@@ -1,0 +1,194 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Code Blocks Inc. brand tokens (identical values to the Flutter app theme).
+   --------------------------------------------------------------------------- */
+@theme {
+  --color-navy: #071633;
+  --color-navy-700: #0f233f;
+  --color-navy-600: #152841;
+  --color-azure: #c5d5e0;
+  --color-sky: #c3e6ff;
+  --color-cream: #f3efe3;
+  --color-surface: #f7fbff;
+  --color-sheet: #eaf0fa;
+  --color-ink: #071633;
+  --color-ink-2: #3d4b63;
+  --color-ink-3: #5b6a82;
+
+  --color-amber: #c9821f;
+  --color-amber-tint: #fbefdc;
+  --color-green: #1f8a5b;
+  --color-green-tint: #e1f2e9;
+  --color-red: #c23b3b;
+  --color-red-tint: #f9e3e3;
+  --color-blue: #2f6fd0;
+  --color-blue-tint: #e3edfb;
+  --color-slate: #5b6a82;
+  --color-slate-tint: #edf0f5;
+
+  --font-display: "League Spartan", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Poppins", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-brand-sm: 14px;
+  --radius-brand: 20px;
+  --radius-brand-lg: 28px;
+  --radius-brand-xl: 40px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-sheet);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-navy);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .brand-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-azure);
+    border-radius: var(--radius-brand);
+  }
+
+  .brand-input {
+    width: 100%;
+    background-color: #ffffff;
+    border: 1px solid var(--color-azure);
+    border-radius: var(--radius-brand-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.9375rem;
+    color: var(--color-ink);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  .brand-input::placeholder {
+    color: var(--color-ink-3);
+  }
+
+  .brand-input:focus {
+    outline: none;
+    border-color: var(--color-navy);
+    box-shadow: 0 0 0 3px rgb(7 22 51 / 0.08);
+  }
+
+  .brand-label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-ink-2);
+    margin-bottom: 0.375rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-brand-sm);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.9375rem;
+    letter-spacing: 0.01em;
+    padding: 0.75rem 1.4rem;
+    min-height: 48px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: opacity 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .btn-primary {
+    background-color: var(--color-navy);
+    color: var(--color-surface);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-navy-600);
+  }
+
+  .btn-secondary {
+    background-color: transparent;
+    color: var(--color-navy);
+    border-color: var(--color-navy);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background-color: rgb(7 22 51 / 0.06);
+  }
+
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--color-ink-2);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background-color: rgb(197 213 224 / 0.35);
+  }
+
+  .btn-danger {
+    background-color: var(--color-red);
+    color: #fff;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background-color: #a93232;
+  }
+
+  .btn-sm {
+    padding: 0.5rem 0.9rem;
+    min-height: 38px;
+    font-size: 0.8125rem;
+  }
+}
+
+/* Subtle block-motif background used on dark hero panels. */
+.block-motif {
+  background-image: linear-gradient(rgb(195 230 255 / 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(195 230 255 / 0.07) 1px, transparent 1px);
+  background-size: 46px 46px;
+}
+
+@keyframes rw-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-up {
+  animation: rw-fade-up 220ms ease-out both;
+}

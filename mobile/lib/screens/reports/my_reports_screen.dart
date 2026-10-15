@@ -1,0 +1,252 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/models.dart';
+import '../../state/reports_provider.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_typography.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/error_view.dart';
+import '../../widgets/report_card.dart';
+import 'report_detail_screen.dart';
+import 'submit_report_screen.dart';
+
+class MyReportsScreen extends StatefulWidget {
+  const MyReportsScreen({super.key});
+
+  @override
+  State<MyReportsScreen> createState() => _MyReportsScreenState();
+}
+
+class _MyReportsScreenState extends State<MyReportsScreen> {
+  final _search = TextEditingController();
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300) {
+        context.read<MyReportsProvider>().loadMore();
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<MyReportsProvider>();
+      provider.load(refresh: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openSubmit() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const SubmitReportScreen()),
+    );
+    if (created == true && mounted) {
+      context.read<MyReportsProvider>().load(refresh: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<MyReportsProvider>();
+
+    return Scaffold(
+      backgroundColor: AppColors.sheetBackground,
+      body: Column(
+        children: [
+          _Header(
+            search: _search,
+            onSearch: (value) => provider.setSearch(value),
+            onClear: () {
+              _search.clear();
+              provider.setSearch('');
+            },
+          ),
+          _Filters(provider: provider),
+          if (provider.isShowingCache)
+            Container(
+              width: double.infinity,
+              color: AppColors.lightYellow,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_off_rounded, size: 15, color: AppColors.darkBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Showing saved reports — you appear to be offline.',
+                      style: AppTypography.caption(size: 11.5, color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(child: _buildBody(provider)),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openSubmit,
+        backgroundColor: AppColors.darkBlue,
+        foregroundColor: AppColors.onPrimary,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('New report'),
+      ),
+    );
+  }
+
+  Widget _buildBody(MyReportsProvider provider) {
+    if (provider.isLoading && provider.reports.isEmpty) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.darkBlue));
+    }
+    if (provider.error != null && provider.reports.isEmpty) {
+      return ErrorView(message: provider.error!, onRetry: () => provider.load(refresh: true));
+    }
+    if (provider.reports.isEmpty) {
+      return EmptyState(
+        icon: Icons.article_outlined,
+        title: 'No reports found',
+        message: 'Reports you submit will appear here with their live status.',
+        action: ElevatedButton.icon(
+          onPressed: _openSubmit,
+          icon: const Icon(Icons.camera_alt_rounded, size: 18),
+          label: const Text('Report an issue'),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => provider.load(refresh: true),
+      color: AppColors.darkBlue,
+      child: ListView.separated(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
+        itemCount: provider.reports.length + (provider.hasMore ? 1 : 0),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          if (index >= provider.reports.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Center(child: CircularProgressIndicator(color: AppColors.darkBlue)),
+            );
+          }
+          final report = provider.reports[index];
+          return ReportCard(
+            report: report,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ReportDetailScreen(reportId: report.id, initialReport: report),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.search, required this.onSearch, required this.onClear});
+
+  final TextEditingController search;
+  final ValueChanged<String> onSearch;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.darkBlue,
+        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 14, bottom: 14),
+              child: Text('My reports', style: AppTypography.display(size: 24, color: AppColors.onPrimary)),
+            ),
+            TextField(
+              controller: search,
+              textInputAction: TextInputAction.search,
+              onSubmitted: onSearch,
+              style: AppTypography.bodyStyle(size: 14),
+              decoration: InputDecoration(
+                hintText: 'Search by title or reference no.',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: search.text.isEmpty
+                    ? null
+                    : IconButton(icon: const Icon(Icons.close_rounded, size: 18), onPressed: onClear),
+                isDense: true,
+                fillColor: AppColors.cardSurface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Filters extends StatelessWidget {
+  const _Filters({required this.provider});
+
+  final MyReportsProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        children: [
+          _chip('All', provider.filterModeration == null && provider.filterRepair == null, () {
+            provider.setModerationFilter(null);
+            provider.setRepairFilter(null);
+          }),
+          for (final status in ModerationStatus.values) ...[
+            const SizedBox(width: 8),
+            _chip(status.label, provider.filterModeration == status, () => provider.setModerationFilter(status)),
+          ],
+          for (final status in RepairStatus.values) ...[
+            const SizedBox(width: 8),
+            _chip(status.label, provider.filterRepair == status, () => provider.setRepairFilter(status)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.darkBlue : AppColors.cardSurface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? AppColors.darkBlue : AppColors.lightAzure),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.bodyStyle(
+            size: 12.5,
+            weight: FontWeight.w600,
+            color: selected ? AppColors.onPrimary : AppColors.textSecondary,
+            height: 1.1,
+          ),
+        ),
+      ),
+    );
+  }
+}

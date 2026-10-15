@@ -1,0 +1,4 @@
+# SPA fallback for static hosts that read Netlify-style `_redirects`
+# (Netlify, Cloudflare Pages, Render static sites). Every unknown path is
+# served index.html so client-side routing (react-router) works on refresh.
+/*  /index.html  200

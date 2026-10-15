@@ -1,0 +1,44 @@
+# RoadWatch — root ignores
+
+# dependencies & build output
+node_modules/
+dist/
+build/
+
+# environment files (ship .env.example instead)
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+
+# mobile (Flutter)
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/key.properties
+# keep real Google service files out of VCS; ship .example versions
+mobile/android/app/google-services.json
+mobile/ios/Runner/GoogleService-Info.plist
+# iOS Google Maps key xcconfig (ship the .example); see maps-key.js note below
+mobile/ios/Flutter/Maps.xcconfig
+
+# web (Vite)
+web/node_modules/
+web/dist/
+
+# mobile web build: locally-supplied Maps browser key (ship the .example)
+mobile/web/maps-key.js
+
+# backend runtime data (uploaded images live here, never in the database)
+backend/uploads/
+
+# python scratch tools
+_tools/__pycache__/

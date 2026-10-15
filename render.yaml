@@ -1,0 +1,131 @@
+# ===========================================================================
+#  RoadWatch — Render Blueprint
+# ===========================================================================
+#  Deploys two services from this repository:
+#    1. roadwatch-api  — the shared Node + Express API (Docker)
+#    2. roadwatch-web  — the admin / officer web platform (static site)
+#
+#  MySQL is NOT offered by Render. Create a free managed MySQL database at
+#  Aiven (https://aiven.io) or Railway (https://railway.app), then paste its
+#  connection string into the DATABASE_URL variable during the first deploy.
+#
+#  Step-by-step instructions: docs/DEPLOY_RENDER.md
+#
+#  Fields marked `sync: false` prompt for a value in the Render dashboard and
+#  are never committed to git.
+# ===========================================================================
+
+services:
+  # ------------------------------------------------------------------ API ---
+  - type: web
+    name: roadwatch-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+
+      # Managed MySQL connection string, e.g.
+      #   mysql://user:password@host:port/defaultdb?ssl-mode=REQUIRED
+      # URL-encode special characters in the password.
+      - key: DATABASE_URL
+        sync: false
+
+      # Strong, unique secrets. `generateValue` lets Render create them.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL
+        value: 30d
+
+      # The public origin(s) of the web platform (comma-separated, no trailing
+      # slash), e.g. https://roadwatch-web.onrender.com
+      - key: CORS_ORIGINS
+        sync: false
+
+      # The externally reachable API URL — used to build absolute image URLs.
+      # e.g. https://roadwatch-api.onrender.com
+      - key: PUBLIC_BASE_URL
+        sync: false
+
+      # --- Image storage ---------------------------------------------------
+      # "local" writes to /app/uploads. On Render's ephemeral filesystem those
+      # files are lost on redeploy; for durable storage either attach a disk
+      # (see below, requires a paid instance) or switch to S3-compatible
+      # object storage by setting STORAGE_DRIVER=s3 and the S3_* variables.
+      - key: STORAGE_DRIVER
+        value: local
+      - key: STORAGE_LOCAL_DIR
+        value: /app/uploads
+      - key: MAX_UPLOAD_BYTES
+        value: "8388608"
+
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+
+      # --- Optional image-processing module (disabled by default) ----------
+      - key: IMAGE_PROCESSING_ENABLED
+        value: "false"
+      - key: IMAGE_PROCESSING_PROVIDER
+        value: none
+      - key: IMAGE_PROCESSING_API_URL
+        sync: false
+      - key: IMAGE_PROCESSING_API_KEY
+        sync: false
+
+      # --- Optional server-side Google key (reverse geocoding) -------------
+      - key: GOOGLE_MAPS_SERVER_API_KEY
+        sync: false
+
+      # Create the seeded demo accounts on first boot (handy for a class demo,
+      # remove/rotate before any real use).
+      - key: SEED_ON_START
+        value: "false"
+
+    # Persistent disk for the local storage driver. Uncomment and use a paid
+    # instance type if you are not using S3-compatible object storage.
+    # disk:
+    #   name: roadwatch-uploads
+    #   mountPath: /app/uploads
+    #   sizeGB: 1
+
+  # ------------------------------------------------------------------ WEB ---
+  - type: web
+    name: roadwatch-web
+    runtime: static
+    plan: free
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    # Client-side routing: send every path back to index.html.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Build-time values — Vite inlines them into the bundle.
+      # e.g. https://roadwatch-api.onrender.com
+      - key: VITE_API_BASE_URL
+        sync: false
+      # Optional: a browser-restricted Google Maps JavaScript API key.
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        sync: false

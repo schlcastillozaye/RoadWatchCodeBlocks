@@ -1,0 +1,236 @@
+import '../core/api_client.dart';
+import '../core/json.dart';
+import '../models/models.dart';
+
+class AuthSession {
+  const AuthSession({required this.user, required this.accessToken, required this.refreshToken});
+
+  final AppUser user;
+  final String accessToken;
+  final String refreshToken;
+
+  factory AuthSession.fromJson(Map<String, dynamic> json) => AuthSession(
+        user: AppUser.fromJson(asMap(json['user'])),
+        accessToken: asString(json['accessToken']),
+        refreshToken: asString(json['refreshToken']),
+      );
+}
+
+class GeocodeResult {
+  const GeocodeResult({required this.available, this.address, this.areaLabel, this.reason});
+
+  final bool available;
+  final String? address;
+  final String? areaLabel;
+  final String? reason;
+
+  factory GeocodeResult.fromJson(Map<String, dynamic> json) => GeocodeResult(
+        available: asBool(json['available']),
+        address: asStringOrNull(json['address']),
+        areaLabel: asStringOrNull(json['areaLabel']),
+        reason: asStringOrNull(json['reason']),
+      );
+}
+
+/// One resolved place from forward geocoding (address / landmark search).
+class PlaceResult {
+  const PlaceResult({
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    this.areaLabel,
+  });
+
+  final String address;
+  final double latitude;
+  final double longitude;
+  final String? areaLabel;
+
+  String get label {
+    final area = areaLabel;
+    return area == null || area.isEmpty ? address : '$address · $area';
+  }
+
+  factory PlaceResult.fromJson(Map<String, dynamic> json) => PlaceResult(
+        address: asString(json['address']),
+        latitude: asDouble(json['lat']),
+        longitude: asDouble(json['lng']),
+        areaLabel: asStringOrNull(json['areaLabel']),
+      );
+}
+
+/// Response from the optional forward-geocoding endpoint. When [available] is
+/// false the caller degrades to filtering reports by text.
+class PlaceSearchResult {
+  const PlaceSearchResult({required this.available, required this.results, this.reason});
+
+  final bool available;
+  final List<PlaceResult> results;
+  final String? reason;
+
+  factory PlaceSearchResult.fromJson(Map<String, dynamic> json) => PlaceSearchResult(
+        available: asBool(json['available']),
+        results: asList(json['results']).map((e) => PlaceResult.fromJson(asMap(e))).toList(),
+        reason: asStringOrNull(json['reason']),
+      );
+}
+
+/// Single entry point to the RoadWatch backend, shared by all providers.
+class RoadWatchApi {
+  RoadWatchApi(this.client);
+
+  final ApiClient client;
+
+  // ------------------------------------------------------------------ auth
+
+  Future<AuthSession> register({
+    required String fullName,
+    required String email,
+    required String password,
+    String? phone,
+  }) async {
+    final json = await client.postJson('/api/auth/register', body: {
+      'fullName': fullName,
+      'email': email,
+      'password': password,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+    }, auth: false);
+    return AuthSession.fromJson(asMap(json));
+  }
+
+  Future<AuthSession> login({required String email, required String password}) async {
+    final json = await client.postJson('/api/auth/login', body: {'email': email, 'password': password}, auth: false);
+    return AuthSession.fromJson(asMap(json));
+  }
+
+  Future<AuthSession> refresh(String refreshToken) async {
+    final json = await client.postJson('/api/auth/refresh', body: {'refreshToken': refreshToken}, auth: false);
+    return AuthSession.fromJson(asMap(json));
+  }
+
+  Future<void> logout(String refreshToken) async {
+    await client.postJson('/api/auth/logout', body: {'refreshToken': refreshToken}, auth: false);
+  }
+
+  Future<AppUser> me() async {
+    final json = await client.getJson('/api/auth/me');
+    return AppUser.fromJson(asMap(asMap(json)['user']));
+  }
+
+  // --------------------------------------------------------------- reports
+
+  Future<RoadReport> createReport({
+    required String title,
+    required String description,
+    required IssueCategory category,
+    required double latitude,
+    required double longitude,
+    String? addressText,
+    String? areaLabel,
+    Priority? priority,
+    required List<UploadFile> photos,
+    ProgressCallback? onProgress,
+  }) async {
+    final json = await client.postMultipart(
+      '/api/reports',
+      fields: {
+        'title': title,
+        'description': description,
+        'category': category.api,
+        'latitude': latitude.toString(),
+        'longitude': longitude.toString(),
+        if (addressText != null && addressText.isNotEmpty) 'addressText': addressText,
+        if (areaLabel != null && areaLabel.isNotEmpty) 'areaLabel': areaLabel,
+        if (priority != null) 'priority': priority.api,
+      },
+      files: photos,
+      onProgress: onProgress,
+    );
+    return RoadReport.fromJson(asMap(asMap(json)['report']));
+  }
+
+  Future<Paginated<RoadReport>> myReports({
+    int page = 1,
+    int pageSize = 20,
+    ModerationStatus? moderationStatus,
+    RepairStatus? repairStatus,
+    String? search,
+  }) async {
+    final json = await client.getJson('/api/reports/mine', query: {
+      'page': page,
+      'pageSize': pageSize,
+      if (moderationStatus != null) 'moderationStatus': moderationStatus.api,
+      if (repairStatus != null) 'repairStatus': repairStatus.api,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return Paginated<RoadReport>.fromJson(asMap(json), RoadReport.fromJson);
+  }
+
+  Future<RoadReport> getReport(String id) async {
+    final json = await client.getJson('/api/reports/$id');
+    return RoadReport.fromJson(asMap(asMap(json)['report']));
+  }
+
+  Future<List<StatusHistoryEntry>> getHistory(String id) async {
+    final json = await client.getJson('/api/reports/$id/history');
+    return asList(asMap(json)['history']).map((e) => StatusHistoryEntry.fromJson(asMap(e))).toList();
+  }
+
+  Future<void> deleteReport(String id) => client.deleteJson('/api/reports/$id');
+
+  // ------------------------------------------------------------------- map
+
+  Future<Paginated<MapReport>> publicReports({
+    int page = 1,
+    int pageSize = 100,
+    IssueCategory? category,
+    RepairStatus? repairStatus,
+    String? search,
+    DateTime? from,
+    DateTime? to,
+    String? areaLabel,
+    String sort = 'newest',
+  }) async {
+    final json = await client.getJson('/api/map/reports', query: {
+      'page': page,
+      'pageSize': pageSize,
+      'sort': sort,
+      if (category != null) 'category': category.api,
+      if (repairStatus != null) 'repairStatus': repairStatus.api,
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+      if (areaLabel != null && areaLabel.isNotEmpty) 'areaLabel': areaLabel,
+      if (from != null) 'from': from.toIso8601String(),
+      if (to != null) 'to': to.toIso8601String(),
+    });
+    return Paginated<MapReport>.fromJson(asMap(json), MapReport.fromJson);
+  }
+
+  Future<RoadReport> publicReportDetail(String id) async {
+    final json = await client.getJson('/api/map/reports/$id');
+    return RoadReport.fromJson(asMap(asMap(json)['report']));
+  }
+
+  Future<GeocodeResult> reverseGeocode({required double latitude, required double longitude}) async {
+    final json = await client.getJson('/api/map/geocode/reverse', query: {
+      'lat': latitude,
+      'lng': longitude,
+    }, auth: false);
+    return GeocodeResult.fromJson(asMap(json));
+  }
+
+  /// Forward geocoding (place / address search). Optional: returns
+  /// `available: false` with a reason when geocoding is not configured.
+  Future<PlaceSearchResult> searchPlace(String query) async {
+    final json = await client.getJson('/api/map/geocode/search', query: {'q': query}, auth: false);
+    return PlaceSearchResult.fromJson(asMap(json));
+  }
+
+  // --------------------------------------------------------------- helpers
+
+  /// Headers for authenticated image loading (approved photos are public).
+  Future<Map<String, String>> imageHeaders({required bool isPublic}) async {
+    if (isPublic) return const {};
+    final token = await client.tokens.readAccessToken();
+    return token == null ? const {} : {'Authorization': 'Bearer $token'};
+  }
+}
