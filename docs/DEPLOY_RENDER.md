@@ -248,6 +248,8 @@ storage is fine.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
+| API URL returns `{"statusCode":500,"message":"Internal server error"}` or `"Hello World!"` | you are hitting **someone else's** service — Render service names are **globally unique**, so if `roadwatch-api` was already taken your service was created under a suffixed URL | open the service in the Render dashboard, copy its real URL (e.g. `roadwatch-api-6w2m.onrender.com`) and use that everywhere (`VITE_API_BASE_URL`, `PUBLIC_BASE_URL`) |
+| Login returns `401` for the demo accounts | the seed never ran, so the `User` table is empty | set `SEED_ON_START=true` on the API, save (it redeploys and seeds), then set it back to `false` |
 | `/health` reports `database: "down"` | wrong/unreachable `DATABASE_URL` | re-check the URL, the encoded password, and the TLS parameter (`sslaccept=strict` for TiDB, `sslmode=require` for most others) |
 | API logs `Can't reach database server` | provider requires TLS | append the right TLS parameter (see Step 2) |
 | Blueprint error `services[1].plan no such plan free` | a `plan:` was set on the **static site** | static sites have no compute plan — remove `plan`/`region` from `roadwatch-web` in `render.yaml` (already fixed here) |
