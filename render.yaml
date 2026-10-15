@@ -5,9 +5,11 @@
 #    1. roadwatch-api  — the shared Node + Express API (Docker)
 #    2. roadwatch-web  — the admin / officer web platform (static site)
 #
-#  MySQL is NOT offered by Render. Create a free managed MySQL database at
-#  Aiven (https://aiven.io) or Railway (https://railway.app), then paste its
+#  MySQL is NOT offered by Render. Create a free MySQL-compatible database at
+#  TiDB Cloud Starter (https://tidbcloud.com, free, no credit card), Aiven
+#  (https://aiven.io) or Railway (https://railway.app), then paste its
 #  connection string into the DATABASE_URL variable during the first deploy.
+#  TiDB Cloud requires TLS: end the URL with ?sslaccept=strict
 #
 #  Step-by-step instructions: docs/DEPLOY_RENDER.md
 #
@@ -108,13 +110,13 @@ services:
     #   sizeGB: 1
 
   # ------------------------------------------------------------------ WEB ---
+  # NOTE: static sites have no compute plan, so `plan`, `region`, `port` and
+  # `healthCheckPath` must NOT be set here, or the Blueprint fails to parse.
   - type: web
     name: roadwatch-web
     runtime: static
-    plan: free
-    rootDir: web
-    buildCommand: npm ci && npm run build
-    staticPublishPath: dist
+    buildCommand: cd web && npm ci && npm run build
+    staticPublishPath: ./web/dist
     autoDeploy: true
     # Client-side routing: send every path back to index.html.
     routes:

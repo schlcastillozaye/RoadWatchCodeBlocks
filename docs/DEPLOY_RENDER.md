@@ -13,8 +13,8 @@ creates two services:
 | `roadwatch-api` | Web service (Docker) | `backend/Dockerfile` — Node + Express API |
 | `roadwatch-web` | Static site | `web/` — React admin / officer platform |
 
-> **MySQL is not provided by Render.** You create a managed MySQL 8 database separately
-> (Step 2) and give the API its connection string.
+> **MySQL is not provided by Render.** You create a managed MySQL-compatible database
+> separately (Step 2) and give the API its connection string.
 
 ---
 
@@ -22,19 +22,21 @@ creates two services:
 
 - The code pushed to a **GitHub** repository.
 - A free **Render** account (<https://render.com>).
-- A **managed MySQL 8** database (free options in Step 2).
+- A **managed MySQL-compatible** database (free options in Step 2; TiDB Cloud Starter is
+  verified).
 - *(Optional)* Google Maps API keys — the system works fully without them (both clients
   fall back to list views), so you can add them later.
 
 ### Push the code to GitHub first
 
-This repository currently has **no commits**. Before Render can deploy, create the initial
-commit and push it:
+This repository is already committed on `main` and pushed to
+`https://github.com/schlcastillozaye/RoadWatchCodeBlocks`. If you are deploying from a
+different repo or a fresh clone, push it the same way:
 
 ```powershell
 cd "C:\School\3RD YEAR\ADVWEB\Project"
 git add .
-git commit -m "RoadWatch: initial commit"
+git commit -m "RoadWatch: update"
 git branch -M main
 git remote add origin https://github.com/<you>/<repo>.git
 git push -u origin main
@@ -42,6 +44,9 @@ git push -u origin main
 
 `.env` files, `node_modules/`, `dist/`, build output and the real Google key files are
 already ignored (see `.gitignore`), so no secrets are pushed.
+
+> Render redeploys automatically on every push to `main` (`autoDeploy: true`), so make sure
+> you have pushed the latest commit before clicking **Apply**.
 
 ---
 
@@ -60,40 +65,65 @@ Leave the web key out at first if you don't have it — the map page falls back 
 
 ---
 
-## 2. Create a managed MySQL 8 database
+## 2. Create a managed MySQL database
 
-Pick any provider that offers **MySQL 8 with TLS**. Two easy options:
+Pick any provider that offers **MySQL 8 (or MySQL-compatible) with TLS**. The option this
+project has been verified against is **TiDB Cloud Starter**:
+
+- **TiDB Cloud Starter** (free, no credit card) — <https://tidbcloud.com> → sign up →
+  **Create Resource** → plan **Starter** → pick the region closest to you (e.g. Singapore)
+  → **Create**. When it is running, open the cluster → **Connect** → set/reveal the
+  password → open the **Prisma** tab and copy the string. It looks like:
+
+  ```
+  mysql://<user>.root:<PASSWORD>@gateway01.<region>.prod.aws.tidbcloud.com:4000/test?sslaccept=strict
+  ```
+
+  > TiDB Cloud requires TLS. Its public endpoint is signed by a publicly trusted CA, so
+  > **`?sslaccept=strict` works as-is** (verified against TiDB v8.5 with Prisma 6,
+  > including all 15 foreign-key constraints in the initial migration).
 
 - **Aiven** — <https://aiven.io> → *Create service* → **MySQL** → *Free* plan → choose the
-  region closest to your users (e.g. Singapore). When it is running, copy the **Service
-  URI**.
+  region closest to your users. When it is running, copy the **Service URI**.
 - **Railway** — <https://railway.app> → *New Project* → **Provision MySQL** → copy
-  `MYSQL_URL` from the *Variables* tab.
-
-> **Tip (Railway).** Railway gives a `mysql://root:...@host:port/railway` URL that works
-> as-is.
+  `MYSQL_URL` from the *Variables* tab (works as-is).
 
 ### Get the connection string into Prisma's format
 
-Prisma's MySQL connector wants a URL shaped like:
+The URL must be shaped like:
 
 ```
-mysql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
+mysql://USER:PASSWORD@HOST:PORT/DATABASE
 ```
 
 - **URL-encode special characters in the password** (`!`→`%21`, `@`→`%40`, `#`→`%23`,
   `/`→`%2F`).
-- **TLS:** if your provider's URI says `ssl-mode=REQUIRED` (Aiven does), change that
-  parameter to **`sslmode=require`** — that is the name Prisma's engine understands.
-  If the provider needs no TLS (many local/Railway setups), omit the parameter entirely.
+- **TLS:** providers spell this parameter differently, and Prisma's engine understands
+  **both**:
+  - `?sslaccept=strict` — TiDB Cloud (verified), and any MySQL server whose certificate is
+    signed by a public CA.
+  - `?sslmode=require` — Aiven (its URI says `ssl-mode=REQUIRED`; change the name) and most
+    other providers. `sslmode=require` encrypts but does not verify the CA.
 
-Example (Aiven, fixed up):
+  Omit the parameter entirely only for a local / no-TLS database.
+
+Example (TiDB Cloud Starter, verified — substitute your own values):
+
+```
+mysql://AbC123xyz.root:YOUR-PASSWORD@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/test?sslaccept=strict
+```
+
+Example (Aiven):
 
 ```
 mysql://avnadmin:My%21Passw0rd@mysql-abc123-roadwatch.a.aivencloud.com:25060/defaultdb?sslmode=require
 ```
 
 Keep this string — it becomes `DATABASE_URL` in Step 4.
+
+> **You never import a `.sql` file by hand.** On first boot the API container runs
+> `prisma migrate deploy` and creates all ten tables itself. Using the default `test`
+> database on TiDB is fine — the tables are created inside it.
 
 ---
 
@@ -218,8 +248,10 @@ storage is fine.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| `/health` reports `database: "down"` | wrong/unreachable `DATABASE_URL` | re-check the URL, the encoded password, and `sslmode=require` |
-| API logs `Can't reach database server` | provider requires TLS | append `?sslmode=require` |
+| `/health` reports `database: "down"` | wrong/unreachable `DATABASE_URL` | re-check the URL, the encoded password, and the TLS parameter (`sslaccept=strict` for TiDB, `sslmode=require` for most others) |
+| API logs `Can't reach database server` | provider requires TLS | append the right TLS parameter (see Step 2) |
+| Blueprint error `services[1].plan no such plan free` | a `plan:` was set on the **static site** | static sites have no compute plan — remove `plan`/`region` from `roadwatch-web` in `render.yaml` (already fixed here) |
+| Migration fails with `FOREIGN KEY` | rare on older TiDB/PlanetScale-style servers | set `relationMode = "prisma"` in `backend/prisma/schema.prisma`, regenerate the migration, redeploy |
 | Web shows "Cannot reach the server" | wrong `VITE_API_BASE_URL`, or not rebuilt | set it to the API URL and **Clear build cache & deploy** |
 | Browser console shows a CORS error | `CORS_ORIGINS` missing the web origin | add the exact `https://…` origin (no trailing slash), redeploy the API |
 | Deep link / refresh shows Render's 404 | SPA fallback | the `render.yaml` rewrite (`/*` → `/index.html`) handles this; confirm it applied |
