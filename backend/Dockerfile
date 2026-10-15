@@ -39,6 +39,11 @@ RUN apt-get update -y \
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
+# `npm run seed` runs prisma/seed.ts directly through tsx, and that file imports
+# from ../src/… (storage, reference counter, config). Without the TypeScript
+# sources in the image those imports cannot resolve and seeding fails with
+# MODULE_NOT_FOUND — dist/ alone is not enough.
+COPY --from=build /app/src ./src
 COPY prisma.config.ts package.json package-lock.json ./
 
 # Entrypoint applies pending migrations before the server starts.
