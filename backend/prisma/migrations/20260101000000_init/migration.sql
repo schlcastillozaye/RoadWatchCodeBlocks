@@ -1,4 +1,4 @@
-- CreateTable
+-- CreateTable
 CREATE TABLE `User` (
     `id` VARCHAR(191) NOT NULL,
     `fullName` VARCHAR(191) NOT NULL,
