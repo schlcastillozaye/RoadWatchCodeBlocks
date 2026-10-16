@@ -24,9 +24,9 @@ creates two services:
 - A free **Render** account (<https://render.com>).
 - A **managed MySQL-compatible** database (free options in Step 2; TiDB Cloud Starter is
   verified).
-- *(Optional)* Google Maps API keys — **the system works fully without any**. The web
-  platform draws its map with Leaflet on OpenStreetMap tiles and the API geocodes with
-  the free OpenStreetMap Nominatim service, so nothing on the hosted system needs a key.
+
+No map credentials are needed: every map is OpenStreetMap, and the API geocodes through
+the free OpenStreetMap Nominatim service.
 
 ### Push the code to GitHub first
 
@@ -51,24 +51,26 @@ already ignored (see `.gitignore`), so no secrets are pushed.
 
 ---
 
-## 1. (Optional) Google Maps keys
+## 1. (Optional) Hosted maps and geocoding
 
-**You can skip this step completely.** Nothing you deploy here needs a Google key:
+**You can skip this step completely — nothing needs a map key anymore:**
 
-- The **web platform** renders its map with **Leaflet + OpenStreetMap** — no key, no
-  account, no billing.
+- The **web platform** renders its map with **Leaflet on OpenStreetMap tiles**.
+- The **mobile app** renders its map with **`flutter_map` on OpenStreetMap tiles**.
 - The **API** geocodes addresses with the free **OpenStreetMap Nominatim** service.
-- Only the **Flutter mobile app** uses Google Maps, and it falls back to a list without
-  a key — so even that is optional.
 
-If you *do* want Google keys (they require billing enabled), create **separate,
-restricted** keys in the [Google Cloud Console](https://console.cloud.google.com/google/maps-apis):
+No key, no account, no billing, on any platform.
+
+The only optional paid extra is switching **server-side geocoding** from Nominatim to
+Google. If you want that, enable billing in the
+[Google Cloud Console](https://console.cloud.google.com/google/maps-apis) and create one
+key restricted to the **Geocoding API**:
 
 | Key | For | Restriction |
 | --- | --- | --- |
-| Android key | Mobile app | Package name + SHA-1 of the signing certificate, **Maps SDK for Android** |
-| iOS key | Mobile app | Bundle id, **Maps SDK for iOS** |
-| Server key | API (`GOOGLE_MAPS_SERVER_API_KEY`) | Server IP, **Geocoding API** (optional) |
+| Server key | API (`GOOGLE_MAPS_SERVER_API_KEY`) | Server IP, **Geocoding API** |
+
+Client maps never use a key, so there is nothing to restrict or rotate there.
 
 ---
 
@@ -215,11 +217,10 @@ Build the app with the public API URL so citizens' reports reach the hosted back
 
 ```powershell
 cd mobile
-$env:ORG_GRADLE_PROJECT_GOOGLE_MAPS_API_KEY = "<android-key>"
-flutter build appbundle `
-  --dart-define=API_BASE_URL=https://roadwatch-api.onrender.com `
-  --dart-define=GOOGLE_MAPS_API_KEY=<android-key>
+flutter build appbundle --dart-define=API_BASE_URL=https://roadwatch-api.onrender.com
 ```
+
+No map key is involved — the mobile map is `flutter_map` on OpenStreetMap tiles.
 
 For a quick local test against the deployed API, `flutter run --dart-define=API_BASE_URL=https://roadwatch-api.onrender.com`.
 

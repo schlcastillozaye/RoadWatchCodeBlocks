@@ -27,17 +27,6 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        // Google Maps API key, injected into AndroidManifest as
-        // com.google.android.geo.API_KEY. Supply it as a Gradle property:
-        //   $env:ORG_GRADLE_PROJECT_GOOGLE_MAPS_API_KEY = "..."
-        // or place GOOGLE_MAPS_API_KEY=... in android/gradle.properties.
-        // Also pass --dart-define=GOOGLE_MAPS_API_KEY=... so the Dart side
-        // knows maps are enabled. When empty the app degrades to a
-        // list-based map view instead of failing.
-        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] =
-            (project.findProperty("GOOGLE_MAPS_API_KEY") as String?)
-                ?: (System.getenv("GOOGLE_MAPS_API_KEY") ?: "")
     }
 
     buildTypes {

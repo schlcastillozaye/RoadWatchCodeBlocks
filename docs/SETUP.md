@@ -163,27 +163,9 @@ flutter run -d chrome --web-port=3000 --dart-define=API_BASE_URL=http://localhos
 flutter run -d emulator-5554 --dart-define=API_BASE_URL=http://localhost:4000
 ```
 
-Add a Google Maps key — **mobile only, and optional** (the Flutter app degrades
-gracefully to a list without it). The web platform needs no key at all:
-
-```powershell
-flutter run -d windows `
-  --dart-define=API_BASE_URL=http://localhost:4000 `
-  --dart-define=GOOGLE_MAPS_API_KEY=AIza...
-```
-
-For Android builds, the key must also reach Gradle so the manifest gets populated.
-Gradle reads it from an `ORG_GRADLE_PROJECT_*` environment variable:
-
-```powershell
-$env:ORG_GRADLE_PROJECT_GOOGLE_MAPS_API_KEY = "AIza..."
-flutter build apk --dart-define=GOOGLE_MAPS_API_KEY=AIza...
-```
-
-For Flutter **web** (`flutter run -d chrome`) the map plugin reads the key from a
-`<script>` tag in `mobile/web/index.html` instead of `--dart-define`. Uncomment the
-template there and paste your key — you still need the `--dart-define` as well so the
-app shows the map rather than the list fallback.
+**Maps need no key.** Every map in the app is drawn with `flutter_map` on
+OpenStreetMap tiles, so there is nothing to configure — on Android, iOS, web or
+desktop. Attribution is shown in the corner of each map.
 
 Checks: `flutter analyze lib` and `flutter test`.
 
@@ -219,11 +201,11 @@ It imports `dotenv/config` itself — keep the `dotenv` dependency installed.
 **CORS error in the browser console**
 Add your web origin to `CORS_ORIGINS` in `backend/.env` and restart the backend.
 
-**Map is blank / “Map view unavailable”**
-The web platform uses Leaflet + OpenStreetMap, so a blank map usually means the
-browser is blocking `tile.openstreetmap.org` or you are offline — the list
-fallback remains fully functional. On the mobile app, the Google Maps key is
-missing or not authorised for Maps SDK for Android / iOS.
+**Map is blank / tiles do not load**
+Every platform uses OpenStreetMap tiles, so a blank map almost always means the
+device is offline, a firewall/proxy is blocking `tile.openstreetmap.org`, or the
+tiles are rate-limited (OSM throttles heavy anonymous traffic). The report list
+view on the public map screen stays fully functional either way.
 
 **`flutter run` cannot find the API on Android**
 Use `10.0.2.2` instead of `localhost`, or pass

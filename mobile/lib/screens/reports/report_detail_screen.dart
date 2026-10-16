@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api_exception.dart';
-import '../../core/app_config.dart';
 import '../../core/format.dart';
 import '../../models/models.dart';
 import '../../services/roadwatch_api.dart';
@@ -15,6 +15,7 @@ import '../../widgets/app_button.dart';
 import '../../widgets/category_badge.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/photo_thumbnail.dart';
+import '../../widgets/roadwatch_map.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/status_chip.dart';
 
@@ -73,9 +74,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   Future<void> _openExternalMap() async {
     final report = _report;
     if (report == null) return;
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=${report.latitude},${report.longitude}',
-    );
+    final uri = openStreetMapUri(report.latitude, report.longitude);
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && mounted) _snack('Could not open the maps application.');
@@ -359,34 +358,34 @@ class _LocationSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
               height: 170,
-              child: AppConfig.mapsConfigured
-                  ? GoogleMap(
-                      initialCameraPosition: CameraPosition(target: target, zoom: 16),
-                      markers: {
-                        Marker(
-                          markerId: MarkerId(report.id),
-                          position: target,
-                          infoWindow: InfoWindow(title: report.title, snippet: report.referenceNo),
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: target,
+                  initialZoom: 16,
+                  minZoom: 3,
+                  maxZoom: 19,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                  ),
+                ),
+                children: [
+                  roadwatchTileLayer(),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: target,
+                        width: 26,
+                        height: 26,
+                        child: Tooltip(
+                          message: '${report.title} · ${report.referenceNo}',
+                          child: const MapStatusDot(color: AppColors.darkBlue, strokeColor: AppColors.lightBlue),
                         ),
-                      },
-                      zoomControlsEnabled: false,
-                      mapToolbarEnabled: false,
-                      compassEnabled: false,
-                      myLocationButtonEnabled: false,
-                      scrollGesturesEnabled: true,
-                    )
-                  : Container(
-                      color: AppColors.sheetBackground,
-                      alignment: Alignment.center,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.map_outlined, size: 34, color: AppColors.textMuted),
-                          const SizedBox(height: 8),
-                          Text('Map preview unavailable', style: AppTypography.caption(size: 12)),
-                        ],
                       ),
-                    ),
+                    ],
+                  ),
+                  roadwatchAttribution(),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -404,7 +403,7 @@ class _LocationSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppButton(
-            label: 'Open in Google Maps',
+            label: 'Open in OpenStreetMap',
             variant: AppButtonVariant.secondary,
             icon: Icons.directions_rounded,
             onPressed: onOpenMaps,

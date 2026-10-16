@@ -134,19 +134,22 @@ same API with `--dart-define=API_BASE_URL=…`.
 
 ## Maps
 
-The web platform draws its map with **Leaflet + OpenStreetMap** — an interactive,
-colour-coded, click-through map with **no API key, no account and no billing**. It
-works the moment you deploy it.
+Every platform draws its map with **OpenStreetMap — no API key, no account and no
+billing**. It works the moment you run or deploy it.
 
-| Client | Map provider | Key needed |
+| Client | Map library | Key needed |
 | --- | --- | --- |
-| Web | Leaflet + OpenStreetMap | **None** |
-| Mobile | Google Maps, falls back to a list | `--dart-define=GOOGLE_MAPS_API_KEY=…` (optional) |
+| Web | Leaflet on OpenStreetMap tiles | **None** |
+| Mobile | `flutter_map` on OpenStreetMap tiles | **None** |
 | Backend (geocoding) | OpenStreetMap Nominatim, Google optional | `GOOGLE_MAPS_SERVER_API_KEY` (optional) |
 
 Address search and reverse geocoding on the API default to the **free OpenStreetMap
-Nominatim** service. Set `GOOGLE_MAPS_SERVER_API_KEY` only if you would rather use
-Google Geocoding — that key requires billing to be enabled.
+Nominatim** service, throttled to its one-request-per-second policy and cached for
+10 minutes. Set `GOOGLE_MAPS_SERVER_API_KEY` only if you would rather use Google
+Geocoding — that key requires billing to be enabled.
+
+The OpenStreetMap tile usage policy is honoured everywhere: requests carry a
+descriptive `User-Agent` and attribution is shown on every map.
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the exact configuration steps and
 [`docs/API.md`](docs/API.md) for every endpoint.

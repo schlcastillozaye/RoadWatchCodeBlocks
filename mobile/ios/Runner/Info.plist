@@ -24,11 +24,6 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<!-- Google Maps SDK for iOS key. Populated from the GOOGLE_MAPS_API_KEY
-	     build setting, which comes from ios/Flutter/Maps.xcconfig (git-ignored).
-	     Empty by default so no feature breaks; see Maps.xcconfig.example. -->
-	<key>GMSApiKey</key>
-	<string>$(GOOGLE_MAPS_API_KEY)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>

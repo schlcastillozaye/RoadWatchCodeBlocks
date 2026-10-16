@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 ///
 /// Override at build/run time, e.g.:
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.20:4000
-///               --dart-define=GOOGLE_MAPS_API_KEY=your_key
 class AppConfig {
   AppConfig._();
 
@@ -16,17 +15,6 @@ class AppConfig {
     'API_BASE_URL',
     defaultValue: 'http://localhost:4000',
   );
-
-  /// Google Maps key for the mobile SDK. When empty the app degrades
-  /// gracefully to a list-based map view instead of failing.
-  ///
-  /// This dart-define only tells the Dart side that maps are enabled. The
-  /// native SDK still needs the key delivered separately:
-  ///   - Android: Gradle manifest placeholder (see android/app/build.gradle.kts)
-  ///   - iOS:     GOOGLE_MAPS_API_KEY in ios/Flutter/Maps.xcconfig
-  static const String googleMapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
-
-  static bool get mapsConfigured => googleMapsApiKey.trim().isNotEmpty;
 
   /// On the Android emulator `localhost` is the emulator itself; the host
   /// machine is reachable at 10.0.2.2.

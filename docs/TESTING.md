@@ -98,7 +98,9 @@ Tick each box as you go.
 - [ ] Tapping a marker/card shows details and photos.
 - [ ] Filtering by category and repair status works.
 - [ ] Pending and rejected reports are absent from every result.
-- [ ] With no Maps key configured, both clients show the list fallback and remain usable.
+- [ ] Address search on the public map returns OpenStreetMap results and centres the map on them.
+- [ ] The web list/Map toggle switches views without losing the current filter.
+- [ ] OpenStreetMap attribution is visible on every map.
 
 ## 9. Persistence
 

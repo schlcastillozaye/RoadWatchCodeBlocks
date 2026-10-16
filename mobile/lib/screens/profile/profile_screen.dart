@@ -137,7 +137,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       _Row(
                         label: 'Maps',
-                        value: AppConfig.mapsConfigured ? 'Configured' : 'Not configured',
+                        value: 'OpenStreetMap',
                         icon: Icons.map_outlined,
                       ),
                     ],

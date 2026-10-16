@@ -1,15 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/app_config.dart';
 import '../../core/format.dart';
 import '../../services/roadwatch_api.dart';
 import '../../services/location_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/section_card.dart';
+import '../../widgets/roadwatch_map.dart';
 
 class PickedLocation {
   const PickedLocation({required this.latitude, required this.longitude, this.address, this.areaLabel});
@@ -20,8 +22,8 @@ class PickedLocation {
   final String? areaLabel;
 }
 
-/// Lets the citizen confirm the exact location. Uses a real Google Map when an
-/// API key is configured, and degrades to precise manual coordinates otherwise.
+/// Lets the citizen confirm the exact location on an OpenStreetMap map (no API
+/// key needed), with GPS and manual coordinate entry as alternatives.
 class LocationPickerScreen extends StatefulWidget {
   const LocationPickerScreen({super.key, this.initialLatitude, this.initialLongitude});
 
@@ -39,7 +41,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   late double _longitude;
   LatLng _center = _defaultTarget;
 
-  GoogleMapController? _mapController;
+  final MapController _mapController = MapController();
+  bool _mapReady = false;
+  bool _showManual = false;
+  Timer? _idleTimer;
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
 
@@ -66,9 +71,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   @override
   void dispose() {
+    _idleTimer?.cancel();
     _latController.dispose();
     _lngController.dispose();
-    _mapController?.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -98,7 +104,28 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _lngController.text = lng.toStringAsFixed(6);
       _address = null;
     });
-    _mapController?.animateCamera(CameraUpdate.newLatLng(_center));
+    if (_mapReady) {
+      _mapController.move(_center, _mapController.camera.zoom);
+    }
+    _reverseGeocode();
+  }
+
+  /// Tracks the map centre while the user drags.
+  void _onPositionChanged(MapCamera camera, bool hasGesture) {
+    _center = camera.center;
+    _latitude = camera.center.latitude;
+    _longitude = camera.center.longitude;
+
+    // flutter_map has no "camera idle" callback, so debounce instead: once
+    // movement settles, sync the fields and look the address up again.
+    _idleTimer?.cancel();
+    _idleTimer = Timer(const Duration(milliseconds: 650), _onCameraIdle);
+  }
+
+  void _onCameraIdle() {
+    if (!mounted) return;
+    _latController.text = _latitude.toStringAsFixed(6);
+    _lngController.text = _longitude.toStringAsFixed(6);
     _reverseGeocode();
   }
 
@@ -148,19 +175,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mapsReady = AppConfig.mapsConfigured;
-
     return Scaffold(
       backgroundColor: AppColors.sheetBackground,
       appBar: AppBar(title: const Text('Confirm location')),
       body: Column(
         children: [
-          Expanded(
-            child: mapsReady
-                ? _buildMap()
-                : _buildFallback(),
-          ),
-          _buildFooter(mapsReady),
+          Expanded(child: _buildMap()),
+          _buildFooter(),
         ],
       ),
     );
@@ -169,24 +190,27 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   Widget _buildMap() {
     return Stack(
       children: [
-        GoogleMap(
-          initialCameraPosition: CameraPosition(target: _center, zoom: 16.5),
-          myLocationEnabled: false,
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: false,
-          compassEnabled: false,
-          mapToolbarEnabled: false,
-          onMapCreated: (controller) => _mapController = controller,
-          onCameraMove: (position) {
-            _center = position.target;
-            _latitude = position.target.latitude;
-            _longitude = position.target.longitude;
-          },
-          onCameraIdle: () {
-            _latController.text = _latitude.toStringAsFixed(6);
-            _lngController.text = _longitude.toStringAsFixed(6);
-            _reverseGeocode();
-          },
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: _center,
+            initialZoom: 16.5,
+            minZoom: 3,
+            maxZoom: 19,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            ),
+            onPositionChanged: _onPositionChanged,
+            onMapReady: () {
+              _mapReady = true;
+              // The user's position may have arrived before the map was ready.
+              _mapController.move(_center, 16.5);
+            },
+          ),
+          children: [
+            roadwatchTileLayer(),
+            roadwatchAttribution(),
+          ],
         ),
         // Fixed centre pin.
         IgnorePointer(
@@ -226,70 +250,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 
-  Widget _buildFallback() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionCard(
-            color: AppColors.lightYellow,
-            child: Row(
-              children: [
-                const Icon(Icons.map_outlined, color: AppColors.darkBlue),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Map preview is unavailable because no Google Maps API key is configured. '
-                    'Use GPS or type the coordinates below — this works exactly the same.',
-                    style: AppTypography.bodyStyle(size: 13, color: AppColors.textSecondary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('Coordinates', style: AppTypography.headingStyle(size: 16)),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _latController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                  decoration: const InputDecoration(labelText: 'Latitude'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _lngController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                  decoration: const InputDecoration(labelText: 'Longitude'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          AppButton(
-            label: 'Apply coordinates',
-            variant: AppButtonVariant.secondary,
-            icon: Icons.check_rounded,
-            onPressed: _applyManual,
-          ),
-          const SizedBox(height: 10),
-          AppButton(
-            label: _locating ? 'Detecting…' : 'Use my current location',
-            icon: Icons.my_location_rounded,
-            loading: _locating,
-            onPressed: _locating ? null : () => _useCurrentLocation(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFooter(bool mapsReady) {
+  Widget _buildFooter() {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -300,50 +261,86 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       child: SafeArea(
         top: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.place_rounded, size: 18, color: AppColors.darkBlue),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    formatCoords(_latitude, _longitude),
-                    style: AppTypography.bodyStyle(size: 14, weight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            if (_geocoding)
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
-                  const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const Icon(Icons.place_rounded, size: 18, color: AppColors.darkBlue),
                   const SizedBox(width: 8),
-                  Text('Looking up address…', style: AppTypography.caption(size: 12)),
+                  Expanded(
+                    child: Text(
+                      formatCoords(_latitude, _longitude),
+                      style: AppTypography.bodyStyle(size: 14, weight: FontWeight.w600),
+                    ),
+                  ),
                 ],
-              )
-            else
-              Text(
-                _address ?? (_notice ?? 'Address lookup unavailable — coordinates will be used.'),
-                style: AppTypography.caption(size: 12, color: _notice != null ? AppColors.statusAmber : AppColors.textMuted),
               ),
-            const SizedBox(height: 14),
-            AppButton(
-              label: 'Use this location',
-              icon: Icons.check_circle_rounded,
-              onPressed: _confirm,
-            ),
-            if (mapsReady)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Drag the map to move the pin.',
-                  style: AppTypography.caption(size: 11.5),
+              const SizedBox(height: 6),
+              if (_geocoding)
+                Row(
+                  children: [
+                    const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: 8),
+                    Text('Looking up address…', style: AppTypography.caption(size: 12)),
+                  ],
+                )
+              else
+                Text(
+                  _address ?? (_notice ?? 'Address lookup unavailable — coordinates will be used.'),
+                  style: AppTypography.caption(size: 12, color: _notice != null ? AppColors.statusAmber : AppColors.textMuted),
                 ),
+              const SizedBox(height: 14),
+              AppButton(
+                label: 'Use this location',
+                icon: Icons.check_circle_rounded,
+                onPressed: _confirm,
               ),
-          ],
+              const SizedBox(height: 4),
+              TextButton.icon(
+                onPressed: () => setState(() => _showManual = !_showManual),
+                icon: Icon(_showManual ? Icons.expand_less_rounded : Icons.keyboard_rounded, size: 16),
+                label: Text(_showManual ? 'Hide coordinate entry' : 'Enter coordinates manually'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+              ),
+              if (_showManual) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _latController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                        decoration: const InputDecoration(labelText: 'Latitude'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _lngController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                        decoration: const InputDecoration(labelText: 'Longitude'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                AppButton(
+                  label: 'Apply coordinates',
+                  variant: AppButtonVariant.secondary,
+                  icon: Icons.check_rounded,
+                  onPressed: _applyManual,
+                ),
+              ] else
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'Drag the map to move the pin.',
+                    style: AppTypography.caption(size: 11.5),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

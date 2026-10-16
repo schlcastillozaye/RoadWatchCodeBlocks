@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/app_config.dart';
 import '../../core/format.dart';
 import '../../models/models.dart';
 import '../../services/roadwatch_api.dart';
@@ -12,13 +12,15 @@ import '../../services/recent_searches.dart';
 import '../../state/map_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/status_theme.dart';
 import '../../widgets/category_badge.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/photo_thumbnail.dart';
+import '../../widgets/roadwatch_map.dart';
 import '../../widgets/status_chip.dart';
 
-/// Public map of approved reports. Uses a real Google Map when a key is
-/// configured and falls back to a fully-functional list view otherwise.
+/// Public map of approved reports, drawn with Leaflet-style OpenStreetMap
+/// tiles — no API key, no billing. A list view is available as a toggle.
 class PublicMapScreen extends StatefulWidget {
   const PublicMapScreen({super.key});
 
@@ -27,8 +29,11 @@ class PublicMapScreen extends StatefulWidget {
 }
 
 class _PublicMapScreenState extends State<PublicMapScreen> {
-  GoogleMapController? _controller;
+  final MapController _controller = MapController();
   bool _centred = false;
+  bool _mapReady = false;
+  bool _showList = false;
+  PlaceResult? _pendingFocus;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -43,65 +48,85 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _controller?.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  double _hue(RepairStatus status) => switch (status) {
-        RepairStatus.notAssigned => 210,
-        RepairStatus.awaitingMaintenance => 180,
-        RepairStatus.inProgress => 40,
-        RepairStatus.completed => 120,
-      };
+  void _setShowList(bool value) {
+    setState(() {
+      _showList = value;
+      if (!value) {
+        // Re-entering the map: fit the viewport to the current reports again.
+        _mapReady = false;
+        _centred = false;
+      }
+    });
+  }
 
-  Set<Marker> _markers(List<MapReport> reports, PlaceResult? origin) {
-    final markers = <Marker>{
+  List<Marker> _markers(List<MapReport> reports, PlaceResult? origin) {
+    return [
       for (final report in reports)
         Marker(
-          markerId: MarkerId(report.id),
-          position: LatLng(report.latitude, report.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(_hue(report.repairStatus)),
-          onTap: () => _openSheet(report),
+          point: LatLng(report.latitude, report.longitude),
+          width: 26,
+          height: 26,
+          child: GestureDetector(
+            onTap: () => _openSheet(report),
+            child: MapStatusDot(color: repairColors(report.repairStatus).foreground),
+          ),
         ),
-    };
-
-    if (origin != null) {
-      markers.add(
+      if (origin != null)
         Marker(
-          markerId: const MarkerId('__search_origin__'),
-          position: LatLng(origin.latitude, origin.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
-          infoWindow: InfoWindow(title: 'Searched location', snippet: origin.address),
+          point: LatLng(origin.latitude, origin.longitude),
+          width: 28,
+          height: 28,
+          child: Tooltip(
+            message: 'Searched location',
+            child: const MapSearchPoint(),
+          ),
         ),
-      );
-    }
-
-    return markers;
+    ];
   }
 
   void _fitToReports(List<MapReport> reports) {
-    if (_centred || reports.isEmpty || _controller == null) return;
+    if (_centred || reports.isEmpty || !_mapReady) return;
     _centred = true;
+
     if (reports.length == 1) {
-      _controller!.animateCamera(
-        CameraUpdate.newLatLngZoom(LatLng(reports.first.latitude, reports.first.longitude), 15),
-      );
+      _controller.move(LatLng(reports.first.latitude, reports.first.longitude), 15);
       return;
     }
-    var minLat = reports.first.latitude, maxLat = reports.first.latitude;
-    var minLng = reports.first.longitude, maxLng = reports.first.longitude;
-    for (final r in reports) {
-      minLat = minLat < r.latitude ? minLat : r.latitude;
-      maxLat = maxLat > r.latitude ? maxLat : r.latitude;
-      minLng = minLng < r.longitude ? minLng : r.longitude;
-      maxLng = maxLng > r.longitude ? maxLng : r.longitude;
-    }
-    _controller!.animateCamera(
-      CameraUpdate.newLatLngBounds(
-        LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng)),
-        60,
+
+    _controller.fitCamera(
+      CameraFit.bounds(
+        bounds: LatLngBounds.fromPoints([
+          for (final report in reports) LatLng(report.latitude, report.longitude),
+        ]),
+        padding: const EdgeInsets.all(60),
+        maxZoom: 15,
       ),
     );
+  }
+
+  /// Moves to the chosen search origin, switching out of list view if needed.
+  void _focusOrigin(PlaceResult origin) {
+    _pendingFocus = origin;
+    if (_showList) {
+      setState(() {
+        _showList = false;
+        _mapReady = false;
+      });
+    }
+    _applyPendingFocus();
+  }
+
+  void _applyPendingFocus() {
+    final origin = _pendingFocus;
+    if (origin == null || !_mapReady) return;
+    _pendingFocus = null;
+    // Claim the viewport so the report auto-fit does not override the choice.
+    _centred = true;
+    _controller.move(LatLng(origin.latitude, origin.longitude), 15);
   }
 
   Future<void> _openSheet(MapReport report) async {
@@ -216,12 +241,6 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     );
   }
 
-  void _focusOrigin(PlaceResult origin) {
-    _controller?.animateCamera(
-      CameraUpdate.newLatLngZoom(LatLng(origin.latitude, origin.longitude), 15),
-    );
-  }
-
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -234,7 +253,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       backgroundColor: AppColors.sheetBackground,
       body: Column(
         children: [
-          _Header(provider: provider),
+          _Header(provider: provider, showList: _showList, onToggleView: _setShowList),
           _SearchPanel(controller: _searchController, provider: provider, onSubmit: _runSearch),
           Expanded(child: _buildBody(provider)),
         ],
@@ -248,83 +267,84 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     }
 
     final reports = provider.visibleReports;
-    final origin = provider.origin;
 
-    if (AppConfig.mapsConfigured) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _fitToReports(reports));
-      return Stack(
-        children: [
-          GoogleMap(
-            initialCameraPosition: const CameraPosition(target: LatLng(14.7942, 120.8790), zoom: 12),
-            markers: _markers(reports, origin),
-            onMapCreated: (controller) {
-              _controller = controller;
+    if (_showList) {
+      return _buildList(provider, reports);
+    }
+
+    // Re-fit once the reports arrive (the map may already be ready).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fitToReports(reports));
+
+    return Stack(
+      children: [
+        FlutterMap(
+          mapController: _controller,
+          options: MapOptions(
+            initialCenter: const LatLng(14.7942, 120.8790),
+            initialZoom: 12,
+            minZoom: 3,
+            maxZoom: 19,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            ),
+            onMapReady: () {
+              _mapReady = true;
+              _applyPendingFocus();
               _fitToReports(reports);
             },
-            zoomControlsEnabled: false,
-            compassEnabled: false,
-            myLocationButtonEnabled: false,
-            mapToolbarEnabled: false,
           ),
-          if (reports.isEmpty)
-            const Positioned(
-              left: 20,
-              right: 20,
-              top: 20,
-              child: _InfoBanner(
-                icon: Icons.info_outline_rounded,
-                message: 'No approved reports to display yet.',
-              ),
+          children: [
+            roadwatchTileLayer(),
+            MarkerLayer(markers: _markers(reports, provider.origin)),
+            roadwatchAttribution(),
+          ],
+        ),
+        if (reports.isEmpty)
+          const Positioned(
+            left: 20,
+            right: 20,
+            top: 20,
+            child: _InfoBanner(
+              icon: Icons.info_outline_rounded,
+              message: 'No approved reports to display yet.',
             ),
-          Positioned(bottom: 16, left: 16, right: 16, child: _Legend()),
-        ],
+          ),
+        Positioned(bottom: 16, left: 16, right: 16, child: _Legend()),
+      ],
+    );
+  }
+
+  Widget _buildList(MapProvider provider, List<MapReport> reports) {
+    if (reports.isEmpty) {
+      return EmptyState(
+        icon: Icons.location_off_rounded,
+        title: provider.origin != null
+            ? 'No approved reports near this location'
+            : (provider.textQuery.isNotEmpty ? 'No reports match your search' : 'No approved reports nearby'),
+        message: provider.isShowingCache
+            ? 'You are offline. Showing the last saved reports.'
+            : 'Approved reports from your community will appear here.',
+        action: OutlinedButton.icon(
+          onPressed: () => provider.load(refresh: true),
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          label: const Text('Refresh'),
+        ),
       );
     }
 
-    // Fallback: no Maps key configured — still fully usable.
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: _InfoBanner(
-            icon: Icons.map_outlined,
-            message: 'Map view needs a Google Maps API key. Showing the report list instead — tap any card for details.',
-          ),
+    return RefreshIndicator(
+      onRefresh: () => provider.load(refresh: true),
+      color: AppColors.darkBlue,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        itemCount: reports.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (context, i) => _MapReportTile(
+          report: reports[i],
+          distance: provider.distanceFor(reports[i]),
+          onTap: () => _openSheet(reports[i]),
         ),
-        Expanded(
-          child: reports.isEmpty
-              ? EmptyState(
-                  icon: Icons.location_off_rounded,
-                  title: provider.origin != null
-                      ? 'No approved reports near this location'
-                      : (provider.textQuery.isNotEmpty
-                          ? 'No reports match your search'
-                          : 'No approved reports nearby'),
-                  message: provider.isShowingCache
-                      ? 'You are offline. Showing the last saved reports.'
-                      : 'Approved reports from your community will appear here.',
-                  action: OutlinedButton.icon(
-                    onPressed: () => provider.load(refresh: true),
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Refresh'),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: () => provider.load(refresh: true),
-                  color: AppColors.darkBlue,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: reports.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) => _MapReportTile(
-                      report: reports[i],
-                      distance: provider.distanceFor(reports[i]),
-                      onTap: () => _openSheet(reports[i]),
-                    ),
-                  ),
-                ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -626,9 +646,11 @@ class _RecentSearchesList extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.provider});
+  const _Header({required this.provider, required this.showList, required this.onToggleView});
 
   final MapProvider provider;
+  final bool showList;
+  final ValueChanged<bool> onToggleView;
 
   @override
   Widget build(BuildContext context) {
@@ -650,15 +672,12 @@ class _Header extends StatelessWidget {
                   Expanded(
                     child: Text('Public map', style: AppTypography.display(size: 24, color: AppColors.onPrimary)),
                   ),
-                  Text(
-                    '${provider.reports.length} approved',
-                    style: AppTypography.caption(size: 12, color: AppColors.lightBlue),
-                  ),
+                  _ViewToggle(showList: showList, onChanged: onToggleView),
                 ],
               ),
             ),
             Text(
-              'Only approved reports are published here.',
+              '${provider.reports.length} approved · only approved reports are published here.',
               style: AppTypography.caption(size: 12, color: AppColors.lightBlue),
             ),
             const SizedBox(height: 12),
@@ -681,6 +700,77 @@ class _Header extends StatelessWidget {
                     ),
                   ],
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small Map / List switch shown in the header.
+class _ViewToggle extends StatelessWidget {
+  const _ViewToggle({required this.showList, required this.onChanged});
+
+  final bool showList;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.lightBlue.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment(
+            icon: Icons.map_rounded,
+            label: 'Map',
+            selected: !showList,
+            onTap: () => onChanged(false),
+          ),
+          _segment(
+            icon: Icons.list_rounded,
+            label: 'List',
+            selected: showList,
+            onTap: () => onChanged(true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment({
+    required IconData icon,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final color = selected ? AppColors.darkBlue : AppColors.lightBlue;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.lightBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: AppTypography.bodyStyle(
+                size: 11.5,
+                weight: FontWeight.w600,
+                color: color,
+                height: 1.1,
               ),
             ),
           ],
@@ -745,7 +835,8 @@ class _Legend extends StatelessWidget {
         spacing: 12,
         runSpacing: 6,
         children: [
-          dot(AppColors.statusBlue, 'Not assigned'),
+          dot(AppColors.statusSlate, 'Not assigned'),
+          dot(AppColors.statusBlue, 'Awaiting maintenance'),
           dot(AppColors.statusAmber, 'In progress'),
           dot(AppColors.statusGreen, 'Completed'),
         ],

@@ -27,15 +27,10 @@ mobile/android/key.properties
 # keep real Google service files out of VCS; ship .example versions
 mobile/android/app/google-services.json
 mobile/ios/Runner/GoogleService-Info.plist
-# iOS Google Maps key xcconfig (ship the .example); see maps-key.js note below
-mobile/ios/Flutter/Maps.xcconfig
 
 # web (Vite)
 web/node_modules/
 web/dist/
-
-# mobile web build: locally-supplied Maps browser key (ship the .example)
-mobile/web/maps-key.js
 
 # backend runtime data (uploaded images live here, never in the database)
 backend/uploads/

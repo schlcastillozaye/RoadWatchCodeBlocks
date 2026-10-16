@@ -375,11 +375,11 @@ function PublicDetail({
 
       <a
         className="btn btn-secondary btn-sm mt-4"
-        href={`https://www.google.com/maps/search/?api=1&query=${report.latitude},${report.longitude}`}
+        href={`https://www.openstreetmap.org/?mlat=${report.latitude}&mlon=${report.longitude}#map=17/${report.latitude}/${report.longitude}`}
         target="_blank"
         rel="noreferrer"
       >
-        Open in Google Maps ↗
+        Open in OpenStreetMap ↗
       </a>
     </Section>
   );

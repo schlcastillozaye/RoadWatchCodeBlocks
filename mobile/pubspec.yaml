@@ -40,11 +40,12 @@ dependencies:
   shared_preferences: ^2.5.6
   image_picker: ^1.2.4
   geolocator: ^14.1.1
-  google_maps_flutter: ^2.18.2
   intl: ^0.20.3
   cached_network_image: ^4.0.4
   http_parser: ^4.1.2
   url_launcher: ^6.3.3
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
 
 dev_dependencies:
   flutter_test:

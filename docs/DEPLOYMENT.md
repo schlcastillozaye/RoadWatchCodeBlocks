@@ -209,36 +209,28 @@ OpenStreetMap tiles**, which needs no account or billing.
 
 | Component | Provider | Key |
 | --- | --- | --- |
-| Web map | Leaflet + OpenStreetMap tiles | none |
+| Web map | Leaflet on OpenStreetMap tiles | none |
+| Mobile map | `flutter_map` on OpenStreetMap tiles | none |
 | API geocoding (search + reverse) | OpenStreetMap Nominatim | none |
-| Mobile map | Google Maps, falls back to a list | optional |
 
 Nominatim's usage policy is respected automatically: requests carry a descriptive
 `User-Agent`, are throttled to at most one per second, and results are cached in memory
-for 10 minutes.
+for 10 minutes. OSM tile requests likewise carry a descriptive `User-Agent` on mobile,
+and both maps display OpenStreetMap attribution.
 
-### Using Google instead (optional)
+### Optional: server-side Google geocoding
 
-If you would rather use Google for the mobile map, or for server-side geocoding, create
-**separate, restricted** keys. Google requires billing to be enabled on the project.
+If you would rather geocode with Google, enable billing on the project and create a key
+restricted to the **Geocoding API**:
 
 | Key | Used by | Restriction |
 | --- | --- | --- |
-| Android key | Mobile (`--dart-define` + Gradle property `ORG_GRADLE_PROJECT_GOOGLE_MAPS_API_KEY`) | Package name + SHA-1 of the signing certificate, **Maps SDK for Android** |
-| iOS key | Mobile (`--dart-define` + `GOOGLE_MAPS_API_KEY` in `ios/Flutter/Maps.xcconfig`) | Bundle id, **Maps SDK for iOS** |
 | Server key | Backend (`GOOGLE_MAPS_SERVER_API_KEY`) | No application restriction, **Geocoding API** only |
-
-Flutter **web** builds are a special case: the map plugin reads the key from a
-`<script src="https://maps.googleapis.com/maps/api/js?key=…&libraries=marker">` tag in
-`mobile/web/index.html`, **not** from `--dart-define`. `--dart-define=GOOGLE_MAPS_API_KEY`
-is still required so the Dart side switches from the list fallback to a real map.
 
 Setting `GOOGLE_MAPS_SERVER_API_KEY` makes the API use Google Geocoding instead of
 Nominatim — no client change needed. Never reuse the server key in a client.
 
-If maps are not needed at all, simply leave the variables empty: the mobile app falls
-back to a list view and the backend falls back to manual address entry. **No feature
-breaks.**
+Client maps need no key at all, so there is nothing to restrict or rotate there.
 
 ---
 
@@ -246,32 +238,16 @@ breaks.**
 
 ```bash
 cd mobile
-
-# Android: the key must reach BOTH Gradle (to populate the manifest) and Dart
-# (to switch the UI from the list fallback to a real map). Gradle properties are
-# supplied through an ORG_GRADLE_PROJECT_* environment variable.
-export ORG_GRADLE_PROJECT_GOOGLE_MAPS_API_KEY="<android-key>"
-# PowerShell:  $env:ORG_GRADLE_PROJECT_GOOGLE_MAPS_API_KEY = "<android-key>"
-
-flutter build appbundle \
-  --dart-define=API_BASE_URL=https://api.roadwatch.example \
-  --dart-define=GOOGLE_MAPS_API_KEY=<android-key>
+flutter build appbundle --dart-define=API_BASE_URL=https://api.roadwatch.example
 
 # iOS
-flutter build ipa \
-  --dart-define=API_BASE_URL=https://api.roadwatch.example \
-  --dart-define=GOOGLE_MAPS_API_KEY=<ios-key>
+flutter build ipa --dart-define=API_BASE_URL=https://api.roadwatch.example
 ```
 
-For iOS the native SDK additionally needs the key delivered through Xcode, not just
-`--dart-define`: copy `ios/Flutter/Maps.xcconfig.example` to `ios/Flutter/Maps.xcconfig`
-and paste the same key there. `AppDelegate.swift` reads it from the `GMSApiKey` Info.plist
-entry and starts the SDK only when it is non-empty (an empty key falls back to the list
-map instead of a blank one).
-
-`API_BASE_URL` defaults to `http://localhost:4000`, which is useful for emulators but
-**must** be overridden for any real build. Note that Android emulators rewrite `localhost`
-to `10.0.2.2` automatically; physical devices need the machine's LAN IP or the public URL.
+Maps need no key on either platform. `API_BASE_URL` defaults to
+`http://localhost:4000`, which is useful for emulators but **must** be overridden for any
+real build. Note that Android emulators rewrite `localhost` to `10.0.2.2` automatically;
+physical devices need the machine's LAN IP or the public URL.
 
 Store listings need the camera and location usage descriptions, which are already
 declared in `android/app/src/main/AndroidManifest.xml` and `ios/Runner/Info.plist`.
@@ -286,7 +262,7 @@ declared in `android/app/src/main/AndroidManifest.xml` and `ios/Runner/Info.plis
 - [ ] TLS everywhere; HSTS at the proxy.
 - [ ] `PUBLIC_BASE_URL` is the HTTPS API URL.
 - [ ] Image storage is private; images are only reachable through the API.
-- [ ] Mobile Google Maps keys (if used) are application-restricted and split by platform.
+- [ ] Maps need no key; verify OSM tiles load and attribution is visible.
 - [ ] Seeded demo accounts are removed or their passwords rotated.
 - [ ] Database and the uploads volume are backed up, and a restore has been tested.
 - [ ] Rate limits are appropriate for expected traffic (`src/app.ts` and `modules/auth/routes.ts`).
@@ -301,6 +277,20 @@ each module's service layer. In particular:
 - the override that completes a repair without a photo is `ADMIN` only and is audited.
 
 Client-side hiding of buttons is cosmetic only — the server is the source of truth.
+
+### Third-party data flows
+
+Two outbound requests leave your infrastructure, both to OpenStreetMap:
+
+| Call | Made by | What is sent |
+| --- | --- | --- |
+| Nominatim geocoding | Backend, on address search / reverse geocode | the search text or the coordinates being resolved |
+| OSM raster tiles | Web and mobile clients, directly | standard HTTP request (IP address, `User-Agent`) |
+
+Neither carries user identity, tokens or photos. Both are rate-limited per the OSM usage
+policy. If your deployment handles location data with stricter requirements, set
+`GOOGLE_MAPS_SERVER_API_KEY` to route geocoding through Google instead, or self-host
+tiles/Nominatim.
 
 ---
 
