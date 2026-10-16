@@ -12,5 +12,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    // Leaflet (~150 kB) plus React pushes the single bundle just past Vite's
+    // default 500 kB warning. It gzips to ~150 kB, which is fine for this app.
+    chunkSizeWarningLimit: 700,
   },
 });

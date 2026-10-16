@@ -1,50 +1,19 @@
-import { GOOGLE_MAPS_API_KEY } from './config';
+/**
+ * Map configuration for the web platform.
+ *
+ * RoadWatch uses Leaflet with OpenStreetMap raster tiles: an interactive map
+ * with no API key, no account and no billing. This mirrors the mobile app's
+ * graceful behaviour — if tiles cannot be fetched the list view still works.
+ */
 
-export interface GoogleMapInstance {
-  fitBounds: (bounds: unknown, padding?: number) => void;
-  setCenter: (position: unknown) => void;
-  setZoom: (zoom: number) => void;
-  panTo: (position: unknown) => void;
-}
+/** OpenStreetMap standard raster tiles (free, attribution required). */
+export const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-export interface GoogleMarkerInstance {
-  setMap: (map: GoogleMapInstance | null) => void;
-  addListener: (event: string, handler: () => void) => void;
-}
+export const OSM_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-interface GoogleMapsApi {
-  Map: new (element: HTMLElement, options: Record<string, unknown>) => GoogleMapInstance;
-  Marker: new (options: Record<string, unknown>) => GoogleMarkerInstance;
-  LatLng: new (lat: number, lng: number) => unknown;
-  LatLngBounds: new () => { extend: (point: unknown) => void };
-  SymbolPath: { CIRCLE: number };
-}
-
-declare global {
-  interface Window {
-    google?: { maps: GoogleMapsApi };
-  }
-}
-
-let loader: Promise<void> | null = null;
-
-/** Loads the Google Maps JS API once; resolves immediately if already present. */
-export function loadGoogleMaps(): Promise<void> {
-  if (typeof window !== 'undefined' && window.google?.maps) return Promise.resolve();
-  if (loader) return loader;
-
-  loader = new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Google Maps failed to load'));
-    document.head.appendChild(script);
-  });
-
-  return loader;
-}
+/** Fallback viewport centre (Metro Manila) when there is nothing to fit. */
+export const FALLBACK_CENTRE = { lat: 14.7942, lng: 120.879 };
 
 /** Functional repair-status colours (identical to the mobile app). */
 export const REPAIR_COLORS: Record<string, string> = {
@@ -53,3 +22,7 @@ export const REPAIR_COLORS: Record<string, string> = {
   IN_PROGRESS: '#c9821f',
   COMPLETED: '#1f8a5b',
 };
+
+/** Distinct colour for a searched place, which is not a report. */
+export const SEARCH_MARKER_COLOR = '#071633';
+export const SEARCH_MARKER_STROKE = '#c3e6ff';

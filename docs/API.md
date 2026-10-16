@@ -373,8 +373,26 @@ No authentication. Converts coordinates to an address.
 { "available": true, "address": "Mabini Street, Malolos", "areaLabel": "Barangay San Jose" }
 ```
 
-When `GOOGLE_MAPS_SERVER_API_KEY` is not set, `available` is `false` and the clients fall
-back to manual address entry.
+Uses the free **OpenStreetMap Nominatim** service by default, so this works with no
+configuration. When `GOOGLE_MAPS_SERVER_API_KEY` is set, Google Geocoding is used
+instead. If the provider fails or returns nothing, `available` is `false` plus a
+`reason`, and the clients fall back to manual address entry.
+
+### `GET /api/map/geocode/search?q=…&limit=5`
+
+No authentication. Forward geocoding (address / place search), same providers as
+above.
+
+```json
+{
+  "available": true,
+  "results": [{ "address": "Ortigas Center, Pasig, Metro Manila, Philippines", "lat": 14.58425, "lng": 121.06041, "areaLabel": "Pasig" }],
+  "reason": null
+}
+```
+
+Results are cached in memory for 10 minutes and Nominatim calls are throttled to the
+one request per second its usage policy allows.
 
 ---
 

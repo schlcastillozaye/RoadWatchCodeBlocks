@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { optionalAuthenticate } from '../../middleware/auth';
 import { validate } from '../../middleware/validate';
-import { env } from '../../config/env';
+import { reverseGeocode, searchPlaces } from '../../services/geocoding';
 import { listPublicReports, getReportForActor } from '../reports/service';
 import { listReportsQuerySchema, idParamSchema } from '../reports/schemas';
 
@@ -39,8 +39,9 @@ router.get(
 );
 
 /**
- * Server-side reverse geocoding. Optional: when no Google key is configured the
- * client falls back to raw coordinates (never an error the user must handle).
+ * Server-side reverse geocoding. Uses Google when a server key is configured,
+ * otherwise the free OpenStreetMap Nominatim service. Never a hard error: the
+ * client falls back to raw coordinates or a text label when unavailable.
  */
 router.get(
   '/geocode/reverse',
@@ -52,57 +53,17 @@ router.get(
   }),
   asyncHandler(async (req, res) => {
     const { lat, lng } = req.query as unknown as { lat: number; lng: number };
-
-    if (!env.googleMaps.serverApiKey) {
-      res.json({ available: false, address: null, areaLabel: null, reason: 'GOOGLE_MAPS_SERVER_API_KEY is not configured.' });
-      return;
-    }
-
-    try {
-      const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-      url.searchParams.set('latlng', `${lat},${lng}`);
-      url.searchParams.set('key', env.googleMaps.serverApiKey);
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timer);
-
-      if (!response.ok) {
-        res.json({ available: false, address: null, areaLabel: null, reason: `Geocoding failed (${response.status}).` });
-        return;
-      }
-
-      const data = (await response.json()) as {
-        status: string;
-        error_message?: string;
-        results?: Array<{ formatted_address: string; address_components: Array<{ long_name: string; types: string[] }> }>;
-      };
-
-      const first = data.results?.[0];
-      const areaLabel =
-        first?.address_components.find((c) => c.types.includes('sublocality') || c.types.includes('locality'))?.long_name ??
-        null;
-
-      res.json({
-        available: Boolean(first),
-        address: first?.formatted_address ?? null,
-        areaLabel,
-        reason: first ? null : describeGeocodeStatus(data.status, data.error_message),
-      });
-    } catch {
-      res.json({ available: false, address: null, areaLabel: null, reason: 'Geocoding service unavailable.' });
-    }
+    res.json(await reverseGeocode(lat, lng));
   }),
 );
 
 /**
  * Server-side forward geocoding (place / address search).
  *
- * Optional, exactly like reverse geocoding: when no key is configured, or when
- * Google refuses the request, we answer with `available: false` plus a reason
- * the client can show — never a hard error the user has to interpret. Clients
- * degrade to matching their own reports by text instead.
+ * Uses Google when a server key is configured, otherwise the free
+ * OpenStreetMap Nominatim service. When a provider returns nothing we answer
+ * with `available: false` plus a reason the client can show — never a hard
+ * error. Clients degrade to matching their own reports by text instead.
  */
 router.get(
   '/geocode/search',
@@ -114,80 +75,8 @@ router.get(
   }),
   asyncHandler(async (req, res) => {
     const { q, limit } = req.query as unknown as { q: string; limit?: number };
-
-    if (!env.googleMaps.serverApiKey) {
-      res.json({
-        available: false,
-        results: [],
-        reason: 'GOOGLE_MAPS_SERVER_API_KEY is not configured.',
-      });
-      return;
-    }
-
-    try {
-      const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-      url.searchParams.set('address', q);
-      url.searchParams.set('key', env.googleMaps.serverApiKey);
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timer);
-
-      if (!response.ok) {
-        res.json({ available: false, results: [], reason: `Geocoding failed (${response.status}).` });
-        return;
-      }
-
-      const data = (await response.json()) as {
-        status: string;
-        error_message?: string;
-        results?: Array<{
-          formatted_address: string;
-          geometry: { location: { lat: number; lng: number } };
-          address_components: Array<{ long_name: string; types: string[] }>;
-        }>;
-      };
-
-      const results = (data.results ?? []).slice(0, limit ?? 5).map((result) => ({
-        address: result.formatted_address,
-        lat: result.geometry.location.lat,
-        lng: result.geometry.location.lng,
-        areaLabel:
-          result.address_components.find(
-            (component) => component.types.includes('sublocality') || component.types.includes('locality'),
-          )?.long_name ?? null,
-      }));
-
-      res.json({
-        available: results.length > 0,
-        results,
-        reason: results.length > 0 ? null : describeGeocodeStatus(data.status, data.error_message),
-      });
-    } catch {
-      res.json({ available: false, results: [], reason: 'Geocoding service unavailable.' });
-    }
+    res.json(await searchPlaces(q, limit ?? 5));
   }),
 );
-
-/** Turns a Google Geocoding status into something a person can act on. */
-function describeGeocodeStatus(status: string, errorMessage?: string): string {
-  switch (status) {
-    case 'ZERO_RESULTS':
-      return 'No matching place was found.';
-    case 'REQUEST_DENIED':
-      return errorMessage
-        ? `Google rejected the request: ${errorMessage}`
-        : 'Google rejected the request — check that billing is enabled and the Geocoding API is turned on.';
-    case 'OVER_QUERY_LIMIT':
-      return 'The Google Maps quota for this project has been exceeded.';
-    case 'OVER_DAILY_LIMIT':
-      return 'The daily Google Maps limit has been reached. Try again tomorrow.';
-    case 'INVALID_REQUEST':
-      return 'That search was not understood — try a more specific address.';
-    default:
-      return `No result (${status}).`;
-  }
-}
 
 export default router;

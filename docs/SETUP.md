@@ -108,7 +108,7 @@ or add the relevant packages to the `allowScripts` field in `package.json`.
 | `PUBLIC_BASE_URL` | `http://localhost:4000` | Prefix used to build image URLs |
 | `MAX_UPLOAD_BYTES` | `8388608` | Max size per photo (8 MB) |
 | `IMAGE_PROCESSING_ENABLED` | `false` | Optional analysis module |
-| `GOOGLE_MAPS_SERVER_API_KEY` | empty | Server-side key for reverse geocoding |
+| `GOOGLE_MAPS_SERVER_API_KEY` | empty | Optional — prefer Google geocoding (free OpenStreetMap Nominatim by default) |
 
 ---
 
@@ -126,7 +126,9 @@ npm run dev         # http://localhost:5173
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | `http://localhost:4000` | Where the API lives |
-| `VITE_GOOGLE_MAPS_API_KEY` | empty | Leave empty to run without maps |
+
+That is the only variable. The web platform draws its map with **Leaflet on
+OpenStreetMap tiles — no API key, no account, no billing.**
 
 Sign in with `admin@roadwatch.gov` / `Admin@12345`.
 
@@ -161,7 +163,8 @@ flutter run -d chrome --web-port=3000 --dart-define=API_BASE_URL=http://localhos
 flutter run -d emulator-5554 --dart-define=API_BASE_URL=http://localhost:4000
 ```
 
-Add a Google Maps key (optional — the app degrades gracefully without it):
+Add a Google Maps key — **mobile only, and optional** (the Flutter app degrades
+gracefully to a list without it). The web platform needs no key at all:
 
 ```powershell
 flutter run -d windows `
@@ -217,8 +220,10 @@ It imports `dotenv/config` itself — keep the `dotenv` dependency installed.
 Add your web origin to `CORS_ORIGINS` in `backend/.env` and restart the backend.
 
 **Map is blank / “Map view unavailable”**
-No Maps key is configured, or the key is not authorised for Maps JavaScript API /
-Maps SDK for Android / iOS. The list fallback remains fully functional.
+The web platform uses Leaflet + OpenStreetMap, so a blank map usually means the
+browser is blocking `tile.openstreetmap.org` or you are offline — the list
+fallback remains fully functional. On the mobile app, the Google Maps key is
+missing or not authorised for Maps SDK for Android / iOS.
 
 **`flutter run` cannot find the API on Android**
 Use `10.0.2.2` instead of `localhost`, or pass

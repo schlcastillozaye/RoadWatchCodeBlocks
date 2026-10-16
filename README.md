@@ -132,16 +132,21 @@ same API with `--dart-define=API_BASE_URL=…`.
 
 ---
 
-## Google Maps
+## Maps
 
-Maps are **optional by design**. When no API key is configured, both clients fall back to
-a fully usable list view so nothing is ever blocked:
+The web platform draws its map with **Leaflet + OpenStreetMap** — an interactive,
+colour-coded, click-through map with **no API key, no account and no billing**. It
+works the moment you deploy it.
 
-| Client | Key variable | Fallback |
+| Client | Map provider | Key needed |
 | --- | --- | --- |
-| Mobile | `--dart-define=GOOGLE_MAPS_API_KEY=…` | Location list + manual pin |
-| Web | `VITE_GOOGLE_MAPS_API_KEY=…` in `web/.env` | Report list with filters |
-| Backend (reverse geocoding) | `GOOGLE_MAPS_SERVER_API_KEY` | Manual address entry |
+| Web | Leaflet + OpenStreetMap | **None** |
+| Mobile | Google Maps, falls back to a list | `--dart-define=GOOGLE_MAPS_API_KEY=…` (optional) |
+| Backend (geocoding) | OpenStreetMap Nominatim, Google optional | `GOOGLE_MAPS_SERVER_API_KEY` (optional) |
+
+Address search and reverse geocoding on the API default to the **free OpenStreetMap
+Nominatim** service. Set `GOOGLE_MAPS_SERVER_API_KEY` only if you would rather use
+Google Geocoding — that key requires billing to be enabled.
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the exact configuration steps and
 [`docs/API.md`](docs/API.md) for every endpoint.

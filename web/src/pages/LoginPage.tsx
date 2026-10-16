@@ -5,7 +5,7 @@ import { BrandMark } from '../components/BrandMark';
 import { Banner, Spinner } from '../components/Feedback';
 import { errorMessage } from '../lib/errors';
 import { useAuth } from '../lib/auth';
-import { BRAND, MAPS_ENABLED } from '../lib/config';
+import { BRAND } from '../lib/config';
 
 const DEMO_ACCOUNTS = [
   { label: 'Administrator', email: 'admin@roadwatch.gov', password: 'Admin@12345' },
@@ -141,12 +141,6 @@ export function LoginPage() {
                 {submitting ? 'Signing in…' : 'Sign in'}
               </button>
             </form>
-
-            {!MAPS_ENABLED && (
-              <p className="mt-5 text-xs text-ink-3">
-                Tip: maps are disabled until a Google Maps key is configured. Every other feature works normally.
-              </p>
-            )}
           </div>
 
           {SHOW_DEMO_ACCOUNTS && (

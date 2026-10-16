@@ -71,8 +71,9 @@ MAX_UPLOAD_BYTES=8388608
 # Optional image-processing module
 IMAGE_PROCESSING_ENABLED=false
 
-# Server-side key for reverse geocoding
-GOOGLE_MAPS_SERVER_API_KEY=<key restricted to the Geocoding API>
+# Optional: prefer Google geocoding. Leave empty to use the free
+# OpenStreetMap Nominatim geocoder (no key needed).
+GOOGLE_MAPS_SERVER_API_KEY=
 ```
 
 > **`PUBLIC_BASE_URL` should be the externally reachable API URL.** It is used to build the
@@ -194,37 +195,50 @@ Build-time environment:
 
 ```ini
 VITE_API_BASE_URL=https://api.roadwatch.example
-VITE_GOOGLE_MAPS_API_KEY=<browser key>
 ```
 
 Vite inlines these at build time, so rebuild after changing them. There are no runtime
-secrets in the web bundle — it holds only the Maps browser key, which is safe to expose
-provided it is **restricted** (see below).
+secrets in the web bundle, and no map key at all — the web map is **Leaflet on
+OpenStreetMap tiles**, which needs no account or billing.
 
 ---
 
-## 5. Google Maps keys
+## 5. Maps and geocoding
 
-Use three separate keys, each restricted to what it needs:
+**Nothing here requires a Google key.** The map stack is:
+
+| Component | Provider | Key |
+| --- | --- | --- |
+| Web map | Leaflet + OpenStreetMap tiles | none |
+| API geocoding (search + reverse) | OpenStreetMap Nominatim | none |
+| Mobile map | Google Maps, falls back to a list | optional |
+
+Nominatim's usage policy is respected automatically: requests carry a descriptive
+`User-Agent`, are throttled to at most one per second, and results are cached in memory
+for 10 minutes.
+
+### Using Google instead (optional)
+
+If you would rather use Google for the mobile map, or for server-side geocoding, create
+**separate, restricted** keys. Google requires billing to be enabled on the project.
 
 | Key | Used by | Restriction |
 | --- | --- | --- |
-| Browser key | Web (`VITE_GOOGLE_MAPS_API_KEY`) | HTTP referrer (`https://admin.roadwatch.example/*`), **Maps JavaScript API** only |
 | Android key | Mobile (`--dart-define` + Gradle property `ORG_GRADLE_PROJECT_GOOGLE_MAPS_API_KEY`) | Package name + SHA-1 of the signing certificate, **Maps SDK for Android** |
 | iOS key | Mobile (`--dart-define` + `GOOGLE_MAPS_API_KEY` in `ios/Flutter/Maps.xcconfig`) | Bundle id, **Maps SDK for iOS** |
-| Server key | Backend (`GOOGLE_MAPS_SERVER_API_KEY`) | Server IP, **Geocoding API** only |
+| Server key | Backend (`GOOGLE_MAPS_SERVER_API_KEY`) | No application restriction, **Geocoding API** only |
 
 Flutter **web** builds are a special case: the map plugin reads the key from a
 `<script src="https://maps.googleapis.com/maps/api/js?key=…&libraries=marker">` tag in
 `mobile/web/index.html`, **not** from `--dart-define`. `--dart-define=GOOGLE_MAPS_API_KEY`
 is still required so the Dart side switches from the list fallback to a real map.
-The React web platform is different again — it takes the key from `VITE_GOOGLE_MAPS_API_KEY`.
 
-Never reuse the server key in a client. Clients should always use application-restricted
-keys, and the server key should never leave the backend.
+Setting `GOOGLE_MAPS_SERVER_API_KEY` makes the API use Google Geocoding instead of
+Nominatim — no client change needed. Never reuse the server key in a client.
 
-If maps are not needed at all, simply leave the variables empty: both clients fall back to
-a list view and the backend falls back to manual address entry. **No feature breaks.**
+If maps are not needed at all, simply leave the variables empty: the mobile app falls
+back to a list view and the backend falls back to manual address entry. **No feature
+breaks.**
 
 ---
 
@@ -272,7 +286,7 @@ declared in `android/app/src/main/AndroidManifest.xml` and `ios/Runner/Info.plis
 - [ ] TLS everywhere; HSTS at the proxy.
 - [ ] `PUBLIC_BASE_URL` is the HTTPS API URL.
 - [ ] Image storage is private; images are only reachable through the API.
-- [ ] Google Maps keys are application-restricted and split by platform.
+- [ ] Mobile Google Maps keys (if used) are application-restricted and split by platform.
 - [ ] Seeded demo accounts are removed or their passwords rotated.
 - [ ] Database and the uploads volume are backed up, and a restore has been tested.
 - [ ] Rate limits are appropriate for expected traffic (`src/app.ts` and `modules/auth/routes.ts`).

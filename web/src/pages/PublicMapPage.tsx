@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
 import { AuthImage, Lightbox } from '../components/AuthImage';
-import { Banner, EmptyState, ErrorState, LoadingBlock } from '../components/Feedback';
+import { EmptyState, ErrorState, LoadingBlock } from '../components/Feedback';
 import { MapCanvas, MapLegend } from '../components/MapPanel';
 import { PlaceSearch } from '../components/PlaceSearch';
 import { CategoryChip, PriorityBadge, RepairBadge } from '../components/StatusBadge';
 import { PageHeader, Section } from '../components/ui';
 import { api } from '../lib/api';
-import { MAPS_ENABLED } from '../lib/config';
 import { CATEGORY_LABELS, distanceKm, formatDateTime, formatDistance, locationLabel, relativeTime } from '../lib/format';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import type { IssueCategory, PlaceResult, RepairStatus, Report } from '../lib/types';
@@ -118,16 +117,6 @@ export function PublicMapPage() {
           </button>
         }
       />
-
-      {!MAPS_ENABLED && (
-        <div className="mb-4">
-          <Banner tone="info">
-            No Google Maps key is configured, so the platform shows the report list instead. Set{' '}
-            <code className="rounded bg-surface px-1.5 py-0.5 text-xs">VITE_GOOGLE_MAPS_API_KEY</code> to enable the
-            interactive map — everything remains usable either way.
-          </Banner>
-        </div>
-      )}
 
       <Section className="mb-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -287,7 +276,7 @@ export function PublicMapPage() {
           </div>
 
           <div className="lg:col-span-2">
-            <Section title="Map" description={MAPS_ENABLED ? 'Colour-coded by repair status' : 'List mode'}>
+            <Section title="Map" description="Colour-coded by repair status">
               <div className="overflow-hidden rounded-brand-sm border border-azure" style={{ height: 420 }}>
                 <MapCanvas
                   markers={markers}

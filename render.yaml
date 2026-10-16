@@ -93,7 +93,9 @@ services:
       - key: IMAGE_PROCESSING_API_KEY
         sync: false
 
-      # --- Optional server-side Google key (reverse geocoding) -------------
+      # Geocoding (address search + reverse geocoding) works out of the box on
+      # the free OpenStreetMap Nominatim service — no key needed. Set this only
+      # to prefer Google Geocoding instead; it requires billing on the key.
       - key: GOOGLE_MAPS_SERVER_API_KEY
         sync: false
 
@@ -128,6 +130,5 @@ services:
       # e.g. https://roadwatch-api.onrender.com
       - key: VITE_API_BASE_URL
         sync: false
-      # Optional: a browser-restricted Google Maps JavaScript API key.
-      - key: VITE_GOOGLE_MAPS_API_KEY
-        sync: false
+      # No map key is needed: the web platform renders Leaflet on free
+      # OpenStreetMap tiles.

@@ -11,7 +11,6 @@ import { ModerationDialog } from '../components/dialogs/ModerationDialog';
 import { RepairDialog } from '../components/dialogs/RepairDialog';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { MAPS_ENABLED } from '../lib/config';
 import { formatCoords, formatDateTime, locationLabel, relativeTime } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 import type { Report } from '../lib/types';
@@ -186,13 +185,10 @@ export function ReportDetailPage() {
                 >
                   Open in Google Maps ↗
                 </a>
-                {!MAPS_ENABLED && <span className="text-xs text-ink-3">Inline map needs an API key.</span>}
               </div>
-              {MAPS_ENABLED && (
-                <div className="pt-1">
-                  <MapLegend />
-                </div>
-              )}
+              <div className="pt-1">
+                <MapLegend />
+              </div>
             </div>
           </Section>
 

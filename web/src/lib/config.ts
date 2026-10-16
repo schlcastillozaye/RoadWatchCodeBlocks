@@ -14,10 +14,13 @@ if (
   );
 }
 
-/** Google Maps JS API key. Empty -> map panels fall back to a list view. */
-export const GOOGLE_MAPS_API_KEY = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '').trim();
-
-export const MAPS_ENABLED = GOOGLE_MAPS_API_KEY.length > 0;
+/**
+ * Maps are always available: the web platform renders Leaflet on free
+ * OpenStreetMap tiles, which need no API key or billing account. The flag is
+ * kept so panels can still describe the list-only fallback if it is ever turned
+ * off. Annotated as `boolean` so it is not narrowed to `true`.
+ */
+export const MAPS_ENABLED: boolean = true;
 
 export const BRAND = {
   product: 'RoadWatch',

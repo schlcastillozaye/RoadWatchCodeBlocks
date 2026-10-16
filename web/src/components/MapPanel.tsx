@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { MAPS_ENABLED } from '../lib/config';
-import { loadGoogleMaps, REPAIR_COLORS, type GoogleMapInstance, type GoogleMarkerInstance } from '../lib/maps';
+import {
+  FALLBACK_CENTRE,
+  OSM_ATTRIBUTION,
+  OSM_TILE_URL,
+  REPAIR_COLORS,
+  SEARCH_MARKER_COLOR,
+  SEARCH_MARKER_STROKE,
+} from '../lib/maps';
 import { Spinner } from './Feedback';
 
 export interface MapMarker {
@@ -23,12 +32,16 @@ interface MapCanvasProps {
   focusPoint?: { lat: number; lng: number } | null;
 }
 
-const FALLBACK_CENTRE = { lat: 14.7942, lng: 120.879 };
+const MARKER_RADIUS = 9;
+const SEARCH_MARKER_RADIUS = 10;
+/** Stop showing the loading veil after this long even if tiles are slow. */
+const TILE_TIMEOUT_MS = 4000;
 
 /**
- * Renders a real Google Map when a key is configured. Markers are colour-coded
- * by repair status and clickable. If the API fails to load, the component
- * renders a clear message so the caller can fall back to a list view.
+ * Renders an interactive Leaflet map on OpenStreetMap tiles — no API key, no
+ * account, no billing. Markers are colour-coded by repair status and clickable.
+ * If Leaflet cannot initialise, a clear message is shown so callers can keep
+ * using the list view.
  */
 export function MapCanvas({
   markers,
@@ -38,9 +51,9 @@ export function MapCanvas({
   focusPoint = null,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<GoogleMapInstance | null>(null);
-  const markerRefs = useRef<Map<string, GoogleMarkerInstance>>(new Map());
-  const searchMarkerRef = useRef<GoogleMarkerInstance | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRefs = useRef<Map<string, L.CircleMarker>>(new Map());
+  const searchMarkerRef = useRef<L.CircleMarker | null>(null);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
 
@@ -56,42 +69,57 @@ export function MapCanvas({
       setStatus('error');
       return;
     }
-    if (mapRef.current) return;
+    if (mapRef.current || !containerRef.current) return;
 
-    let cancelled = false;
+    let map: L.Map | null = null;
+    let observer: ResizeObserver | null = null;
+    let timer: number | undefined;
 
-    loadGoogleMaps()
-      .then(() => {
-        if (cancelled || !containerRef.current || !window.google?.maps) return;
-        mapRef.current = new window.google.maps.Map(containerRef.current, {
-          center: FALLBACK_CENTRE,
-          zoom: 12,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: true,
-          clickableIcons: false,
-        });
-        setStatus('ready');
-      })
-      .catch(() => {
-        if (!cancelled) setStatus('error');
+    try {
+      map = L.map(containerRef.current, {
+        center: [FALLBACK_CENTRE.lat, FALLBACK_CENTRE.lng],
+        zoom: 12,
+        zoomControl: true,
       });
 
+      const tiles = L.tileLayer(OSM_TILE_URL, {
+        attribution: OSM_ATTRIBUTION,
+        maxZoom: 19,
+      }).addTo(map);
+
+      mapRef.current = map;
+
+      // Reveal the map as soon as tiles land (or after a short grace period).
+      const settle = () => setStatus((current) => (current === 'loading' ? 'ready' : current));
+      tiles.once('load', settle);
+      timer = window.setTimeout(settle, TILE_TIMEOUT_MS);
+
+      // Leaflet only tracks window resizes; keep the canvas correct when the
+      // container itself changes size (responsive layouts, panels, drawers).
+      if (typeof ResizeObserver !== 'undefined') {
+        observer = new ResizeObserver(() => map?.invalidateSize());
+        observer.observe(containerRef.current);
+      }
+    } catch {
+      setStatus('error');
+    }
+
     return () => {
-      cancelled = true;
-      markerRefs.current.forEach((marker) => marker.setMap(null));
+      window.clearTimeout(timer);
+      observer?.disconnect();
+      markerRefs.current.forEach((circle) => circle.remove());
       markerRefs.current.clear();
-      searchMarkerRef.current?.setMap(null);
+      searchMarkerRef.current?.remove();
       searchMarkerRef.current = null;
+      map?.remove();
       mapRef.current = null;
     };
   }, []);
 
   // Sync markers with the current data.
   useEffect(() => {
-    if (status !== 'ready' || !window.google?.maps || !mapRef.current) return;
-    const maps = window.google.maps;
     const map = mapRef.current;
+    if (!map) return;
 
     const seen = new Set<string>();
     for (const marker of markers) {
@@ -99,27 +127,22 @@ export function MapCanvas({
       if (markerRefs.current.has(marker.id)) continue;
 
       const colour = REPAIR_COLORS[marker.status] ?? REPAIR_COLORS.NOT_ASSIGNED;
-      const instance = new maps.Marker({
-        position: new maps.LatLng(marker.lat, marker.lng),
-        map,
-        title: marker.title,
-        icon: {
-          path: maps.SymbolPath.CIRCLE,
-          scale: 9,
-          fillColor: colour,
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-        },
-      });
+      const circle = L.circleMarker([marker.lat, marker.lng], {
+        radius: MARKER_RADIUS,
+        color: '#ffffff',
+        weight: 2,
+        fillColor: colour,
+        fillOpacity: 1,
+      }).addTo(map);
 
-      instance.addListener('click', () => selectRef.current?.(marker.id));
-      markerRefs.current.set(marker.id, instance);
+      circle.bindTooltip(marker.title);
+      circle.on('click', () => selectRef.current?.(marker.id));
+      markerRefs.current.set(marker.id, circle);
     }
 
-    for (const [id, instance] of markerRefs.current) {
+    for (const [id, circle] of markerRefs.current) {
       if (!seen.has(id)) {
-        instance.setMap(null);
+        circle.remove();
         markerRefs.current.delete(id);
       }
     }
@@ -129,55 +152,46 @@ export function MapCanvas({
       .map((marker) => marker.id)
       .sort()
       .join('|');
-    if (markers.length > 0 && signature !== fitSignature && map) {
+    if (markers.length > 0 && signature !== fitSignature) {
       if (markers.length === 1) {
-        map.setCenter(new maps.LatLng(markers[0].lat, markers[0].lng));
-        map.setZoom(15);
+        map.setView([markers[0].lat, markers[0].lng], 15);
       } else {
-        const bounds = new maps.LatLngBounds();
-        markers.forEach((marker) => bounds.extend(new maps.LatLng(marker.lat, marker.lng)));
-        map.fitBounds(bounds, 64);
+        const bounds = L.latLngBounds(markers.map((marker) => [marker.lat, marker.lng] as [number, number]));
+        map.fitBounds(bounds, { padding: [64, 64] });
       }
       setFitSignature(signature);
     }
-  }, [markers, status, fitSignature]);
+  }, [markers, fitSignature]);
 
   // Focus a specific marker (e.g. after clicking a list row).
   useEffect(() => {
-    if (status !== 'ready' || !focusId || !window.google?.maps || !mapRef.current) return;
+    const map = mapRef.current;
+    if (!map || !focusId) return;
     const marker = markers.find((item) => item.id === focusId);
     if (!marker) return;
-    const maps = window.google.maps;
-    mapRef.current.panTo(new maps.LatLng(marker.lat, marker.lng));
-    mapRef.current.setZoom(16);
-  }, [focusId, markers, status]);
+    map.setView([marker.lat, marker.lng], 16);
+  }, [focusId, markers]);
 
   // Pan to a searched place and mark it (not a report, so a distinct pin).
   useEffect(() => {
-    if (status !== 'ready' || !focusSignature || !window.google?.maps || !mapRef.current) return;
+    const map = mapRef.current;
+    if (!map || !focusSignature) return;
     const [lat, lng] = focusSignature.split(',').map(Number);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-    const maps = window.google.maps;
-    const map = mapRef.current;
-    map.panTo(new maps.LatLng(lat, lng));
-    map.setZoom(15);
+    map.setView([lat, lng], 15);
 
-    searchMarkerRef.current?.setMap(null);
-    searchMarkerRef.current = new maps.Marker({
-      position: new maps.LatLng(lat, lng),
-      map,
-      title: 'Searched location',
-      icon: {
-        path: maps.SymbolPath.CIRCLE,
-        scale: 10,
-        fillColor: '#071633',
-        fillOpacity: 1,
-        strokeColor: '#c3e6ff',
-        strokeWeight: 3,
-      },
-    });
-  }, [focusSignature, status]);
+    searchMarkerRef.current?.remove();
+    searchMarkerRef.current = L.circleMarker([lat, lng], {
+      radius: SEARCH_MARKER_RADIUS,
+      color: SEARCH_MARKER_STROKE,
+      weight: 3,
+      fillColor: SEARCH_MARKER_COLOR,
+      fillOpacity: 1,
+    })
+      .addTo(map)
+      .bindTooltip('Searched location');
+  }, [focusSignature]);
 
   if (status === 'error') {
     return (
