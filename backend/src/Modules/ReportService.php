@@ -446,8 +446,25 @@ class ReportService
 
     public static function delete(string $reportId, array $actor): array
     {
+        return self::deleteReport($reportId, $actor, false);
+    }
+
+    public static function deleteAsAdmin(string $reportId, array $actor): array
+    {
+        if (($actor['role'] ?? null) !== 'ADMIN') {
+            throw AppError::forbidden('Only administrators can delete reports through report management.');
+        }
+
+        return self::deleteReport($reportId, $actor, true);
+    }
+
+    private static function deleteReport(string $reportId, array $actor, bool $adminOnly): array
+    {
         $report = self::getOrThrow($reportId);
 
+        if ($adminOnly && ($actor['role'] ?? null) !== 'ADMIN') {
+            throw AppError::forbidden('Only administrators can delete reports through report management.');
+        }
         if (($actor['role'] ?? null) !== 'ADMIN') {
             if (($report['citizenId'] ?? null) !== $actor['id']) {
                 throw AppError::forbidden('You cannot delete this report.');
@@ -457,16 +474,27 @@ class ReportService
             }
         }
 
-        Db::execute('DELETE FROM `Report` WHERE `id` = ?', [$reportId]);
+        $storageKeys = array_column(
+            Db::all('SELECT `storageKey` FROM `ReportPhoto` WHERE `reportId` = ?', [$reportId]),
+            'storageKey'
+        );
 
-        Audit::record(array_merge([
-            'actorId' => $actor['id'],
-            'actorRole' => $actor['role'],
-            'action' => 'REPORT_DELETED',
-            'entityType' => 'Report',
-            'entityId' => $reportId,
-            'metadata' => ['referenceNo' => $report['referenceNo']],
-        ], Audit::actorContext()));
+        Db::transaction(static function () use ($reportId, $actor, $report): void {
+            Db::execute('DELETE FROM `Report` WHERE `id` = ?', [$reportId]);
+
+            Audit::record(array_merge([
+                'actorId' => $actor['id'],
+                'actorRole' => $actor['role'],
+                'action' => 'REPORT_DELETED',
+                'entityType' => 'Report',
+                'entityId' => $reportId,
+                'metadata' => ['referenceNo' => $report['referenceNo']],
+            ], Audit::actorContext()));
+        });
+
+        foreach ($storageKeys as $storageKey) {
+            Storage::remove((string) $storageKey);
+        }
 
         return ['success' => true];
     }

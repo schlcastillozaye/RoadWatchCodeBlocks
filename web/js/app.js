@@ -8,11 +8,20 @@
   'use strict';
 
   // --- Configuration ---------------------------------------------------------
-  // Prefer the runtime config from config.js (loaded before this file); fall
-  // back to the standard local API port so the app still works standalone.
-  const API_BASE = (typeof window.RW_API_BASE === 'string' && window.RW_API_BASE !== '')
-    ? window.RW_API_BASE.replace(/\/$/, '')
-    : 'http://localhost:4000'.replace(/\/$/, '');
+  // Resolve the API origin lazily (on each request) from the runtime
+  // configuration, so whichever of config.js / rw-runtime-config.js ran last
+  // wins and an override is never missed. RW_API_BASE_URL is the documented
+  // override (written by the container from the env var); RW_API_BASE is the
+  // value config.js derives from it or from auto-detection.
+  const resolveApiBase = () => {
+    const raw = (typeof window.RW_API_BASE_URL === 'string' && window.RW_API_BASE_URL)
+      || (typeof window.RW_API_BASE === 'string' && window.RW_API_BASE)
+      || '';
+    // Drop trailing slashes; a leading-slash path is added by the callers below.
+    const trimmed = String(raw).replace(/\/+$/, '');
+    // Standalone fallback (no config.js loaded): the local PHP dev API.
+    return trimmed || 'http://localhost:4000';
+  };
   const TOKEN_KEY = 'roadwatch_auth_token';
 
   // Build an absolute URL for an API asset path (photo URLs come back absolute
@@ -21,7 +30,7 @@
     if (!url) return '';
     if (/^https?:\/\//i.test(url)) return url;
     if (typeof window.RW_absoluteUrl === 'function') return window.RW_absoluteUrl(url);
-    return API_BASE + (url.charAt(0) === '/' ? '' : '/') + url;
+    return resolveApiBase() + (url.charAt(0) === '/' ? '' : '/') + url;
   };
 
   // --- DOM helpers -----------------------------------------------------------
@@ -56,6 +65,7 @@
   // --- State -----------------------------------------------------------------
   let user = null;
   let flash = null; // one-shot success message handed between pages
+  const deletingReportIds = new Set();
 
   // --- Auth ------------------------------------------------------------------
   const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -75,7 +85,7 @@
     }
     if (options.headers) Object.assign(headers, options.headers);
 
-    const resp = await fetch(`${API_BASE}/api${path}`, { ...options, headers });
+    const resp = await fetch(`${resolveApiBase()}/api${path}`, { ...options, headers });
 
     let data = null;
     const ct = resp.headers.get('content-type') || '';
@@ -207,15 +217,26 @@
 
   // --- Page templates --------------------------------------------------------
 
+  const brandLogoHtml = (theme) => `
+    <span class="rw-brand-lockup rw-brand-lockup--${theme}" role="img" aria-label="Code Blocks Inc.">
+      <span class="rw-brand-mark" aria-hidden="true">
+        <span class="rw-brand-block"></span>
+        <span class="rw-brand-block rw-brand-block--accent"></span>
+        <span class="rw-brand-block"></span>
+        <span class="rw-brand-block"></span>
+        <span class="rw-brand-block rw-brand-block--accent"></span>
+      </span>
+      <span class="rw-brand-wordmark">
+        <span class="rw-brand-name">CODEBLOCKS</span>
+        <span class="rw-brand-inc">INC.</span>
+      </span>
+    </span>`;
+
   const pageLogin = () => `
     <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet">
       <div class="brand-card w-full max-w-md p-8 rounded-xl shadow-lg">
         <div class="text-center mb-6">
-          <div class="w-20 h-20 mx-auto mb-4">
-            <svg class="w-full h-full text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1111.16 3L7 7zM7 16l.067-.033a5 5 0 119.934 0l.067.033A4 4 0 017 16z"/>
-            </svg>
-          </div>
+          <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
           <h1 class="text-3xl font-bold text-navy tracking-tight">Welcome back</h1>
           <p class="text-sm text-slate-tint mt-1">Sign in to continue</p>
         </div>
@@ -241,11 +262,7 @@
     <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet">
       <div class="brand-card w-full max-w-md p-8 rounded-xl shadow-lg">
         <div class="text-center mb-6">
-          <div class="w-20 h-20 mx-auto mb-4">
-            <svg class="w-full h-full text-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 4M12 6l-4 4m0 0a4 4 0 01-.88-7.903A5 5 0 1111.16 3L7 7m5 3.317a5 5 0 010 6.634L12 15m3.667-1.667a5 5 0 000-6.634L15 9"/>
-            </svg>
-          </div>
+          <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
           <h1 class="text-3xl font-bold text-navy tracking-tight">Create account</h1>
           <p class="text-sm text-slate-tint mt-1">Join RoadWatch and report road issues</p>
         </div>
@@ -275,18 +292,31 @@
     </section>
   `;
 
-  const pageHome = () => {
+  // The global header is rendered by the router for every non-auth route, so
+  // navigation is available on /reports, /map, /admin … and not only the home
+  // page. The role-gated links only point at routes the signed-in user may open
+  // (the router would otherwise bounce them straight back).
+  const headerHtml = () => {
     const u = getUser();
     const firstName = u ? escapeHtml((u.fullName || '').split(' ')[0] || 'there') : '';
+    const roleLinks = !u
+      ? ''
+      : u.role === 'ADMIN'
+        ? '<a href="/admin" data-nav="/admin" class="text-azure text-sm">Admin</a>'
+          + '<a href="/audit" data-nav="/audit" class="text-azure text-sm">Audit log</a>'
+        : u.role === 'MAINTENANCE_OFFICER'
+          ? '<a href="/assignments" data-nav="/assignments" class="text-azure text-sm">Assignments</a>'
+          : '';
     return `
     <header class="bg-navy border-b border-azure">
       <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 px-6 py-3">
-        <a href="/" id="nav-home" data-nav="/" class="text-white font-bold text-lg tracking-tight">RoadWatch</a>
+        <a href="/" id="nav-home" data-nav="/" class="rw-brand-home" aria-label="RoadWatch by Code Blocks Inc.">${brandLogoHtml('dark')}</a>
         <nav class="flex flex-wrap items-center gap-4">
           <a href="/map" data-nav="/map" class="text-azure text-sm">Map</a>
           ${u ? `
             <a href="/reports" data-nav="/reports" class="text-azure text-sm">My Reports</a>
             <a href="/submit-report" data-nav="/submit-report" class="text-azure text-sm">Report an issue</a>
+            ${roleLinks}
             <span class="text-slate-200 text-sm">${firstName}</span>
             <button id="nav-logout" type="button" class="btn btn-sm btn-ghost text-white">Logout</button>
           ` : `
@@ -294,7 +324,12 @@
           `}
         </nav>
       </div>
-    </header>
+    </header>`;
+  };
+
+  const pageHome = () => {
+    const u = getUser();
+    return `
     <main class="max-w-7xl mx-auto px-6 py-8">
       <h1 class="text-2xl font-bold text-navy mb-2">${u ? 'Welcome back, ' + escapeHtml(u.fullName || '') : 'Road issues, reported and fixed'}</h1>
       <p class="text-slate-tint text-sm mb-6">Recently verified reports from across the network.</p>
@@ -380,21 +415,23 @@
     <section class="py-8">
       <div class="max-w-7xl mx-auto px-6">
         <h2 class="text-2xl font-bold text-navy mb-4">Report Map</h2>
-        <div id="map" class="w-full rounded-lg overflow-hidden border border-slate-300"></div>
-        <div id="map-legend" class="fixed bottom-6 right-6 bg-white p-3 rounded shadow-lg max-w-xs">
-          <h4 class="font-medium text-navy text-sm mb-2">Repair Status</h4>
-          <div class="space-y-1">
-            <div class="flex items-center gap-2 text-xs">
-              <span class="w-2 h-2 rounded bg-slate-400"></span> Not assigned
-            </div>
-            <div class="flex items-center gap-2 text-xs">
-              <span class="w-2 h-2 rounded bg-blue-400"></span> In progress
-            </div>
-            <div class="flex items-center gap-2 text-xs">
-              <span class="w-2 h-2 rounded bg-amber-400"></span> Awaiting maintenance
-            </div>
-            <div class="flex items-center gap-2 text-xs">
-              <span class="w-2 h-2 rounded bg-green-400"></span> Completed
+        <div class="relative">
+          <div id="map" class="w-full rounded-lg overflow-hidden border border-slate-300"></div>
+          <div id="map-legend" class="absolute bottom-6 right-6 bg-white p-3 rounded shadow-lg max-w-xs">
+            <h4 class="font-medium text-navy text-sm mb-2">Repair Status</h4>
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 text-xs">
+                <span class="w-2 h-2 rounded bg-slate-400"></span> Not assigned
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="w-2 h-2 rounded bg-blue-400"></span> In progress
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="w-2 h-2 rounded bg-amber-400"></span> Awaiting maintenance
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="w-2 h-2 rounded bg-green-400"></span> Completed
+              </div>
             </div>
           </div>
         </div>
@@ -402,47 +439,133 @@
     </section>
   `;
 
-  const pageAdminDashboard = () => `
-    <section class="py-8">
-      <div class="max-w-7xl mx-auto px-6">
-        <h2 class="text-2xl font-bold text-navy mb-6">Admin Dashboard</h2>
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          ${dashboardStatsHtml()}
+  const adminLayout = (active, content) => `
+    <section class="admin-workspace">
+      <aside class="admin-sidebar" aria-label="Admin navigation">
+        <p class="admin-sidebar-heading">WORKSPACE</p>
+        <nav class="admin-sidebar-nav">
+          <a href="/admin" data-nav="/admin" class="${active === 'dashboard' ? 'is-active' : ''}">Dashboard</a>
+          <a href="/admin/reports" data-nav="/admin/reports" class="${active === 'reports' ? 'is-active' : ''}">Reports</a>
+          <a href="/admin/users" data-nav="/admin/users" class="${active === 'users' ? 'is-active' : ''}">Users</a>
+        </nav>
+        <button type="button" class="admin-sidebar-logout" data-admin-logout>Sign out</button>
+      </aside>
+      <div class="admin-content">${content}</div>
+    </section>`;
+
+  const pageAdminDashboard = () => adminLayout('dashboard', `
+    <div class="admin-page-heading">
+      <div>
+        <p class="admin-eyebrow">ROADWATCH OPERATIONS</p>
+        <h1 id="admin-dashboard-title" class="admin-page-title">Dashboard</h1>
+        <p class="admin-page-subtitle">A live overview of reports and repair activity.</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" data-admin-refresh>Refresh data</button>
+    </div>
+    <div class="admin-stat-grid" aria-label="Report statistics">
+      ${[
+        ['Total reports', 'stat-total', 'navy'],
+        ['Pending review', 'stat-pending', 'amber'],
+        ['Approved', 'stat-approved', 'green'],
+        ['Rejected', 'stat-rejected', 'red'],
+        ['Under repair', 'stat-under-repair', 'blue'],
+      ].map(([label, id, tone]) => `
+        <article class="admin-stat-card admin-stat-${tone}">
+          <p>${label}</p>
+          <strong id="${id}"><span class="spinner" aria-label="Loading"></span></strong>
+        </article>`).join('')}
+    </div>
+    <section class="admin-panel">
+      <div class="admin-panel-heading">
+        <div>
+          <h2>Latest reports</h2>
+          <p>Recently submitted reports across the network.</p>
         </div>
-        <div class="mt-6 grid grid-cols-1 gap-6">
-          ${dashboardRecentReportsHtml()}
-        </div>
+        <a href="/admin/reports" data-nav="/admin/reports" class="btn btn-ghost btn-sm">Manage reports</a>
+      </div>
+      <div id="admin-dashboard-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+      <div id="admin-dashboard-reports">
+        <div class="loading-block"><span class="spinner"></span> Loading recent reports…</div>
       </div>
     </section>
-  `;
+  `);
 
-  const dashboardStatsHtml = () => `
-    <div class="brand-card p-6 rounded-xl shadow-sm">
-      <h3 class="font-semibold text-slate-400 text-sm uppercase tracking-wider">Total Reports</h3>
-      <p class="text-3xl font-bold text-navy" id="stat-total">Loading...</p>
-    </div>
-    <div class="brand-card p-6 rounded-xl shadow-sm">
-      <h3 class="font-semibold text-slate-400 text-sm uppercase tracking-wider">Pending Review</h3>
-      <p class="text-3xl font-bold text-amber" id="stat-pending">Loading...</p>
-    </div>
-    <div class="brand-card p-6 rounded-xl shadow-sm">
-      <h3 class="font-semibold text-slate-400 text-sm uppercase tracking-wider">Approved</h3>
-      <p class="text-3xl font-bold text-green" id="stat-approved">Loading...</p>
-    </div>
-    <div class="brand-card p-6 rounded-xl shadow-sm">
-      <h3 class="font-semibold text-slate-400 text-sm uppercase tracking-wider">Completed</h3>
-      <p class="text-3xl font-bold text-green" id="stat-completed">Loading...</p>
-    </div>
-  `;
-
-  const dashboardRecentReportsHtml = () => `
-    <div class="brand-card p-6 rounded-xl shadow-sm">
-      <h2 class="font-bold text-navy text-lg mb-4">Recent Reports</h2>
-      <div id="recent-reports" class="space-y-3 max-h-80 overflow-y-auto">
-        <p class="text-slate-tint text-sm">Loading reports...</p>
+  const pageAdminReports = () => adminLayout('reports', `
+    <div class="admin-page-heading">
+      <div>
+        <p class="admin-eyebrow">ROADWATCH OPERATIONS</p>
+        <h1 class="admin-page-title">Report management</h1>
+        <p class="admin-page-subtitle">Search, review and manage submitted road reports.</p>
       </div>
+      <button type="button" class="btn btn-secondary btn-sm" data-admin-refresh>Refresh data</button>
     </div>
-  `;
+    <section class="admin-panel">
+      <form id="admin-report-filters" class="admin-filters">
+        <label class="admin-search">
+          <span class="sr-only">Search reports</span>
+          <input class="brand-input" type="search" name="search" placeholder="Search title, reference, location…" />
+        </label>
+        <label>
+          <span class="sr-only">Filter reports by status</span>
+          <select class="brand-input" name="status">
+            <option value="">All statuses</option>
+            <option value="moderationStatus:PENDING_REVIEW">Pending review</option>
+            <option value="moderationStatus:APPROVED">Approved</option>
+            <option value="moderationStatus:REJECTED">Rejected</option>
+            <option value="repairStatus:AWAITING_MAINTENANCE">Awaiting maintenance</option>
+            <option value="repairStatus:IN_PROGRESS">In progress</option>
+            <option value="repairStatus:COMPLETED">Completed</option>
+          </select>
+        </label>
+        <label>
+          <span class="sr-only">Sort reports</span>
+          <select class="brand-input" name="sort">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="priority">Priority</option>
+          </select>
+        </label>
+        <button class="btn btn-primary btn-sm" type="submit">Apply filters</button>
+      </form>
+      <div id="admin-reports-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+      <div id="admin-reports-list">
+        <div class="loading-block"><span class="spinner"></span> Loading reports…</div>
+      </div>
+    </section>
+  `);
+
+  const pageAdminUsers = () => adminLayout('users', `
+    <div class="admin-page-heading">
+      <div>
+        <p class="admin-eyebrow">ROADWATCH OPERATIONS</p>
+        <h1 class="admin-page-title">Users</h1>
+        <p class="admin-page-subtitle">Registered citizens, officers and administrators.</p>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" data-admin-refresh>Refresh data</button>
+    </div>
+    <section class="admin-panel">
+      <form id="admin-user-filters" class="admin-filters">
+        <label class="admin-search">
+          <span class="sr-only">Search users</span>
+          <input class="brand-input" type="search" name="search" placeholder="Search name, email or phone…" />
+        </label>
+        <label>
+          <span class="sr-only">Filter users by role</span>
+          <select class="brand-input" name="role">
+            <option value="">All roles</option>
+            <option value="CITIZEN">Citizen</option>
+            <option value="MAINTENANCE_OFFICER">Maintenance officer</option>
+            <option value="ADMIN">Administrator</option>
+          </select>
+        </label>
+        <button class="btn btn-primary btn-sm" type="submit">Search users</button>
+      </form>
+      <div id="admin-users-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+      <div id="admin-users-list">
+        <div class="loading-block"><span class="spinner"></span> Loading users…</div>
+      </div>
+    </section>
+  `);
 
   const pageAssignments = () => `
     <section class="py-8 max-w-2xl mx-auto px-6">
@@ -467,7 +590,7 @@
   `;
 
   const pageNotFound = () => `
-    <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet">
+    <section class="flex-1 flex items-center justify-center p-4 bg-sheet">
       <div class="text-center">
         <h1 class="text-5xl font-bold text-navy">404</h1>
         <p class="text-slate-tint text-2xl">Page not found</p>
@@ -478,14 +601,16 @@
 
   // --- Router (simple SPA) ---------------------------------------------------
   const routes = [
-    { path: '/', name: 'home', page: pageHome },
+    { path: '/', name: 'home', page: pageHome, requireAuth: true },
     { path: '/login', name: 'login', page: pageLogin },
     { path: '/register', name: 'register', page: pageRegister },
     { path: '/reports', name: 'reports', page: pageReports, requireAuth: true },
-    { path: '/report/:id', name: 'report-detail', page: pageReportDetail },
+    { path: '/report/:id', name: 'report-detail', page: pageReportDetail, requireAuth: true },
     { path: '/submit-report', name: 'submit-report', page: pageSubmitReport, requireAuth: true },
-    { path: '/map', name: 'map', page: pageMap },
+    { path: '/map', name: 'map', page: pageMap, requireAuth: true },
     { path: '/admin', name: 'admin', page: pageAdminDashboard, requireAuth: true, role: 'ADMIN' },
+    { path: '/admin/reports', name: 'admin-reports', page: pageAdminReports, requireAuth: true, role: 'ADMIN' },
+    { path: '/admin/users', name: 'admin-users', page: pageAdminUsers, requireAuth: true, role: 'ADMIN' },
     { path: '/assignments', name: 'assignments', page: pageAssignments, requireAuth: true, role: 'MAINTENANCE_OFFICER' },
     { path: '/audit', name: 'audit', page: pageAudit, requireAuth: true, role: 'ADMIN' },
   ];
@@ -513,12 +638,27 @@
 
   const navigateTo = (path, replace = false) => {
     const current = window.location.pathname + window.location.search;
-    if (current === path) { render(); return; }
+    if (current === path) return render();
     history[replace ? 'replaceState' : 'pushState']({}, '', path);
-    render();
+    return render();
+  };
+  const landingPath = (account) => {
+    if (account && account.role === 'ADMIN') return '/admin';
+    if (account && account.role === 'MAINTENANCE_OFFICER') return '/assignments';
+    return '/';
   };
   // Exposed so inline handlers / tests can drive the SPA.
   window.navigateTo = navigateTo;
+
+  // Login/register are full-screen auth pages; every other route renders inside
+  // the shared header + main column so navigation (and the navy brand bar) is
+  // present everywhere, not just on the home page.
+  const AUTH_ROUTES = new Set(['login', 'register']);
+  const shell = (routeName, content) => (
+    AUTH_ROUTES.has(routeName)
+      ? content
+      : `${headerHtml()}<div class="rw-main">${content}</div>`
+  );
 
   const render = async () => {
     const root = document.getElementById('root');
@@ -527,7 +667,13 @@
     const { route, params } = matchRoute(window.location.pathname);
 
     if (!route) {
-      root.innerHTML = pageNotFound();
+      root.innerHTML = shell('not-found', pageNotFound());
+      window.scrollTo(0, 0);
+      return;
+    }
+
+    if (user && (route.name === 'login' || (route.name === 'home' && user.role === 'ADMIN'))) {
+      navigateTo(landingPath(user), true);
       return;
     }
 
@@ -537,11 +683,11 @@
       return;
     }
     if (route.role && (!user || user.role !== route.role)) {
-      navigateTo(user ? '/' : '/login', true);
+      navigateTo(user ? landingPath(user) : '/login', true);
       return;
     }
 
-    root.innerHTML = route.page(params);
+    root.innerHTML = shell(route.name, route.page(params));
     window.scrollTo(0, 0);
     await afterRender(route.name, params);
   };
@@ -556,6 +702,8 @@
       case 'submit-report': initSubmitReportPage(); break;
       case 'map': await initMapPage(); break;
       case 'admin': await initAdminDashboard(); break;
+      case 'admin-reports': await initAdminReportsPage(); break;
+      case 'admin-users': await initAdminUsersPage(); break;
       case 'assignments': await initAssignmentsPage(); break;
       case 'audit': await initAuditPage(); break;
       default: break;
@@ -565,12 +713,6 @@
   // --- Page init functions ---------------------------------------------------
 
   const initHomePage = async () => {
-    on(q('#nav-logout'), 'click', () => {
-      clearToken();
-      setUser(null);
-      navigateTo('/login');
-    });
-
     const host = q('#home-reports');
     if (!host) return;
     try {
@@ -877,36 +1019,240 @@
     }
   };
 
-  const initAdminDashboard = async () => {
+  const adminDate = (value) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? 'Date unavailable'
+      : date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  const adminRepairLabel = (status) => ({
+    NOT_ASSIGNED: 'Not assigned',
+    AWAITING_MAINTENANCE: 'Awaiting maintenance',
+    IN_PROGRESS: 'In progress',
+    COMPLETED: 'Completed',
+  }[status] || 'Not assigned');
+
+  const adminReportTableHtml = (items, pagination, allowDelete) => {
+    if (!items.length) {
+      return `<div class="empty-state admin-empty">
+        <h3 class="text-xl font-bold text-navy mb-2">No reports found</h3>
+        <p>Try changing the search or status filters.</p>
+      </div>`;
+    }
+
+    const rows = items.map((report) => `
+      <tr>
+        <td class="admin-report-main">
+          <a href="/report/${encodeURIComponent(report.id)}" data-nav="/report/${encodeURIComponent(report.id)}" class="admin-report-title">
+            ${escapeHtml(report.title || 'Untitled report')}
+          </a>
+          <span class="admin-report-reference">${escapeHtml(report.referenceNo || '')} · ${escapeHtml(categoryLabel(report.category))}</span>
+        </td>
+        <td>
+          <div class="admin-status-stack">
+            ${statusBadge(report.moderationStatus, null)}
+            <span class="admin-repair-state">${escapeHtml(adminRepairLabel(report.repairStatus))}</span>
+          </div>
+        </td>
+        <td class="admin-report-location">${escapeHtml(reportLocation(report))}</td>
+        <td class="admin-report-date">${escapeHtml(adminDate(report.createdAt))}</td>
+        <td>
+          <div class="admin-row-actions">
+            <a href="/report/${encodeURIComponent(report.id)}" data-nav="/report/${encodeURIComponent(report.id)}" class="btn btn-ghost btn-sm">Details</a>
+            ${allowDelete ? `<button type="button" class="btn btn-danger btn-sm" data-delete-report="${escapeHtml(report.id)}" data-report-title="${escapeHtml(report.title || 'Untitled report')}" data-report-reference="${escapeHtml(report.referenceNo || '')}">Delete</button>` : ''}
+          </div>
+        </td>
+      </tr>`).join('');
+
+    const paging = pagination ? `
+      <div class="admin-pagination">
+        <span>${pagination.total} report${pagination.total === 1 ? '' : 's'} · Page ${pagination.page} of ${pagination.totalPages}</span>
+        <div class="admin-row-actions">
+          <button type="button" class="btn btn-secondary btn-sm" data-admin-page="${Math.max(1, pagination.page - 1)}" ${pagination.page <= 1 ? 'disabled' : ''}>Previous</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-admin-page="${Math.min(pagination.totalPages, pagination.page + 1)}" ${pagination.page >= pagination.totalPages ? 'disabled' : ''}>Next</button>
+        </div>
+      </div>` : '';
+
+    return `<div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead><tr><th>Report</th><th>Status</th><th>Location</th><th>Submitted</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>${paging}`;
+  };
+
+  const setAdminFeedback = (id, message, tone = 'info') => {
+    const host = document.getElementById(id);
+    if (!host) return;
+    host.textContent = message || '';
+    host.className = message ? `admin-feedback is-${tone}` : 'admin-feedback';
+  };
+
+  const readAdminReportFilters = () => {
+    const form = q('#admin-report-filters');
+    const data = form ? new FormData(form) : new FormData();
+    const params = new URLSearchParams({ page: '1', pageSize: '25', sort: String(data.get('sort') || 'newest') });
+    const search = String(data.get('search') || '').trim();
+    if (search) params.set('search', search);
+    const status = String(data.get('status') || '');
+    if (status) {
+      const [key, value] = status.split(':');
+      params.set(key, value);
+    }
+    return params;
+  };
+
+  const loadAdminReportList = async (hostId, feedbackId, params, page = 1) => {
+    const host = document.getElementById(hostId);
+    if (!host) return;
+    params.set('page', String(page));
+    host.innerHTML = '<div class="loading-block"><span class="spinner"></span> Loading reports…</div>';
+    try {
+      const data = await api(`/reports?${params.toString()}`);
+      html(host, adminReportTableHtml(data.items || [], {
+        total: Number(data.total) || 0,
+        page: Number(data.page) || page,
+        totalPages: Number(data.totalPages) || 1,
+      }, true));
+      bindAdminReportActions(host, hostId, feedbackId, params);
+      return data;
+    } catch (err) {
+      html(host, `<div class="admin-error-block">Could not load reports. ${escapeHtml(err.message)}</div>`);
+      setAdminFeedback(feedbackId, 'Report data could not be loaded. Retry when the API is available.', 'error');
+      return null;
+    }
+  };
+
+  const refreshAdminStatistics = async (feedbackId) => {
     try {
       const data = await api('/reports/stats');
-      const totals = (data && data.totals) || {};
-      setText('stat-total', totals.total);
-      setText('stat-pending', totals.pending);
-      setText('stat-approved', totals.approved);
-      setText('stat-completed', totals.completed);
-
-      const recentList = q('#recent-reports');
-      const recent = (data && data.recent) || [];
-      if (recentList) {
-        if (recent.length > 0) {
-          html(recentList, recent.map((r) => `
-            <div class="p-3 rounded border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer" data-nav="/report/${encodeURIComponent(r.id)}">
-              <div class="flex justify-between items-start gap-3">
-                <div class="min-w-0">
-                  <h3 class="font-medium text-navy line-clamp-1">${escapeHtml(r.title)}</h3>
-                  <p class="text-slate-tint text-xs line-clamp-1">${escapeHtml(reportLocation(r))}</p>
-                </div>
-                <span class="text-amber text-xs flex-shrink-0">${escapeHtml(r.moderationStatus)}</span>
-              </div>
-            </div>`).join(''));
-        } else {
-          html(recentList, '<p class="text-slate-tint text-sm">No reports yet.</p>');
-        }
-      }
+      const totals = data.totals || {};
+      setText('stat-total', totals.total ?? 0);
+      setText('stat-pending', totals.pending ?? 0);
+      setText('stat-approved', totals.approved ?? 0);
+      setText('stat-rejected', totals.rejected ?? 0);
+      setText('stat-under-repair', (Number(totals.awaiting) || 0) + (Number(totals.inProgress) || 0));
+      return data;
     } catch (err) {
-      html(q('#recent-reports'), `<p class="text-red-400">Error loading dashboard: ${escapeHtml(err.message)}</p>`);
+      ['stat-total', 'stat-pending', 'stat-approved', 'stat-rejected', 'stat-under-repair'].forEach((id) => setText(id, '—'));
+      setAdminFeedback(feedbackId, `Statistics could not be loaded: ${err.message}`, 'error');
+      return null;
     }
+  };
+
+  const bindAdminReportActions = (host, hostId, feedbackId, params) => {
+    host.querySelectorAll('[data-delete-report]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const id = button.getAttribute('data-delete-report');
+        if (!id || deletingReportIds.has(id)) return;
+        const title = button.getAttribute('data-report-title') || 'Untitled report';
+        const reference = button.getAttribute('data-report-reference') || id;
+        if (!window.confirm(`Permanently delete report ${reference} — "${title}"?\n\nThis removes this report and its related photos, assignments, and history. This action cannot be undone.`)) return;
+
+        deletingReportIds.add(id);
+        button.disabled = true;
+        button.textContent = 'Deleting…';
+        setAdminFeedback(feedbackId, `Deleting ${reference}…`);
+        try {
+          await api(`/admin/reports/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          setAdminFeedback(feedbackId, `Report ${reference} was deleted.`, 'success');
+          await refreshAdminStatistics(feedbackId);
+          const page = Number(params.get('page')) || 1;
+          const refreshed = await loadAdminReportList(hostId, feedbackId, new URLSearchParams(params), page);
+          if (refreshed && refreshed.items.length === 0 && page > 1) {
+            await loadAdminReportList(hostId, feedbackId, new URLSearchParams(params), page - 1);
+          }
+        } catch (err) {
+          setAdminFeedback(feedbackId, `Could not delete ${reference}: ${err.message}`, 'error');
+          button.disabled = false;
+          button.textContent = 'Delete';
+        } finally {
+          deletingReportIds.delete(id);
+        }
+      });
+    });
+    host.querySelectorAll('[data-admin-page]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const page = Number(button.getAttribute('data-admin-page'));
+        if (Number.isInteger(page) && page > 0) {
+          void loadAdminReportList(hostId, feedbackId, new URLSearchParams(params), page);
+        }
+      });
+    });
+  };
+
+  const initAdminDashboard = async () => {
+    const refresh = async () => {
+      const params = new URLSearchParams({ page: '1', pageSize: '8', sort: 'newest' });
+      await Promise.all([
+        refreshAdminStatistics('admin-dashboard-feedback'),
+        loadAdminReportList('admin-dashboard-reports', 'admin-dashboard-feedback', params),
+      ]);
+    };
+    on(q('[data-admin-refresh]'), 'click', refresh);
+    await refresh();
+  };
+
+  const initAdminReportsPage = async () => {
+    const load = (page = 1) => loadAdminReportList('admin-reports-list', 'admin-reports-feedback', readAdminReportFilters(), page);
+    await load();
+    on(q('#admin-report-filters'), 'submit', (event) => {
+      event.preventDefault();
+      setAdminFeedback('admin-reports-feedback', '');
+      void load();
+    });
+    on(q('[data-admin-refresh]'), 'click', () => {
+      setAdminFeedback('admin-reports-feedback', '');
+      void load();
+    });
+  };
+
+  const initAdminUsersPage = async () => {
+    const load = async () => {
+      const host = q('#admin-users-list');
+      const feedback = 'admin-users-feedback';
+      if (!host) return;
+      const form = q('#admin-user-filters');
+      const values = form ? new FormData(form) : new FormData();
+      const params = new URLSearchParams({ page: '1', pageSize: '50' });
+      const search = String(values.get('search') || '').trim();
+      const role = String(values.get('role') || '');
+      if (search) params.set('search', search);
+      if (role) params.set('role', role);
+      host.innerHTML = '<div class="loading-block"><span class="spinner"></span> Loading users…</div>';
+      try {
+        const data = await api(`/users?${params.toString()}`);
+        const items = data.items || [];
+        if (items.length === 0) {
+          html(host, '<div class="empty-state admin-empty"><h3 class="text-xl font-bold text-navy mb-2">No users found</h3><p>Try a different name, email or role filter.</p></div>');
+          return;
+        }
+        html(host, `<div class="admin-table-wrap"><table class="admin-table admin-user-table">
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Account status</th><th>Joined</th></tr></thead>
+          <tbody>${items.map((account) => `<tr>
+            <td class="admin-user-name">${escapeHtml(account.fullName)}</td>
+            <td>${escapeHtml(account.email)}</td>
+            <td>${escapeHtml(account.role === 'ADMIN' ? 'Administrator' : account.role === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : 'Citizen')}</td>
+            <td>${escapeHtml(account.status || 'ACTIVE')}</td>
+            <td>${escapeHtml(adminDate(account.createdAt))}</td>
+          </tr>`).join('')}</tbody></table></div>
+          <div class="admin-pagination"><span>${data.total || items.length} user${Number(data.total) === 1 ? '' : 's'}</span></div>`);
+      } catch (err) {
+        html(host, `<div class="admin-error-block">Could not load users. ${escapeHtml(err.message)}</div>`);
+        setAdminFeedback(feedback, 'User data could not be loaded. Retry when the API is available.', 'error');
+      }
+    };
+    await load();
+    on(q('#admin-user-filters'), 'submit', (event) => {
+      event.preventDefault();
+      setAdminFeedback('admin-users-feedback', '');
+      void load();
+    });
+    on(q('[data-admin-refresh]'), 'click', () => {
+      setAdminFeedback('admin-users-feedback', '');
+      void load();
+    });
   };
 
   const initAssignmentsPage = async () => {
@@ -976,6 +1322,17 @@
       if (!target) return;
       e.preventDefault();
       navigateTo(target.getAttribute('data-nav'));
+    });
+
+    // Logout lives in the global header, which the router re-renders for every
+    // route, so bind it once here instead of per-page.
+    document.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('#nav-logout, [data-admin-logout]') : null;
+      if (!btn) return;
+      e.preventDefault();
+      clearToken();
+      setUser(null);
+      navigateTo('/login');
     });
 
     on(window, 'popstate', render);

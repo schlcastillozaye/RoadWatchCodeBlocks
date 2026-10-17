@@ -94,6 +94,12 @@ class ReportsController
         return ReportService::delete($params['id'], $actor);
     }
 
+    public static function destroyAsAdmin(array $params): array
+    {
+        $actor = Auth::requireAdmin();
+        return ReportService::deleteAsAdmin($params['id'], $actor);
+    }
+
     public static function moderation(array $params): array
     {
         $actor = Auth::requireAdmin();

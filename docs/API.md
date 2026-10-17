@@ -307,6 +307,12 @@ Business rules:
 Auth required. An admin may delete any report; a citizen may withdraw **their own report
 only while it is still `PENDING_REVIEW`**.
 
+### `DELETE /api/admin/reports/:id`
+
+Admin-only report-management endpoint. Deletes the report and its related database
+records, writes an audit entry, and removes the report's stored photo files after the
+database transaction commits. Returns `{ "success": true }`.
+
 ---
 
 ## Maintenance — `/api/maintenance`

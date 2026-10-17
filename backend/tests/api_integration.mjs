@@ -582,6 +582,20 @@ async function main() {
 
     const approvedDel = await api('DELETE', `/api/reports/${reportId}`, { token: citizenToken });
     check('owner cannot delete approved report 409', approvedDel.status === 409, `status=${approvedDel.status}`);
+
+    const adminTarget = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({ ...goodReport, title: 'IT admin-deletable report' }),
+    });
+    const adminTargetId = adminTarget.body?.report?.id;
+    const citizenAdminDelete = await api('DELETE', `/api/admin/reports/${adminTargetId}`, { token: citizenToken });
+    check('citizen cannot use admin report deletion route (403)', citizenAdminDelete.status === 403, `status=${citizenAdminDelete.status}`);
+    const officerAdminDelete = await api('DELETE', `/api/admin/reports/${adminTargetId}`, { token: officer1Token });
+    check('officer cannot use admin report deletion route (403)', officerAdminDelete.status === 403, `status=${officerAdminDelete.status}`);
+    const adminDelete = await api('DELETE', `/api/admin/reports/${adminTargetId}`, { token: adminToken });
+    check('admin deletes report through admin route (200)', adminDelete.status === 200 && adminDelete.body?.success === true, `status=${adminDelete.status}`);
+    const adminDeletedGone = await api('GET', `/api/reports/${adminTargetId}`, { token: adminToken });
+    check('admin-deleted report is gone (404)', adminDeletedGone.status === 404, `status=${adminDeletedGone.status}`);
   }
 
   // ---------------------------------------------------------------------

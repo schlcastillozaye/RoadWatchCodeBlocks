@@ -5,41 +5,29 @@ interface BrandMarkProps {
 }
 
 /**
- * The Code Blocks Inc. symbol — a column of three rounded squares with two
- * smaller accent squares beside the top and bottom blocks (the middle-right
- * slot stays empty, forming a "C" out of blocks).
+ * The Code Blocks Inc. symbol — five equally sized rounded squares forming a
+ * block-style "C", with brand accents beside the top and bottom blocks.
  */
 export function BrandMark({ size = 26, onDark = true, className }: BrandMarkProps) {
   const blockColor = onDark ? '#c3e6ff' : '#071633';
   const accentColor = onDark ? '#f3efe3' : '#c5d5e0';
 
-  const gap = size * 0.16;
-  const radius = size * 0.32;
-  const accentSize = size * 0.62;
-
-  const square = (dimension: number, color: string) => (
-    <div style={{ width: dimension, height: dimension, borderRadius: radius * (dimension / size), background: color }} />
-  );
-
   return (
-    <div className={className} style={{ display: 'flex', alignItems: 'flex-start', gap: gap * 0.85 }} aria-hidden="true">
-      <div style={{ display: 'flex', flexDirection: 'column', gap }}>
-        {square(size, blockColor)}
-        {square(size, blockColor)}
-        {square(size, blockColor)}
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          height: size * 3 + gap * 2,
-        }}
-      >
-        {square(accentSize, accentColor)}
-        {/* middle-right slot intentionally empty */}
-        {square(accentSize, accentColor)}
-      </div>
-    </div>
+    <svg
+      className={className}
+      width={size * (22 / 34)}
+      height={size}
+      viewBox="0 0 22 34"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: 'block', flex: '0 0 auto' }}
+    >
+      <rect x="0" y="0" width="10" height="10" rx="1.6" fill={blockColor} />
+      <rect x="12" y="0" width="10" height="10" rx="1.6" fill={accentColor} />
+      <rect x="0" y="12" width="10" height="10" rx="1.6" fill={blockColor} />
+      <rect x="0" y="24" width="10" height="10" rx="1.6" fill={blockColor} />
+      <rect x="12" y="24" width="10" height="10" rx="1.6" fill={accentColor} />
+    </svg>
   );
 }

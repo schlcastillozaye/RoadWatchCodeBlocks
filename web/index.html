@@ -14,15 +14,20 @@
     href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@400..900&family=Poppins:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="vendor/leaflet.css" />
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="/vendor/leaflet.css" />
+  <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
   <div id="root"></div>
-  <script src="vendor/leaflet.js"></script>
-  <script src="config.js"></script>
-  <!-- Regenerated in the container from RW_API_BASE_URL (see docker-entrypoint.d). -->
-  <script src="rw-runtime-config.js"></script>
-  <script src="js/app.js"></script>
+  <!-- Absolute paths so client-side routes (/login, /admin, /reports/…) still
+       find these assets when the page is loaded or reloaded on a deep link. -->
+  <script src="/vendor/leaflet.js"></script>
+  <script src="/config.js"></script>
+  <!-- Regenerated in the container from RW_API_BASE_URL (see docker-entrypoint.d)
+       and loaded *before* js/app.js so the API origin is set when it is consumed.
+       The ?v= is a one-off cache-buster: older deployments cached this file for
+       an hour, which is why a corrected RW_API_BASE_URL could appear ignored. -->
+  <script src="/rw-runtime-config.js?v=2"></script>
+  <script src="/js/app.js"></script>
 </body>
 </html>

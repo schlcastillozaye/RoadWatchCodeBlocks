@@ -73,7 +73,15 @@ function makeCollector(page, label) {
   page.on('requestfailed', (req) => {
     entry.requestFailures.push(`${req.method()} ${req.url()} — ${(req.failure() || {}).errorText || 'failed'}`);
   });
-  page.on('dialog', async (d) => { await d.dismiss().catch(() => {}); });
+  page.on('dialog', async (d) => {
+    if (page.acceptNextDialog) {
+      page.acceptNextDialog = false;
+      page.lastDialogMessage = d.message();
+      await d.accept().catch(() => {});
+      return;
+    }
+    await d.dismiss().catch(() => {});
+  });
   return { entry, label, summary() {
     const errs = entry.consoleErrors.map((t) => `  console.error: ${t}`)
       .concat(entry.pageErrors.map((t) => `  pageerror: ${t}`))
@@ -91,11 +99,9 @@ async function login(page, email, password) {
   await nav(page, '/login', '#login-form');
   await page.fill('#login-form input[name="email"]', email);
   await page.fill('#login-form input[name="password"]', password);
-  // Wait for the authenticated home page (only reachable once the login
-  // request resolves and the token is stored) — NOT a bare `h1`, which matches
-  // the login page itself and would resolve before the request completes.
+  const landing = email === 'admin@roadwatch.gov' ? '#admin-dashboard-title' : '#home-reports';
   await Promise.all([
-    page.waitForSelector('#home-reports', { timeout: 15000 }),
+    page.waitForSelector(landing, { timeout: 15000 }),
     page.click('#login-form button[type="submit"]'),
   ]);
   await page.waitForFunction(() => !!localStorage.getItem('roadwatch_auth_token'), { timeout: 15000 });
@@ -111,6 +117,7 @@ async function waitAuthenticated(page, name) {
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHElEQVQ4jWNgGAWjYBSMglEwCkbBKBgFo2AUAAAHkgABiv0FOAAAAABJRU5ErkJggg==';
 
 async function main() {
+  let submittedReportTitle = null;
   // Saved once (scenario B) and reused by C/G so the suite only performs two
   // logins per run; the API throttles auth writes to 30 per 15 min per IP.
   let citizenState = null;
@@ -139,12 +146,12 @@ async function main() {
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('#root header, #login-form', { timeout: 15000 });
-      await page.waitForFunction(() => {
-        const el = document.querySelector('#home-reports');
-        return el && !el.querySelector('.spinner');
-      }, { timeout: 15000 }).catch(() => {});
+      const signInShown = await page.locator('#login-form').isVisible();
+      const onSignInRoute = new URL(page.url()).pathname === '/login';
+      const publicContentHidden = await page.locator('#home-reports, #reports-list, .leaflet-container').count() === 0;
       const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
-      record('a', 'Load "/" with no uncaught console/page errors', clean, col.summary());
+      record('a', 'Default landing page requires sign-in', signInShown && onSignInRoute && publicContentHidden && clean,
+        `  sign-in visible: ${signInShown}, sign-in route: ${onSignInRoute}, public content hidden: ${publicContentHidden}\n${col.summary()}`);
     } catch (err) {
       record('a', 'Load "/" with no uncaught console/page errors', false, `  ${err.message}\n${col.summary()}`);
     } finally {
@@ -164,9 +171,11 @@ async function main() {
       const nameShown = await page.locator('text=Juan Dela Cruz').first().isVisible();
       const token = await page.evaluate(() => localStorage.getItem('roadwatch_auth_token'));
       if (nameShown && token) citizenState = await context.storageState();
-      const ok = nameShown && !!token;
-      record('b', 'Citizen login lands authenticated with name shown', ok,
-        `  name visible: ${nameShown}, token stored: ${!!token}\n${col.summary()}`);
+      await nav(page, '/admin', '#home-reports');
+      const adminDenied = new URL(page.url()).pathname === '/' && await page.locator('#admin-dashboard-title').count() === 0;
+      const ok = nameShown && !!token && adminDenied;
+      record('b', 'Citizen login and admin-only route protection', ok,
+        `  name visible: ${nameShown}, token stored: ${!!token}, admin route denied: ${adminDenied}\n${col.summary()}`);
     } catch (err) {
       record('b', 'Citizen login lands authenticated with name shown', false, `  ${err.message}\n${col.summary()}`);
     } finally {
@@ -201,6 +210,7 @@ async function main() {
       await page.waitForSelector('#reports-list', { timeout: 15000 });
       await page.waitForFunction((t) => document.body.innerText.includes(t), title, { timeout: 15000 });
       const found = await page.locator(`text=${title}`).first().isVisible();
+      if (found) submittedReportTitle = title;
       // Own (non-approved) photos require a Bearer token: they must be fetched
       // and swapped to blob: URLs, not requested directly (which would 401/ORB).
       await page.waitForFunction(() => document.querySelectorAll('#reports-list img[src^="blob:"]').length > 0, { timeout: 15000 }).catch(() => {});
@@ -224,33 +234,99 @@ async function main() {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       await login(page, 'admin@roadwatch.gov', 'Admin@12345');
 
-      // /admin : stats render numbers (no ReferenceError)
+      const adminLandedDirectly = new URL(page.url()).pathname === '/admin'
+        && await page.locator('#admin-dashboard-title').isVisible()
+        && await page.locator('#home-reports').count() === 0;
       await nav(page, '/admin', '#stat-total');
       await page.waitForFunction(() => {
         const el = document.getElementById('stat-total');
         return el && el.textContent !== 'Loading...' && /^\d+$/.test(el.textContent.trim());
       }, { timeout: 15000 });
-      const stats = await page.evaluate(() => ['stat-total', 'stat-pending', 'stat-approved', 'stat-completed']
+      await page.waitForSelector(
+        '#admin-dashboard-reports .admin-table tbody tr, #admin-dashboard-reports .admin-empty, #admin-dashboard-reports .admin-error-block',
+        { timeout: 15000 }
+      );
+      const stats = await page.evaluate(() => ['stat-total', 'stat-pending', 'stat-approved', 'stat-rejected', 'stat-under-repair']
         .map((id) => `${id}=${document.getElementById(id).textContent.trim()}`).join(', '));
-      const recentRows = await page.locator('#recent-reports > div').count();
+      const totalBefore = Number(stats.match(/stat-total=(\d+)/)?.[1]);
+      const recentRows = await page.locator('#admin-dashboard-reports tbody > tr').count();
+
+      let deletionOk = false;
+      if (submittedReportTitle) {
+        await nav(page, '/admin/reports', '#admin-report-filters');
+        await page.fill('#admin-report-filters input[name="search"]', submittedReportTitle);
+        await page.selectOption('#admin-report-filters select[name="status"]', 'moderationStatus:PENDING_REVIEW');
+        await page.click('#admin-report-filters button[type="submit"]');
+        const row = page.locator('#admin-reports-list tbody tr').filter({ hasText: submittedReportTitle });
+        await row.waitFor({ state: 'visible', timeout: 15000 });
+        const deleteButton = row.locator('[data-delete-report]');
+
+        await page.route('**/api/admin/reports/**', (route) => route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Simulated deletion failure' } }),
+        }));
+        const consoleErrorsBeforeExpectedFailure = col.entry.consoleErrors.length;
+        page.acceptNextDialog = true;
+        await deleteButton.click();
+        await page.waitForFunction(() => document.querySelector('#admin-reports-feedback')?.textContent.includes('Simulated deletion failure'));
+        const errorVisible = (await page.locator('#admin-reports-feedback').innerText()).includes('Simulated deletion failure');
+        const retryEnabled = await row.locator('[data-delete-report]').isEnabled();
+        const expectedFailureErrors = col.entry.consoleErrors.slice(consoleErrorsBeforeExpectedFailure);
+        const expectedHttpFailureObserved = expectedFailureErrors.length === 1
+          && expectedFailureErrors[0].includes('status of 500 (Internal Server Error)');
+        if (expectedHttpFailureObserved) col.entry.consoleErrors.splice(consoleErrorsBeforeExpectedFailure, 1);
+        await page.unroute('**/api/admin/reports/**');
+
+        const reference = await row.locator('[data-delete-report]').getAttribute('data-report-reference');
+        page.acceptNextDialog = true;
+        await row.locator('[data-delete-report]').click();
+        await page.waitForSelector('#admin-reports-list .admin-empty', { timeout: 15000 });
+        const confirmation = page.lastDialogMessage || '';
+        const successVisible = (await page.locator('#admin-reports-feedback').innerText()).includes('was deleted');
+        await nav(page, '/admin', '#stat-total');
+        await page.waitForFunction((before) => {
+          const el = document.getElementById('stat-total');
+          return el && /^\d+$/.test(el.textContent.trim()) && Number(el.textContent.trim()) === before - 1;
+        }, totalBefore, { timeout: 15000 });
+        const totalAfter = Number((await page.locator('#stat-total').innerText()).trim());
+        deletionOk = expectedHttpFailureObserved && errorVisible && retryEnabled && successVisible
+          && confirmation.includes(submittedReportTitle) && confirmation.includes(reference || '')
+          && totalAfter === totalBefore - 1;
+      }
 
       // /audit : log rows render
       await nav(page, '/audit', '#audit-log');
       await page.waitForFunction(() => document.querySelectorAll('#audit-log > div').length > 0, { timeout: 15000 });
       const auditRows = await page.locator('#audit-log > div').count();
 
-      // /reports : list page renders
-      await nav(page, '/reports', '#reports-list');
+      await nav(page, '/admin/users', '#admin-users-list');
       await page.waitForFunction(() => {
-        const el = document.querySelector('#reports-list');
+        const el = document.querySelector('#admin-users-list');
         return el && !el.querySelector('.spinner');
       }, { timeout: 15000 });
-      const reportsRendered = await page.locator('#reports-list').isVisible();
+      const usersRendered = await page.locator('#admin-users-list .admin-user-table, #admin-users-list .admin-empty').count() > 0;
+
+      let adminResponsive = true;
+      for (const route of ['/admin', '/admin/reports', '/admin/users']) {
+        await nav(page, route, route === '/admin' ? '#admin-dashboard-title' : route === '/admin/reports' ? '#admin-report-filters' : '#admin-user-filters');
+        for (const viewport of [
+          { width: 375, height: 667 },
+          { width: 768, height: 1024 },
+          { width: 1024, height: 768 },
+          { width: 1440, height: 900 },
+        ]) {
+          await page.setViewportSize(viewport);
+          await wait(100);
+          const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+          if (overflow) adminResponsive = false;
+        }
+      }
 
       const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
-      const ok = recentRows >= 1 && auditRows >= 1 && reportsRendered && clean;
-      record('d', 'Admin: /admin stats + /audit rows + /reports list', ok,
-        `  ${stats}\n  recent rows: ${recentRows}, audit rows: ${auditRows}, reports list visible: ${reportsRendered}\n${col.summary()}`);
+      const ok = adminLandedDirectly && recentRows >= 1 && deletionOk && auditRows >= 1 && usersRendered && adminResponsive && clean;
+      record('d', 'Admin landing, dashboard, user directory, and safe report deletion', ok,
+        `  direct admin landing: ${adminLandedDirectly}\n  ${stats}\n  recent rows: ${recentRows}, deletion + error recovery: ${deletionOk}, audit rows: ${auditRows}, users visible: ${usersRendered}, admin responsive at 4 widths: ${adminResponsive}\n${col.summary()}`);
     } catch (err) {
       record('d', 'Admin: /admin stats + /audit rows + /reports list', false, `  ${err.message}\n${col.summary()}`);
     } finally {
@@ -265,6 +341,7 @@ async function main() {
     const col = makeCollector(page, 'E');
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
+      await login(page, 'citizen@example.com', 'Citizen@12345');
       await nav(page, '/map', '.leaflet-container');
       await page.waitForSelector('.leaflet-marker-icon', { timeout: 15000 });
       const containers = await page.locator('.leaflet-container').count();
@@ -288,12 +365,13 @@ async function main() {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('#root header, #login-form', { timeout: 15000 });
       await nav(page, '/reports', '#login-form');
-      const url = new URL(page.url());
-      const onLogin = url.pathname.replace(/\/+$/, '') === '/login';
-      const formShown = await page.locator('#login-form').isVisible();
+      const reportsRedirected = new URL(page.url()).pathname === '/login' && await page.locator('#login-form').isVisible();
+      await nav(page, '/map', '#login-form');
+      const mapRedirected = new URL(page.url()).pathname === '/login' && await page.locator('#login-form').isVisible()
+        && await page.locator('.leaflet-container').count() === 0;
       const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
-      record('f', 'Logged-out /reports redirects to /login', onLogin && formShown && clean,
-        `  pathname: ${url.pathname}, login form visible: ${formShown}\n${col.summary()}`);
+      record('f', 'Logged-out report and map routes redirect to sign-in', reportsRedirected && mapRedirected && clean,
+        `  reports redirected: ${reportsRedirected}, map redirected: ${mapRedirected}\n${col.summary()}`);
     } catch (err) {
       record('f', 'Logged-out /reports redirects to /login', false, `  ${err.message}\n${col.summary()}`);
     } finally {
@@ -301,7 +379,7 @@ async function main() {
     }
   }
 
-  // --- Scenario G: no horizontal overflow at 3 viewports -------------------
+  // --- Scenario G: no horizontal overflow at the target viewport sizes -----
   {
     const context = await browser.newContext({ storageState: citizenState || undefined });
     const page = await context.newPage();
@@ -309,6 +387,7 @@ async function main() {
     const viewports = [
       { width: 375, height: 667 },
       { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
       { width: 1440, height: 900 },
     ];
     let allOk = true;
@@ -335,9 +414,49 @@ async function main() {
         }
       }
       const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
-      record('g', 'No horizontal overflow at 375/768/1440 widths', allOk && clean, `${lines.join('\n')}\n${col.summary()}`);
+      record('g', 'No horizontal overflow at 375/768/1024/1440 widths', allOk && clean, `${lines.join('\n')}\n${col.summary()}`);
     } catch (err) {
-      record('g', 'No horizontal overflow at 375/768/1440 widths', false, `  ${err.message}\n${lines.join('\n')}\n${col.summary()}`);
+      record('g', 'No horizontal overflow at 375/768/1024/1440 widths', false, `  ${err.message}\n${lines.join('\n')}\n${col.summary()}`);
+    } finally {
+      await context.close();
+    }
+  }
+
+  // --- Scenario H: runtime API override drives the login URL ---------------
+  // Reproduces the deployed setup: the container serves rw-runtime-config.js
+  // with the RW_API_BASE_URL value. The login POST must go to THAT origin with a
+  // single /api segment — the production bug was the request falling back to the
+  // static frontend origin (405 Method Not Allowed).
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    const col = makeCollector(page, 'H');
+    const override = 'http://127.0.0.1:4000';
+    const loginUrls = [];
+    page.on('request', (req) => {
+      if (req.method() === 'POST' && req.url().includes('/api/auth/login')) loginUrls.push(req.url());
+    });
+    try {
+      // Stand in for the container-generated runtime config file.
+      await page.route(/\/rw-runtime-config\.js(\?|$)/, (route) => route.fulfill({
+        status: 200,
+        contentType: 'application/javascript',
+        body: `window.RW_API_BASE_URL = "${override}";\nwindow.RW_API_BASE = "${override}";\n`,
+      }));
+
+      await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
+      const resolved = await page.evaluate(() => window.RW_API_BASE);
+      await login(page, 'citizen@example.com', 'Citizen@12345');
+
+      const expected = `${override}/api/auth/login`;
+      const hit = loginUrls.includes(expected);
+      const noDupApi = loginUrls.every((u) => !u.includes('/api/api/'));
+      const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
+      record('h', 'Runtime RW_API_BASE_URL override drives the login request', hit && noDupApi && resolved === override && clean,
+        `  window.RW_API_BASE: ${resolved}\n  login POST url(s): ${loginUrls.join(', ') || '(none)'}\n  expected: ${expected}\n${col.summary()}`);
+    } catch (err) {
+      record('h', 'Runtime RW_API_BASE_URL override drives the login request', false,
+        `  ${err.message}\n  login POST url(s): ${loginUrls.join(', ') || '(none)'}\n${col.summary()}`);
     } finally {
       await context.close();
     }

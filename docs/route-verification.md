@@ -9,7 +9,7 @@ suite · **Web** = used by the vanilla web client · **Mobile** = used by the Fl
 
 ---
 
-## 1. Backend route table (35 routes)
+## 1. Backend route table (36 routes)
 
 | # | Method | Path | Auth | Runtime | Web | Mobile |
 |---|---|---|---|---|---|---|
@@ -48,8 +48,11 @@ suite · **Web** = used by the vanilla web client · **Mobile** = used by the Fl
 | 33 | POST | `/api/users/{id}/reset-password` | admin | ✓ | ✓ | — |
 | 34 | GET | `/api/analytics/summary` | admin | ✓ | ✓ | — |
 | 35 | GET | `/api/analytics/audit-logs` | admin | ✓ | ✓ | — |
+| 36 | DELETE | `/api/admin/reports/{id}` | admin | ✓ | ✓ | — |
 
-All 35 routes were executed by the integration suite (not just inspected).
+The original 35 routes were executed by the integration suite (not just inspected).
+The admin report-deletion route is additionally covered by the browser E2E flow and
+a local API authorization smoke test.
 
 ---
 

@@ -7,8 +7,31 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # Long-cache static assets.
-    location ~* \.(?:css|js|png|jpe?g|gif|svg|ico|webp|woff2?)$ {
+    # The API origin is injected into rw-runtime-config.js at container start-up
+    # (see docker-entrypoint.d/40-roadwatch-config.sh). It must never be served
+    # from cache: otherwise setting/changing RW_API_BASE_URL — or simply
+    # redeploying — appears to do nothing for up to an hour, and the app silently
+    # falls back to this (static) origin, which answers POST /api/… with 405.
+    location = /rw-runtime-config.js {
+        try_files $uri =404;
+        add_header Cache-Control "no-store";
+    }
+
+    # The HTML entry point must be revalidated so script tags and their order
+    # land immediately after a deploy.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    # App code is not content-hashed, so revalidate it rather than risk serving
+    # a stale build for an hour after a deploy.
+    location ~* \.(?:css|js)$ {
+        try_files $uri =404;
+        add_header Cache-Control "no-cache";
+    }
+
+    # Immutable assets (images, fonts) are safe to cache for a while.
+    location ~* \.(?:png|jpe?g|gif|svg|ico|webp|woff2?)$ {
         try_files $uri =404;
         expires 1h;
         add_header Cache-Control "public";

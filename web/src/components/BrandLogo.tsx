@@ -8,9 +8,9 @@ interface BrandLogoProps {
 }
 
 const SIZES = {
-  sm: { mark: 16, title: '1.05rem' },
-  md: { mark: 22, title: '1.4rem' },
-  lg: { mark: 32, title: '2rem' },
+  sm: { mark: 24, title: '0.95rem', gap: 9 },
+  md: { mark: 38, title: '1.4rem', gap: 11 },
+  lg: { mark: 50, title: '2rem', gap: 16 },
 } as const;
 
 export function BrandLogo({ onDark = true, size = 'md', showTagline = false }: BrandLogoProps) {
@@ -19,7 +19,11 @@ export function BrandLogo({ onDark = true, size = 'md', showTagline = false }: B
   const subtitleColor = onDark ? '#c3e6ff' : '#3d4b63';
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: size === 'lg' ? 16 : 11 }}>
+    <div
+      role="img"
+      aria-label={`${BRAND.company}${showTagline ? `, ${BRAND.product}` : ''}`}
+      style={{ display: 'flex', alignItems: 'center', gap: config.gap }}
+    >
       <BrandMark size={config.mark} onDark={onDark} />
       <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
         <span
@@ -27,15 +31,26 @@ export function BrandLogo({ onDark = true, size = 'md', showTagline = false }: B
             fontFamily: 'var(--font-display)',
             fontWeight: 700,
             fontSize: config.title,
-            letterSpacing: '-0.02em',
+            letterSpacing: '0.15em',
             color: titleColor,
           }}
         >
-          {BRAND.product}
+          CODEBLOCKS
+        </span>
+        <span
+          style={{
+            marginTop: 3,
+            fontSize: '0.62rem',
+            fontWeight: 500,
+            letterSpacing: '0.24em',
+            color: subtitleColor,
+          }}
+        >
+          INC.
         </span>
         {showTagline && (
-          <span style={{ fontSize: '0.7rem', fontWeight: 500, color: subtitleColor, marginTop: 3 }}>
-            by {BRAND.company}
+          <span style={{ fontSize: '0.7rem', fontWeight: 500, color: subtitleColor, marginTop: 5 }}>
+            {BRAND.product}
           </span>
         )}
       </div>
