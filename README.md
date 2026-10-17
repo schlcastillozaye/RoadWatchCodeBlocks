@@ -15,21 +15,35 @@ completion. Approved reports appear on a public map; pending and rejected ones n
 
 ```
 Project/
-├─ backend/        Node + Express + TypeScript API (shared by both clients)
-│  ├─ prisma/      Prisma schema, committed migrations + seed script
-│  ├─ Dockerfile   Production image (also used by the Render Blueprint)
-│  └─ src/         config, middleware, modules (auth, users, reports, …)
+├─ backend/        PHP 8.2 API (PDO + MySQL) — the current backend
+│  ├─ public/      Front controller (index.php)
+│  ├─ src/         Http controllers · Modules (ReportService, …) · Services · Support
+│  ├─ database/    schema.sql (9 tables) + migrate.php (idempotent)
+│  ├─ seed.php     Demo accounts + sample reports
+│  ├─ router.php   Router for the PHP built-in dev server
+│  ├─ tests/       api_integration.mjs  (103 end-to-end API checks)
+│  └─ Dockerfile.php · railway.json     (Railway deploy)
 ├─ db/
 │  └─ setup.sql    One-time MySQL database + user setup
 ├─ mobile/         Flutter citizen app (Android, iOS, Web)
-├─ web/            React + TypeScript admin & officer platform (Vite)
-├─ docs/           Design system, setup, API, deployment, image-processing notes
-├─ render.yaml     Render Blueprint (hosts the API + web platform)
+├─ web/            Plain HTML + CSS + vanilla JS app (no build step)
+│  ├─ config.js    Runtime API base URL / brand config
+│  ├─ js/app.js    Application entry point
+│  └─ Dockerfile · railway.json         (Railway static deploy)
+├─ docs/           Design system, setup, API, deployment, verification reports
 └─ README.md
 ```
 
 One backend, one MySQL database, one authentication system and one image store serve
 both the mobile app and the web platform.
+
+> **Migration note.** This project was migrated from a Node/Express + Prisma + React
+> stack to **PHP + vanilla JS**. The legacy sources remain in the tree for reference
+> but are **not** the target and are not deployed: `backend/prisma/`,
+> `backend/src/config`, `backend/Dockerfile`, `backend/package.json`,
+> `web/src/`, `web/vite.config.ts`, `web/package.json`, `web/dist/`, plus the
+> Render `render.yaml`. See `docs/independent-verification-report.md` for the audited
+> status of every component.
 
 ---
 
@@ -55,7 +69,8 @@ Rules enforced on the server:
 
 ## Quick start
 
-> Full details, including troubleshooting, are in [`docs/SETUP.md`](docs/SETUP.md).
+> Local setup for the PHP API, the no-build web app and the Flutter app is below.
+> (The original Node/Prisma instructions live in `docs/SETUP.md` and are legacy.)
 
 ### 1. Create the database (once)
 
@@ -66,24 +81,34 @@ cd "C:\School\3RD YEAR\ADVWEB\Project"
 
 This creates the `roadwatch` database and a dedicated `roadwatch` MySQL user.
 
-### 2. Backend
+### 2. Backend (PHP)
 
 ```powershell
 cd backend
-copy .env.example .env      # then edit secrets if you wish
-npm install
-npm run db:push             # create tables from the Prisma schema
-npm run seed                # demo accounts + sample reports
-npm run dev                 # http://localhost:4000
+copy .env.example .env      # then edit DB credentials + JWT secrets
+php database/migrate.php    # create tables from database/schema.sql (idempotent)
+php seed.php                # demo accounts + sample reports
+php -S 127.0.0.1:4000 -t public router.php   # http://localhost:4000
 ```
 
-### 3. Web platform
+Requires **PHP 8.2+** with the `pdo_mysql`, `mbstring` and `curl` extensions.
+There is no Composer dependency to install.
+
+Verify it works:
+
+```powershell
+curl http://localhost:4000/health          # {"status":"ok","database":"up",…}
+node tests/api_integration.mjs             # 103 end-to-end API checks
+```
+
+### 3. Web platform (no build step)
 
 ```powershell
 cd web
-copy .env.example .env
-npm install
-npm run dev                 # http://localhost:5173
+# If the API is not on http://localhost:4000, edit config.js:
+#   window.RW_API_BASE_URL = 'http://localhost:4000';
+python -m http.server 8080
+# then open http://localhost:8080
 ```
 
 ### 4. Mobile app
@@ -110,25 +135,30 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:4000
 
 ---
 
-## Hosting it on the web
+## Deploying on Railway
 
-The web platform and the shared API are ready to deploy. A Render **Blueprint**
-(`render.yaml`) defines both services, and the backend ships a production `Dockerfile`.
+The PHP API and the vanilla web app are ready to deploy as **two Railway services from this
+one repository**.
 
-- **Full walkthrough:** [`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md) — GitHub → managed
-  MySQL → Render → custom domain.
-- **General production notes:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+- **Full walkthrough:** [`docs/deployment-checklist.md`](docs/deployment-checklist.md).
+- **What was verified locally vs. what remains manual:** see the same file §7 and
+  [`docs/independent-verification-report.md`](docs/independent-verification-report.md).
 
-In one paragraph: push the repository to GitHub, create a free managed MySQL 8 database
-(Aiven or Railway), then in Render choose **New + → Blueprint** and connect the repo. Fill
-in `DATABASE_URL`, `CORS_ORIGINS` and `PUBLIC_BASE_URL` for the API and
-`VITE_API_BASE_URL` for the web platform. The API applies its Prisma migrations on boot;
-set `SEED_ON_START=true` once if you want the demo accounts. Point the mobile app at the
-same API with `--dart-define=API_BASE_URL=…`.
+In one paragraph: push the repository to GitHub, create a Railway project with a
+MySQL-compatible database (the Railway **MySQL** plugin, or TiDB Cloud Starter), then add
+two services from this repo — one with root directory `backend/` (uses
+`backend/Dockerfile.php` + `backend/railway.json`) and one with root directory `web/`
+(uses `web/Dockerfile`). Set `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
+`CORS_ORIGINS` and `PUBLIC_BASE_URL` on the API service, run
+`php /app/database/migrate.php` once (or as a pre-deploy command), mount a volume at
+`/app/uploads` so photos survive redeploys, and set `window.RW_API_BASE_URL` in
+`web/config.js` to the API service URL before deploying the web service. Point the mobile
+app at the same API with `--dart-define=API_BASE_URL=…`.
 
-> **Images:** Render's free plan has an ephemeral disk, so either attach a persistent disk
-> (paid) or use S3-compatible storage (`STORAGE_DRIVER=s3`, e.g. Cloudflare R2). Details in
-> the deployment guide.
+> **Images:** without a persistent volume the container filesystem is ephemeral and uploaded
+> photos are lost on redeploy — attach a Railway volume at `/app/uploads`. Note that the PHP
+> backend implements **only** `STORAGE_DRIVER=local`; the `S3_*` variables in the templates
+> are not wired up in PHP (they belonged to the legacy Node backend).
 
 ---
 
@@ -172,10 +202,15 @@ moderation, the map or maintenance. See
 
 | Document | Contents |
 | --- | --- |
+| [`docs/independent-verification-report.md`](docs/independent-verification-report.md) | **Independent audit** of the migration: verified vs. claimed, issues found/fixed |
+| [`docs/route-verification.md`](docs/route-verification.md) | Every API route with its auth rule and the client that uses it |
+| [`docs/deployment-checklist.md`](docs/deployment-checklist.md) | Step-by-step Railway deployment (API + web + DB) |
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Brand palette, typography, spacing, status colours |
-| [`docs/SETUP.md`](docs/SETUP.md) | Local setup for backend, web and mobile |
-| [`docs/API.md`](docs/API.md) | Full REST API reference with examples |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Production configuration, hosting and secrets |
-| [`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md) | Step-by-step Render deployment (API + web) |
+| [`docs/API.md`](docs/API.md) | REST API reference with examples |
 | [`docs/IMAGE_PROCESSING.md`](docs/IMAGE_PROCESSING.md) | Plugging in the optional analysis service |
 | [`docs/TESTING.md`](docs/TESTING.md) | End-to-end verification checklist |
+| _legacy_ [`docs/SETUP.md`](docs/SETUP.md) | Original Node/Prisma setup (superseded by the PHP quick start above) |
+| _legacy_ [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md) | Original Render/Node deployment notes |
+
+Automated checks: `node backend/tests/api_integration.mjs` (PHP API, 103 checks) and
+`flutter test` in `mobile/`.

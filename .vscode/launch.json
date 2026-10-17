@@ -1,0 +1,68 @@
+{
+  // The Flutter app lives in `mobile/`, so every config points there with `cwd`.
+  // Press F5 (or Run > Start Debugging) after starting an Android emulator.
+  //
+  // Requires the "Flutter" and "Dart" extensions — VS Code should prompt you
+  // to install them (see the recommendations in this folder).
+  //
+  // On an Android emulator, `localhost` is rewritten to `10.0.2.2` for you
+  // (see mobile/lib/core/app_config.dart), so the local-backend configs work on
+  // an emulator with no changes. A physical phone needs your machine's LAN IP,
+  // e.g. http://192.168.1.20:4000
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Mobile · Android emulator (local backend)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "${workspaceFolder}/mobile",
+      "program": "${workspaceFolder}/mobile/lib/main.dart",
+      "toolArgs": ["--dart-define=API_BASE_URL=http://localhost:4000"]
+    },
+    {
+      "name": "Mobile · Android emulator (hosted API)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "${workspaceFolder}/mobile",
+      "program": "${workspaceFolder}/mobile/lib/main.dart",
+      "toolArgs": [
+        "--dart-define=API_BASE_URL=https://roadwatch-api-6w2m.onrender.com"
+      ]
+    },
+    {
+      "name": "Mobile · Android emulator (local backend, release)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "${workspaceFolder}/mobile",
+      "program": "${workspaceFolder}/mobile/lib/main.dart",
+      "flutterMode": "release",
+      "toolArgs": ["--dart-define=API_BASE_URL=http://localhost:4000"]
+    },
+    {
+      "name": "Mobile · Chrome (local backend)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "${workspaceFolder}/mobile",
+      "program": "${workspaceFolder}/mobile/lib/main.dart",
+      "toolArgs": [
+        "--web-port=3000",
+        "--dart-define=API_BASE_URL=http://localhost:4000"
+      ]
+    },
+    {
+      "name": "Mobile · Windows desktop (local backend)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "${workspaceFolder}/mobile",
+      "program": "${workspaceFolder}/mobile/lib/main.dart",
+      "toolArgs": ["--dart-define=API_BASE_URL=http://localhost:4000"]
+    },
+    {
+      "name": "Mobile · Run all tests",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "${workspaceFolder}/mobile",
+      "program": "${workspaceFolder}/mobile/test/widget_test.dart"
+    }
+  ]
+}

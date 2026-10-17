@@ -1,0 +1,63 @@
+# archived-react - React/TS Source (Moved from web/src/)
+
+This directory contains the original React/TypeScript source code that was migrated 
+to plain HTML/CSS/JS. Kept for reference but no longer required for application runtime.
+
+## Moved Files
+
+### Pages (web/src/pages/ → archived-react/pages/)
+- DashboardPage.tsx
+- AssignmentsPage.tsx
+- AuditPage.tsx
+- LoginPage.tsx
+- NotFoundPage.tsx
+- PublicMapPage.tsx
+- ReportDetailPage.tsx
+- ReportsPage.tsx
+- UsersPage.tsx
+
+### Components (web/src/components/ → archived-react/components/)
+- AuthImage.tsx
+- CategoryChip.tsx
+- ModerationBadge.tsx
+- PriorityBadge.tsx
+- Pagination.tsx
+- PageHeader.tsx
+- Section.tsx
+- dialogs/
+  - *
+
+### Config (web/src/ → archived-react/src/)
+- App.tsx (root component with Routes)
+- main.tsx (entry point)
+- index.css (Tailwind/React imports)
+- vite-env.d.ts
+- vite-config.ts
+
+### Config Files (web/src/ → archived-react/)
+- package.json (React, TS deps)
+- vite.config.ts (React plugin)
+- tsconfig.json
+
+## Verification Note
+
+All functionality has been replaced by `web/js/app.js` (plain JS SPA) and 
+`web/css/styles.css` (brand tokens). The archived source is kept for reference 
+only; the application runs without these files.
+
+## To Revert (Not Recommended)
+
+1. Install dependencies: `cd web && npm install`
+2. Run build: `npm run build`
+3. Start dev server: `npm run dev`
+3. Application will use React Router and component-based rendering.
+
+## Current Runtime (Without This Source)
+
+The application runs successfully using:
+- `web/index.html` - HTML entry point
+- `web/js/app.js` - Vanilla JS SPA
+- `web/css/styles.css` - Brand token styles
+
+All routes, authentication, report flows, and map functionality work without
+the React/TS source code.

@@ -1,0 +1,11 @@
+# Whitelist only the runtime static assets of the vanilla web app.
+# Everything else (React source, node_modules, build output) is excluded.
+*
+!index.html
+!config.js
+!js
+!css
+!brand
+!vendor
+!nginx.conf.template
+!Dockerfile

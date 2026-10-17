@@ -1,0 +1,21 @@
+# RoadWatch web platform — nginx site config (rendered with envsubst).
+# ${PORT} is injected by the platform (Railway sets PORT).
+server {
+    listen ${PORT};
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Long-cache static assets.
+    location ~* \.(?:css|js|png|jpe?g|gif|svg|ico|webp|woff2?)$ {
+        try_files $uri =404;
+        expires 1h;
+        add_header Cache-Control "public";
+    }
+
+    # SPA fallback: unknown paths return index.html (the router handles them).
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

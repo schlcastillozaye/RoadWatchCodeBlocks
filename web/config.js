@@ -1,0 +1,49 @@
+/**
+ * RoadWatch web platform — runtime configuration.
+ *
+ * This file is plain JavaScript (no bundler): edit it directly to point the
+ * static web app at the shared RoadWatch API.
+ *
+ *   - Local development (API on http://localhost:4000) works with no changes.
+ *   - For a split deployment, set `window.RW_API_BASE_URL` below to the API's
+ *     public origin, e.g. 'https://roadwatch-api.up.railway.app'.
+ *   - When the API is served from the same origin as the site (a single
+ *     Railway service hosting both), leave it empty to use the current origin.
+ */
+(function () {
+  'use strict';
+
+  /** Set this to an absolute API origin, or leave '' to auto-detect. */
+  window.RW_API_BASE_URL = '';
+
+  var override = (window.RW_API_BASE_URL || '').replace(/\/+$/, '');
+  var isLocalHost = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+
+  if (override) {
+    window.RW_API_BASE = override;
+  } else if (isLocalHost && window.location.port !== '4000') {
+    // Static dev server (e.g. `python -m http.server 8080`) talking to the PHP
+    // dev API on port 4000 — the same default the mobile app and Vite use.
+    window.RW_API_BASE = 'http://localhost:4000';
+  } else {
+    // Same-origin deployment (static files and API under one host).
+    window.RW_API_BASE = window.location.origin;
+  }
+
+  /** Absolute URL for an API asset path (photos served by the API). */
+  window.RW_absoluteUrl = function (url) {
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    return window.RW_API_BASE + (url.charAt(0) === '/' ? '' : '/') + url;
+  };
+
+  window.RW_BRAND = {
+    product: 'RoadWatch',
+    company: 'Code Blocks Inc.',
+    tagline: 'Your friendly coding helper',
+    system: 'Road issue reporting & maintenance management',
+  };
+
+  /** Maps are always available: Leaflet on free OpenStreetMap tiles. */
+  window.RW_MAPS_ENABLED = true;
+})();

@@ -5,13 +5,31 @@ Tick each box as you go.
 
 ---
 
+## Automated tests (run these first)
+
+These cover most of the checklist below without manual clicking:
+
+| Layer | Command | Expect |
+| --- | --- | --- |
+| PHP API | `node backend/tests/api_integration.mjs` | `103 passed, 0 failed` |
+| Schema | `php backend/database/migrate.php` | `9 tables`, idempotent |
+| Mobile | `cd mobile; flutter analyze; flutter test` | No issues · 12/12 pass |
+| Web | `node web/tests/e2e.mjs` | browser E2E (see script output) |
+
+> The section names below use the original Node (`npm run …`) commands. With the PHP
+> backend, replace them with: `php database/migrate.php` (≈ `db:push`),
+> `php seed.php` (≈ `seed`), and `php -S 127.0.0.1:4000 -t public router.php` (≈ `dev`).
+> The web app has **no build step** — serve `web/` with any static server.
+
+---
+
 ## 0. Pre-flight
 
-- [ ] `db/setup.sql` has been run and the schema exists.
-- [ ] `backend/.env` points at it and `npm run db:push` succeeded.
-- [ ] `npm run seed` completed without errors.
+- [ ] `db/setup.sql` has been run (or a dedicated DB exists) and the schema is applied.
+- [ ] `backend/.env` points at that database and `php database/migrate.php` succeeded.
+- [ ] `php seed.php` completed without errors.
 - [ ] `GET http://localhost:4000/health` returns `"status": "ok"` and `"database": "up"`.
-- [ ] Backend `npm run dev`, web `npm run dev`, and the Flutter app are all running.
+- [ ] The PHP API (`php -S …`), a static server for `web/`, and the Flutter app are running.
 
 ---
 
