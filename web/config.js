@@ -4,7 +4,7 @@
  * This file is plain JavaScript (no bundler): edit it directly to point the
  * static web app at the shared RoadWatch API.
  *
- *   - Local development (API on http://localhost:4000) works with no changes.
+ *   - Local development (API on http://127.0.0.1:4000) works with no changes.
  *   - For a split deployment, set `window.RW_API_BASE_URL` below to the API's
  *     public origin, e.g. 'https://roadwatch-api.up.railway.app'.
  *   - When the API is served from the same origin as the site (a single
@@ -30,7 +30,7 @@
   } else if (isLocalHost && window.location.port !== '4000') {
     // Static dev server (e.g. `python -m http.server 8080`) talking to the PHP
     // dev API on port 4000 — the same default the mobile app and Vite use.
-    window.RW_API_BASE = 'http://localhost:4000';
+    window.RW_API_BASE = 'http://127.0.0.1:4000';
   } else {
     // Same-origin deployment (static files and API under one host).
     window.RW_API_BASE = window.location.origin;

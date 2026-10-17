@@ -8,6 +8,23 @@
   <link rel="icon" type="image/png" href="/brand/logo-dark.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
+  <meta id="rw-theme-color" name="theme-color" content="#eaf0fa" />
+  <script>
+    (function () {
+      try {
+        var savedTheme = localStorage.getItem('roadwatch_theme');
+        var theme = savedTheme === 'light' || savedTheme === 'dark'
+          ? savedTheme
+          : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+        document.getElementById('rw-theme-color').content = theme === 'dark' ? '#0b1729' : '#eaf0fa';
+      } catch (error) {
+        var systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = systemTheme;
+        document.getElementById('rw-theme-color').content = systemTheme === 'dark' ? '#0b1729' : '#eaf0fa';
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link

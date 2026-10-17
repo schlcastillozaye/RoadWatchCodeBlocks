@@ -4,10 +4,10 @@
    Serves the static app with `python -m http.server` and drives Microsoft Edge
    (channel: 'msedge').  No browsers are downloaded.
 
-   IMPORTANT: the PHP API only emits CORS headers for its allow-listed origins
-   (http://localhost:5173, http://localhost:3000, http://localhost).  The usual
-   8080 static port is NOT allow-listed, so the browser would block every API
-   call.  We therefore serve on an allow-listed origin (5173 by default).
+   IMPORTANT: the PHP API emits CORS headers only for configured development
+   origins (including http://localhost:5173); the API treats localhost and
+   127.0.0.1 as aliases for the same explicitly allow-listed local port.
+   We therefore serve on an allow-listed origin (5173 by default).
 
    Because `python -m http.server` has no SPA fallback, in-app routes are driven
    through the SPA router (`window.navigateTo`) rather than direct deep-link
@@ -118,8 +118,8 @@ const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHElEQVQ4jWNgGAW
 
 async function main() {
   let submittedReportTitle = null;
-  // Saved once (scenario B) and reused by C/G so the suite only performs two
-  // logins per run; the API throttles auth writes to 30 per 15 min per IP.
+  // Saved once (scenario B) and reused by citizen scenarios so repeated suite
+  // runs do not consume the API's authentication rate limit unnecessarily.
   let citizenState = null;
   const server = startStaticServer();
   const stop = () => { try { server.kill(); } catch { /* ignore */ } };
@@ -237,6 +237,24 @@ async function main() {
       const adminLandedDirectly = new URL(page.url()).pathname === '/admin'
         && await page.locator('#admin-dashboard-title').isVisible()
         && await page.locator('#home-reports').count() === 0;
+      await page.click('[data-theme-toggle]');
+      const adminDarkTheme = await page.locator('html').getAttribute('data-theme') === 'dark';
+      const darkAdminNavReadable = await page.evaluate(() => {
+        const link = document.querySelector('.admin-sidebar-nav a');
+        const sidebar = document.querySelector('.admin-sidebar');
+        if (!link || !sidebar) return false;
+        const rgb = (value) => value.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+        const luminance = (color) => {
+          const channels = rgb(color).map((value) => {
+            const channel = value / 255;
+            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+        };
+        const foreground = luminance(getComputedStyle(link).color);
+        const background = luminance(getComputedStyle(sidebar).backgroundColor);
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05) >= 4.5;
+      });
       await nav(page, '/admin', '#stat-total');
       await page.waitForFunction(() => {
         const el = document.getElementById('stat-total');
@@ -252,6 +270,7 @@ async function main() {
       const recentRows = await page.locator('#admin-dashboard-reports tbody > tr').count();
 
       let deletionOk = false;
+      let darkConfirmationReadable = false;
       if (submittedReportTitle) {
         await nav(page, '/admin/reports', '#admin-report-filters');
         await page.fill('#admin-report-filters input[name="search"]', submittedReportTitle);
@@ -267,8 +286,16 @@ async function main() {
           body: JSON.stringify({ error: { message: 'Simulated deletion failure' } }),
         }));
         const consoleErrorsBeforeExpectedFailure = col.entry.consoleErrors.length;
-        page.acceptNextDialog = true;
         await deleteButton.click();
+        await page.locator('.rw-confirm-dialog').waitFor({ state: 'visible', timeout: 5000 });
+        const confirmationTheme = await page.locator('.rw-confirm-dialog').evaluate((dialog) => {
+          const style = getComputedStyle(dialog);
+          return { background: style.backgroundColor, color: style.color };
+        });
+        darkConfirmationReadable = adminDarkTheme
+          && confirmationTheme.background === 'rgb(20, 36, 59)'
+          && confirmationTheme.color === 'rgb(241, 245, 250)';
+        await page.locator('.rw-confirm-dialog [data-confirm-delete]').click();
         await page.waitForFunction(() => document.querySelector('#admin-reports-feedback')?.textContent.includes('Simulated deletion failure'));
         const errorVisible = (await page.locator('#admin-reports-feedback').innerText()).includes('Simulated deletion failure');
         const retryEnabled = await row.locator('[data-delete-report]').isEnabled();
@@ -279,10 +306,10 @@ async function main() {
         await page.unroute('**/api/admin/reports/**');
 
         const reference = await row.locator('[data-delete-report]').getAttribute('data-report-reference');
-        page.acceptNextDialog = true;
         await row.locator('[data-delete-report]').click();
+        const confirmation = await page.locator('.rw-confirm-dialog').innerText();
+        await page.locator('.rw-confirm-dialog [data-confirm-delete]').click();
         await page.waitForSelector('#admin-reports-list .admin-empty', { timeout: 15000 });
-        const confirmation = page.lastDialogMessage || '';
         const successVisible = (await page.locator('#admin-reports-feedback').innerText()).includes('was deleted');
         await nav(page, '/admin', '#stat-total');
         await page.waitForFunction((before) => {
@@ -322,11 +349,21 @@ async function main() {
           if (overflow) adminResponsive = false;
         }
       }
+      await page.setViewportSize({ width: 375, height: 667 });
+      await nav(page, '/admin', '#admin-dashboard-title');
+      await page.click('[data-admin-menu-toggle]');
+      const adminMenuExpanded = await page.locator('#admin-sidebar-nav').isVisible();
+      await page.click('#admin-sidebar-nav a[data-nav="/admin/reports"]');
+      await page.waitForSelector('#admin-report-filters', { timeout: 15000 });
+      const adminLinkWorks = new URL(page.url()).pathname === '/admin/reports';
+      const adminMenuClosesOnNavigation = await page.locator('#admin-sidebar-nav').isHidden();
 
       const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
-      const ok = adminLandedDirectly && recentRows >= 1 && deletionOk && auditRows >= 1 && usersRendered && adminResponsive && clean;
+      const ok = adminLandedDirectly && recentRows >= 1 && deletionOk && auditRows >= 1 && usersRendered
+        && adminDarkTheme && darkAdminNavReadable && darkConfirmationReadable && adminResponsive && adminMenuExpanded
+        && adminLinkWorks && adminMenuClosesOnNavigation && clean;
       record('d', 'Admin landing, dashboard, user directory, and safe report deletion', ok,
-        `  direct admin landing: ${adminLandedDirectly}\n  ${stats}\n  recent rows: ${recentRows}, deletion + error recovery: ${deletionOk}, audit rows: ${auditRows}, users visible: ${usersRendered}, admin responsive at 4 widths: ${adminResponsive}\n${col.summary()}`);
+        `  direct admin landing: ${adminLandedDirectly}, dark theme: ${adminDarkTheme}, sidebar contrast: ${darkAdminNavReadable}\n  ${stats}\n  recent rows: ${recentRows}, deletion + error recovery: ${deletionOk}, dark confirmation readable: ${darkConfirmationReadable}, audit rows: ${auditRows}, users visible: ${usersRendered}, admin responsive at 4 widths: ${adminResponsive}, mobile drawer + route: ${adminMenuExpanded && adminLinkWorks && adminMenuClosesOnNavigation}\n${col.summary()}`);
     } catch (err) {
       record('d', 'Admin: /admin stats + /audit rows + /reports list', false, `  ${err.message}\n${col.summary()}`);
     } finally {
@@ -336,12 +373,13 @@ async function main() {
 
   // --- Scenario E: map -----------------------------------------------------
   {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, storageState: citizenState || undefined });
     const page = await context.newPage();
     const col = makeCollector(page, 'E');
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      await login(page, 'citizen@example.com', 'Citizen@12345');
+      if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
+      else await login(page, 'citizen@example.com', 'Citizen@12345');
       await nav(page, '/map', '.leaflet-container');
       await page.waitForSelector('.leaflet-marker-icon', { timeout: 15000 });
       const containers = await page.locator('.leaflet-container').count();
@@ -428,7 +466,7 @@ async function main() {
   // single /api segment — the production bug was the request falling back to the
   // static frontend origin (405 Method Not Allowed).
   {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, storageState: citizenState || undefined });
     const page = await context.newPage();
     const col = makeCollector(page, 'H');
     const override = 'http://127.0.0.1:4000';
@@ -445,6 +483,10 @@ async function main() {
       }));
 
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
+      if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
+      else await login(page, 'citizen@example.com', 'Citizen@12345');
+      await page.getByRole('button', { name: 'Logout' }).click();
+      await page.waitForSelector('#login-form', { timeout: 15000 });
       const resolved = await page.evaluate(() => window.RW_API_BASE);
       await login(page, 'citizen@example.com', 'Citizen@12345');
 
@@ -457,6 +499,181 @@ async function main() {
     } catch (err) {
       record('h', 'Runtime RW_API_BASE_URL override drives the login request', false,
         `  ${err.message}\n  login POST url(s): ${loginUrls.join(', ') || '(none)'}\n${col.summary()}`);
+    } finally {
+      await context.close();
+    }
+  }
+
+  // --- Scenario I: loopback-IP development origin login -------------------
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    const col = makeCollector(page, 'I');
+    const origin = ORIGIN.replace('localhost', '127.0.0.1');
+    try {
+      await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
+      const resolved = await page.evaluate(() => window.RW_API_BASE);
+      const validResponse = page.waitForResponse(
+        (response) => response.url().includes('/api/auth/login') && response.request().method() === 'POST',
+        { timeout: 15000 }
+      );
+      await page.fill('#login-form input[name="email"]', 'citizen@example.com');
+      await page.fill('#login-form input[name="password"]', 'Citizen@12345');
+      await page.click('#login-form button[type="submit"]');
+      const validStatus = (await validResponse).status();
+      await page.waitForURL(`${origin}/`, { timeout: 15000 });
+      const identityVisible = await page.getByText('Juan Dela Cruz').first().isVisible();
+
+      await page.getByRole('button', { name: 'Logout' }).click();
+      await page.waitForSelector('#login-form', { timeout: 15000 });
+      const invalidResponse = page.waitForResponse(
+        (response) => response.url().includes('/api/auth/login') && response.request().method() === 'POST',
+        { timeout: 15000 }
+      );
+      const consoleErrorsBeforeInvalidLogin = col.entry.consoleErrors.length;
+      await page.fill('#login-form input[name="email"]', 'citizen@example.com');
+      await page.fill('#login-form input[name="password"]', 'incorrect-password');
+      await page.click('#login-form button[type="submit"]');
+      const invalidStatus = (await invalidResponse).status();
+      await page.waitForFunction(() => {
+        const button = document.querySelector('#login-form button[type="submit"]');
+        return button && !button.disabled;
+      }, { timeout: 15000 });
+      const loginError = await page.locator('#login-feedback').innerText();
+      const invalidLoginConsoleErrors = col.entry.consoleErrors.slice(consoleErrorsBeforeInvalidLogin);
+      const expectedUnauthorizedError = invalidLoginConsoleErrors.length === 1
+        && invalidLoginConsoleErrors[0].includes('status of 401 (Unauthorized)');
+      if (expectedUnauthorizedError) col.entry.consoleErrors.splice(consoleErrorsBeforeInvalidLogin, 1);
+
+      const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
+      const ok = resolved === 'http://127.0.0.1:4000' && validStatus === 200 && identityVisible
+        && invalidStatus === 401 && loginError.includes('Login failed') && expectedUnauthorizedError && clean;
+      record('i', '127.0.0.1 origin login succeeds and invalid credentials are rejected', ok,
+        `  API base: ${resolved}, valid login: ${validStatus}, identity shown: ${identityVisible}, invalid login: ${invalidStatus}, error shown: ${loginError.includes('Login failed')}\n${col.summary()}`);
+    } catch (err) {
+      record('i', '127.0.0.1 origin login succeeds and invalid credentials are rejected', false,
+        `  ${err.message}\n${col.summary()}`);
+    } finally {
+      await context.close();
+    }
+  }
+
+  // --- Scenario J: theme preference, contrast, navigation -----------------
+  {
+    const context = await browser.newContext({
+      viewport: { width: 375, height: 667 },
+      colorScheme: 'dark',
+    });
+    const page = await context.newPage();
+    const col = makeCollector(page, 'J');
+    let contrastOk = true;
+    let responsive = true;
+    try {
+      await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#login-form', { timeout: 15000 });
+      const systemTheme = await page.locator('html').getAttribute('data-theme');
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.waitForFunction(() => document.documentElement.dataset.theme === 'light', { timeout: 3000 });
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark', { timeout: 3000 });
+      const systemPreferenceUpdates = await page.locator('html').getAttribute('data-theme') === 'dark';
+      await page.click('[data-theme-toggle]');
+      const selectedLight = await page.locator('html').getAttribute('data-theme') === 'light';
+      const savedLight = await page.evaluate(() => localStorage.getItem('roadwatch_theme'));
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#login-form', { timeout: 15000 });
+      const lightSurvivesRefresh = await page.locator('html').getAttribute('data-theme') === 'light';
+      await page.click('[data-theme-toggle]');
+      const selectedDark = await page.locator('html').getAttribute('data-theme') === 'dark';
+      const savedDark = await page.evaluate(() => localStorage.getItem('roadwatch_theme'));
+      const userContext = await browser.newContext({ viewport: { width: 375, height: 667 }, colorScheme: 'dark', storageState: citizenState || undefined });
+      const userPage = await userContext.newPage();
+      userPage.on('console', (message) => { if (message.type() === 'error') col.entry.consoleErrors.push(message.text()); });
+      userPage.on('pageerror', (error) => col.entry.pageErrors.push(error.message));
+      userPage.on('requestfailed', (request) => {
+        col.entry.requestFailures.push(`${request.method()} ${request.url()} — ${(request.failure() || {}).errorText || 'failed'}`);
+      });
+      await userPage.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
+      if (citizenState) await waitAuthenticated(userPage, 'Juan Dela Cruz');
+      else await login(userPage, 'citizen@example.com', 'Citizen@12345');
+      const userSystemTheme = await userPage.locator('html').getAttribute('data-theme');
+      await userPage.click('[data-mobile-menu-toggle]');
+      await userPage.click('[data-theme-toggle]');
+      const userLightSelected = await userPage.locator('html').getAttribute('data-theme') === 'light';
+      const userLightSaved = await userPage.evaluate(() => localStorage.getItem('roadwatch_theme'));
+      await userPage.keyboard.press('Escape');
+      await userPage.reload({ waitUntil: 'domcontentloaded' });
+      await waitAuthenticated(userPage, 'Juan Dela Cruz');
+      const userLightPersists = await userPage.locator('html').getAttribute('data-theme') === 'light';
+      await userPage.click('[data-mobile-menu-toggle]');
+      await userPage.click('[data-theme-toggle]');
+      const userDarkSelected = await userPage.locator('html').getAttribute('data-theme') === 'dark';
+      const userDarkSaved = await userPage.evaluate(() => localStorage.getItem('roadwatch_theme'));
+      await userPage.keyboard.press('Escape');
+
+      const routes = ['/', '/reports', '/submit-report', '/map'];
+      for (const route of routes) {
+        await nav(userPage, route, '#root');
+        const colors = await userPage.evaluate(() => {
+          const root = getComputedStyle(document.documentElement);
+          const parse = (value) => {
+            const match = value.match(/[\da-f]{2}/gi);
+            return match ? match.slice(-3).map((part) => parseInt(part, 16)) : null;
+          };
+          const luminance = (rgb) => {
+            const channels = rgb.map((value) => {
+              const channel = value / 255;
+              return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+          };
+          const contrast = (foreground, background) => {
+            const fg = luminance(parse(foreground));
+            const bg = luminance(parse(background));
+            return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+          };
+          return {
+            inkOnSheet: contrast(root.getPropertyValue('--ink').trim(), root.getPropertyValue('--sheet').trim()),
+            secondaryOnSurface: contrast(root.getPropertyValue('--ink-2').trim(), root.getPropertyValue('--surface').trim()),
+            mutedOnSurface: contrast(root.getPropertyValue('--ink-3').trim(), root.getPropertyValue('--surface').trim()),
+          };
+        });
+        if (Object.values(colors).some((value) => value < 4.5)) contrastOk = false;
+        for (const viewport of [
+          { width: 375, height: 667 },
+          { width: 768, height: 1024 },
+          { width: 1024, height: 768 },
+          { width: 1440, height: 900 },
+        ]) {
+          await userPage.setViewportSize(viewport);
+          await wait(80);
+          if (await userPage.evaluate(() => document.documentElement.scrollWidth > innerWidth)) responsive = false;
+        }
+      }
+
+      await userPage.setViewportSize({ width: 375, height: 667 });
+      await nav(userPage, '/reports', '#reports-list');
+      await userPage.click('[data-mobile-menu-toggle]');
+      const mobileMenuOpens = await userPage.locator('#rw-primary-nav').isVisible();
+      await userPage.keyboard.press('Escape');
+      const escapeClosesMenu = await userPage.locator('#rw-primary-nav').isHidden();
+      await userPage.click('[data-mobile-menu-toggle]');
+      await userPage.click('#rw-primary-nav a[data-nav="/map"]');
+      await userPage.waitForSelector('.leaflet-container', { timeout: 15000 });
+      const mobileNavWorks = new URL(userPage.url()).pathname === '/map';
+      await userContext.close();
+
+      const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
+      const ok = systemTheme === 'dark' && selectedLight && savedLight === 'light'
+        && systemPreferenceUpdates && lightSurvivesRefresh && selectedDark && savedDark === 'dark' && userSystemTheme === 'dark'
+        && userLightSelected && userLightSaved === 'light' && userLightPersists && userDarkSelected && userDarkSaved === 'dark'
+        && contrastOk && responsive
+        && mobileMenuOpens && escapeClosesMenu && mobileNavWorks && clean;
+      record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', ok,
+        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, contrast: ${contrastOk}, responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
+    } catch (err) {
+      record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', false,
+        `  ${err.message}\n${col.summary()}`);
     } finally {
       await context.close();
     }

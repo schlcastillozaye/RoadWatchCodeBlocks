@@ -20,9 +20,58 @@
     // Drop trailing slashes; a leading-slash path is added by the callers below.
     const trimmed = String(raw).replace(/\/+$/, '');
     // Standalone fallback (no config.js loaded): the local PHP dev API.
-    return trimmed || 'http://localhost:4000';
+    return trimmed || 'http://127.0.0.1:4000';
   };
   const TOKEN_KEY = 'roadwatch_auth_token';
+  const THEME_KEY = 'roadwatch_theme';
+
+  const currentTheme = () => document.documentElement.dataset.theme || 'light';
+  const themeToggleHtml = (className = '') => `
+    <button type="button" class="rw-theme-toggle ${className}" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode">
+      <svg class="rw-theme-icon rw-theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"></path>
+      </svg>
+      <svg class="rw-theme-icon rw-theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20.2 15.1A8.5 8.5 0 0 1 8.9 3.8 8.5 8.5 0 1 0 20.2 15.1Z"></path>
+      </svg>
+      <span class="rw-theme-label">Dark mode</span>
+    </button>`;
+
+  const updateThemeToggleLabels = () => {
+    const nextTheme = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+      const label = nextTheme === 'dark' ? 'Switch to dark mode' : 'Switch to light mode';
+      button.setAttribute('aria-label', label);
+      button.setAttribute('title', label);
+      const text = button.querySelector('.rw-theme-label');
+      if (text) text.textContent = nextTheme === 'dark' ? 'Dark mode' : 'Light mode';
+    });
+  };
+
+  const setTheme = (theme, persist = false) => {
+    document.documentElement.dataset.theme = theme;
+    const themeColor = document.getElementById('rw-theme-color');
+    if (themeColor) themeColor.content = theme === 'dark' ? '#0b1729' : '#eaf0fa';
+    if (persist) {
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch (error) {
+        console.warn('Could not save RoadWatch theme preference:', error);
+      }
+    }
+    updateThemeToggleLabels();
+  };
+
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+  systemTheme.addEventListener('change', (event) => {
+    try {
+      if (localStorage.getItem(THEME_KEY) === 'light' || localStorage.getItem(THEME_KEY) === 'dark') return;
+    } catch (error) {
+      console.warn('Could not read RoadWatch theme preference:', error);
+    }
+    setTheme(event.matches ? 'dark' : 'light');
+  });
 
   // Build an absolute URL for an API asset path (photo URLs come back absolute
   // already; this is a safety net for relative ones).
@@ -60,6 +109,31 @@
       el.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
     });
     return el;
+  };
+
+  const notify = (message) => {
+    let region = document.getElementById('rw-notifications');
+    if (!region) {
+      region = document.createElement('div');
+      region.id = 'rw-notifications';
+      region.className = 'rw-notifications';
+      region.setAttribute('aria-live', 'assertive');
+      region.setAttribute('aria-label', 'Notifications');
+      document.body.appendChild(region);
+    }
+    const notice = document.createElement('div');
+    notice.className = 'rw-notice';
+    notice.setAttribute('role', 'alert');
+    const text = document.createElement('p');
+    text.textContent = message;
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'rw-notice-dismiss';
+    dismiss.setAttribute('aria-label', 'Dismiss notification');
+    dismiss.textContent = '×';
+    dismiss.addEventListener('click', () => notice.remove());
+    notice.append(text, dismiss);
+    region.replaceChildren(notice);
   };
 
   // --- State -----------------------------------------------------------------
@@ -233,7 +307,8 @@
     </span>`;
 
   const pageLogin = () => `
-    <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet">
+    <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet rw-auth-page">
+      ${themeToggleHtml('rw-auth-theme-toggle')}
       <div class="brand-card w-full max-w-md p-8 rounded-xl shadow-lg">
         <div class="text-center mb-6">
           <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
@@ -249,6 +324,7 @@
             <label class="block text-sm font-medium text-ink-2 mb-2" for="login-password">Password</label>
             <input id="login-password" type="password" name="password" required class="w-full brand-input" placeholder="••••••••" autocomplete="current-password" />
           </div>
+          <p id="login-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
           <button type="submit" class="btn btn-primary w-full">Sign in</button>
           <p class="text-center text-sm text-slate-tint mt-3">
             New to RoadWatch? <a href="/register" id="show-register" class="font-medium text-navy underline">Create account</a>
@@ -259,7 +335,8 @@
   `;
 
   const pageRegister = () => `
-    <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet">
+    <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet rw-auth-page">
+      ${themeToggleHtml('rw-auth-theme-toggle')}
       <div class="brand-card w-full max-w-md p-8 rounded-xl shadow-lg">
         <div class="text-center mb-6">
           <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
@@ -283,6 +360,7 @@
             <label class="block text-sm font-medium text-ink-2 mb-2">Password</label>
             <input type="password" name="password" required class="w-full brand-input" placeholder="••••••••" />
           </div>
+          <p id="register-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
           <button type="submit" class="btn btn-primary w-full">Create account</button>
           <p class="text-center text-sm text-slate-tint mt-3">
             Already have an account? <a href="/login" id="show-login" class="font-medium text-navy underline">Sign in</a>
@@ -299,29 +377,35 @@
   const headerHtml = () => {
     const u = getUser();
     const firstName = u ? escapeHtml((u.fullName || '').split(' ')[0] || 'there') : '';
+    const active = (path) => window.location.pathname === path ? ' is-active' : '';
     const roleLinks = !u
       ? ''
       : u.role === 'ADMIN'
-        ? '<a href="/admin" data-nav="/admin" class="text-azure text-sm">Admin</a>'
-          + '<a href="/audit" data-nav="/audit" class="text-azure text-sm">Audit log</a>'
+        ? `<a href="/admin" data-nav="/admin" class="rw-nav-link${active('/admin')}">Admin</a>`
+          + `<a href="/audit" data-nav="/audit" class="rw-nav-link${active('/audit')}">Audit log</a>`
         : u.role === 'MAINTENANCE_OFFICER'
-          ? '<a href="/assignments" data-nav="/assignments" class="text-azure text-sm">Assignments</a>'
+          ? `<a href="/assignments" data-nav="/assignments" class="rw-nav-link${active('/assignments')}">Assignments</a>`
           : '';
     return `
-    <header class="bg-navy border-b border-azure">
-      <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 px-6 py-3">
+    <header class="rw-header">
+      <div class="rw-header-inner">
         <a href="/" id="nav-home" data-nav="/" class="rw-brand-home" aria-label="RoadWatch by Code Blocks Inc.">${brandLogoHtml('dark')}</a>
-        <nav class="flex flex-wrap items-center gap-4">
-          <a href="/map" data-nav="/map" class="text-azure text-sm">Map</a>
+        <button type="button" class="rw-mobile-menu-toggle" data-mobile-menu-toggle aria-expanded="false" aria-controls="rw-primary-nav">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+          <span>Menu</span>
+        </button>
+        <nav id="rw-primary-nav" class="rw-primary-nav" aria-label="Primary navigation">
+          <a href="/map" data-nav="/map" class="rw-nav-link${active('/map')}">Map</a>
           ${u ? `
-            <a href="/reports" data-nav="/reports" class="text-azure text-sm">My Reports</a>
-            <a href="/submit-report" data-nav="/submit-report" class="text-azure text-sm">Report an issue</a>
+            <a href="/reports" data-nav="/reports" class="rw-nav-link${active('/reports')}">My Reports</a>
+            <a href="/submit-report" data-nav="/submit-report" class="rw-nav-link rw-nav-primary${active('/submit-report')}">Report an issue</a>
             ${roleLinks}
-            <span class="text-slate-200 text-sm">${firstName}</span>
-            <button id="nav-logout" type="button" class="btn btn-sm btn-ghost text-white">Logout</button>
+            <span class="rw-nav-user">${firstName}</span>
+            <button id="nav-logout" type="button" class="rw-nav-logout">Logout</button>
           ` : `
-            <a href="/login" data-nav="/login" class="btn btn-sm btn-primary">Sign in</a>
+            <a href="/login" data-nav="/login" class="rw-nav-login">Sign in</a>
           `}
+          ${themeToggleHtml()}
         </nav>
       </div>
     </header>`;
@@ -442,8 +526,14 @@
   const adminLayout = (active, content) => `
     <section class="admin-workspace">
       <aside class="admin-sidebar" aria-label="Admin navigation">
-        <p class="admin-sidebar-heading">WORKSPACE</p>
-        <nav class="admin-sidebar-nav">
+        <div class="admin-sidebar-top">
+          <p class="admin-sidebar-heading">WORKSPACE</p>
+          <button type="button" class="admin-sidebar-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-sidebar-nav">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+            <span>Admin menu</span>
+          </button>
+        </div>
+        <nav id="admin-sidebar-nav" class="admin-sidebar-nav">
           <a href="/admin" data-nav="/admin" class="${active === 'dashboard' ? 'is-active' : ''}">Dashboard</a>
           <a href="/admin/reports" data-nav="/admin/reports" class="${active === 'reports' ? 'is-active' : ''}">Reports</a>
           <a href="/admin/users" data-nav="/admin/users" class="${active === 'users' ? 'is-active' : ''}">Users</a>
@@ -737,6 +827,13 @@
   const initLoginPage = () => {
     const form = q('#login-form');
     if (form) {
+      const feedback = q('#login-feedback', form);
+      form.addEventListener('input', () => {
+        if (feedback) {
+          feedback.hidden = true;
+          feedback.textContent = '';
+        }
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
@@ -754,7 +851,11 @@
           setUser(data.user);
           navigateTo('/');
         } catch (err) {
-          alert('Login failed: ' + (err.message || err));
+          if (feedback) {
+            feedback.textContent = 'Login failed: ' + (err.message || err);
+            feedback.hidden = false;
+            feedback.focus();
+          }
           if (btn) { btn.disabled = false; }
         }
       });
@@ -769,6 +870,13 @@
   const initRegisterPage = () => {
     const form = q('#register-form');
     if (form) {
+      const feedback = q('#register-feedback', form);
+      form.addEventListener('input', () => {
+        if (feedback) {
+          feedback.hidden = true;
+          feedback.textContent = '';
+        }
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
@@ -788,7 +896,11 @@
           setUser(data.user);
           navigateTo('/');
         } catch (err) {
-          alert('Registration failed: ' + (err.message || err));
+          if (feedback) {
+            feedback.textContent = 'Registration failed: ' + (err.message || err);
+            feedback.hidden = false;
+            feedback.focus();
+          }
           if (btn) { btn.disabled = false; }
         }
       });
@@ -913,14 +1025,14 @@
     const form = q('#report-form');
 
     on(q('#btn-get-location'), 'click', () => {
-      if (!navigator.geolocation) { alert('Geolocation is not supported by this browser.'); return; }
+      if (!navigator.geolocation) { notify('Geolocation is not supported by this browser.'); return; }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           latInput.value = pos.coords.latitude;
           lonInput.value = pos.coords.longitude;
           if (gpsCoords) gpsCoords.textContent = `Lat: ${pos.coords.latitude.toFixed(6)}, Lng: ${pos.coords.longitude.toFixed(6)}`;
         },
-        (err) => alert('Unable to get location: ' + err.message),
+        (err) => notify('Unable to get location: ' + err.message),
         { enableHighAccuracy: true }
       );
     });
@@ -946,9 +1058,9 @@
       e.preventDefault();
       const lat = (latInput.value || '').trim();
       const lon = (lonInput.value || '').trim();
-      if (!lat || !lon) { alert('Please set the GPS location first.'); return; }
+      if (!lat || !lon) { notify('Please set the GPS location first.'); return; }
       if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-        alert('Please attach at least one photo of the issue.');
+        notify('Please attach at least one photo of the issue.');
         return;
       }
 
@@ -969,7 +1081,7 @@
         flash = ref ? `Report submitted successfully! Reference: ${ref}` : 'Report submitted successfully!';
         navigateTo('/reports');
       } catch (err) {
-        alert('Failed to submit: ' + (err.message || err));
+        notify('Failed to submit: ' + (err.message || err));
         if (btn) { btn.disabled = false; btn.textContent = 'Submit Report'; }
       }
     });
@@ -1089,6 +1201,44 @@
     host.className = message ? `admin-feedback is-${tone}` : 'admin-feedback';
   };
 
+  const confirmAdminDelete = (reference, title) => new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'rw-confirm-dialog';
+    dialog.setAttribute('aria-labelledby', 'rw-confirm-title');
+    dialog.setAttribute('aria-describedby', 'rw-confirm-description');
+    dialog.innerHTML = `
+      <div class="rw-confirm-content">
+        <p class="rw-confirm-eyebrow">REPORT MANAGEMENT</p>
+        <h2 id="rw-confirm-title">Delete this report?</h2>
+        <p class="rw-confirm-identity"><strong>${escapeHtml(reference)}</strong><span>${escapeHtml(title)}</span></p>
+        <p id="rw-confirm-description">This permanently removes the report and its related photos, assignments, and history. This action cannot be undone.</p>
+        <div class="rw-confirm-actions">
+          <button type="button" class="btn btn-secondary" data-confirm-cancel>Cancel</button>
+          <button type="button" class="btn btn-danger" data-confirm-delete>Delete report</button>
+        </div>
+      </div>`;
+    document.body.appendChild(dialog);
+    let settled = false;
+    const finish = (confirmed) => {
+      if (settled) return;
+      settled = true;
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      resolve(confirmed);
+    };
+    dialog.querySelector('[data-confirm-cancel]').addEventListener('click', () => finish(false));
+    dialog.querySelector('[data-confirm-delete]').addEventListener('click', () => finish(true));
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      finish(false);
+    });
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) finish(false);
+    });
+    dialog.showModal();
+    dialog.querySelector('[data-confirm-cancel]').focus();
+  });
+
   const readAdminReportFilters = () => {
     const form = q('#admin-report-filters');
     const data = form ? new FormData(form) : new FormData();
@@ -1148,7 +1298,7 @@
         if (!id || deletingReportIds.has(id)) return;
         const title = button.getAttribute('data-report-title') || 'Untitled report';
         const reference = button.getAttribute('data-report-reference') || id;
-        if (!window.confirm(`Permanently delete report ${reference} — "${title}"?\n\nThis removes this report and its related photos, assignments, and history. This action cannot be undone.`)) return;
+        if (!await confirmAdminDelete(reference, title)) return;
 
         deletingReportIds.add(id);
         button.disabled = true;
@@ -1318,10 +1468,74 @@
 
     // One delegated handler for every [data-nav] element (links, cards, buttons).
     document.addEventListener('click', (e) => {
+      const themeButton = e.target && e.target.closest ? e.target.closest('[data-theme-toggle]') : null;
+      if (themeButton) {
+        e.preventDefault();
+        setTheme(currentTheme() === 'dark' ? 'light' : 'dark', true);
+        return;
+      }
+
+      const mobileMenuButton = e.target && e.target.closest ? e.target.closest('[data-mobile-menu-toggle]') : null;
+      if (mobileMenuButton) {
+        const nav = document.getElementById('rw-primary-nav');
+        const expanded = mobileMenuButton.getAttribute('aria-expanded') === 'true';
+        mobileMenuButton.setAttribute('aria-expanded', String(!expanded));
+        if (nav) nav.dataset.open = String(!expanded);
+        return;
+      }
+
+      const adminMenuButton = e.target && e.target.closest ? e.target.closest('[data-admin-menu-toggle]') : null;
+      if (adminMenuButton) {
+        const sidebar = adminMenuButton.closest('.admin-sidebar');
+        const expanded = adminMenuButton.getAttribute('aria-expanded') === 'true';
+        adminMenuButton.setAttribute('aria-expanded', String(!expanded));
+        if (sidebar) sidebar.dataset.open = String(!expanded);
+        return;
+      }
+
+      const openNav = document.getElementById('rw-primary-nav');
+      const navToggle = document.querySelector('[data-mobile-menu-toggle]');
+      if (openNav?.dataset.open === 'true' && !e.target.closest('#rw-primary-nav, [data-mobile-menu-toggle]')) {
+        openNav.dataset.open = 'false';
+        if (navToggle) navToggle.setAttribute('aria-expanded', 'false');
+      }
+      document.querySelectorAll('.admin-sidebar[data-open="true"]').forEach((sidebar) => {
+        if (e.target.closest('.admin-sidebar')) return;
+        sidebar.dataset.open = 'false';
+        const toggle = sidebar.querySelector('[data-admin-menu-toggle]');
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      });
+
       const target = e.target && e.target.closest ? e.target.closest('[data-nav]') : null;
       if (!target) return;
       e.preventDefault();
+      const menuButton = document.querySelector('[data-mobile-menu-toggle]');
+      const nav = document.getElementById('rw-primary-nav');
+      if (menuButton) menuButton.setAttribute('aria-expanded', 'false');
+      if (nav) nav.dataset.open = 'false';
+      const adminSidebar = target.closest('.admin-sidebar');
+      if (adminSidebar) {
+        adminSidebar.dataset.open = 'false';
+        const adminButton = adminSidebar.querySelector('[data-admin-menu-toggle]');
+        if (adminButton) adminButton.setAttribute('aria-expanded', 'false');
+      }
       navigateTo(target.getAttribute('data-nav'));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const menuButton = document.querySelector('[data-mobile-menu-toggle]');
+      const nav = document.getElementById('rw-primary-nav');
+      const navWasOpen = nav?.dataset.open === 'true';
+      if (menuButton) menuButton.setAttribute('aria-expanded', 'false');
+      if (nav) nav.dataset.open = 'false';
+      if (navWasOpen && menuButton && menuButton.getClientRects().length) menuButton.focus();
+      document.querySelectorAll('.admin-sidebar[data-open="true"]').forEach((sidebar) => {
+        sidebar.dataset.open = 'false';
+        const adminButton = sidebar.querySelector('[data-admin-menu-toggle]');
+        if (adminButton) adminButton.setAttribute('aria-expanded', 'false');
+        if (adminButton && adminButton.getClientRects().length) adminButton.focus();
+      });
     });
 
     // Logout lives in the global header, which the router re-renders for every
@@ -1336,6 +1550,7 @@
     });
 
     on(window, 'popstate', render);
+    updateThemeToggleLabels();
     await render();
   };
 
