@@ -242,7 +242,9 @@ async function main() {
       const darkAdminNavReadable = await page.evaluate(() => {
         const link = document.querySelector('.admin-sidebar-nav a');
         const sidebar = document.querySelector('.admin-sidebar');
-        if (!link || !sidebar) return false;
+        const wordmark = document.querySelector('.rw-brand-wordmark');
+        const header = document.querySelector('.rw-header');
+        if (!link || !sidebar || !wordmark || !header) return false;
         const rgb = (value) => value.match(/[\d.]+/g)?.slice(0, 3).map(Number);
         const luminance = (color) => {
           const channels = rgb(color).map((value) => {
@@ -251,9 +253,13 @@ async function main() {
           });
           return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
         };
-        const foreground = luminance(getComputedStyle(link).color);
-        const background = luminance(getComputedStyle(sidebar).backgroundColor);
-        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05) >= 4.5;
+        const contrast = (foreground, background) => {
+          const fg = luminance(foreground);
+          const bg = luminance(background);
+          return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+        };
+        return contrast(getComputedStyle(link).color, getComputedStyle(sidebar).backgroundColor) >= 4.5
+          && contrast(getComputedStyle(wordmark).color, getComputedStyle(header).backgroundColor) >= 4.5;
       });
       await nav(page, '/admin', '#stat-total');
       await page.waitForFunction(() => {
