@@ -28,8 +28,11 @@ CREATE DATABASE IF NOT EXISTS `roadwatch`
   COLLATE utf8mb4_unicode_ci;
 
 -- Dedicated least-privilege application user.
-CREATE USER IF NOT EXISTS 'roadwatch'@'localhost' IDENTIFIED BY 'RoadWatchDev2026';
-CREATE USER IF NOT EXISTS 'roadwatch'@'127.0.0.1' IDENTIFIED BY 'RoadWatchDev2026';
+-- IMPORTANT: replace CHANGE_ME_DB_PASSWORD below with a strong, unique password
+-- BEFORE running this script, then put the SAME value in backend/.env
+-- (DATABASE_URL). Never commit the real password.
+CREATE USER IF NOT EXISTS 'roadwatch'@'localhost' IDENTIFIED BY 'CHANGE_ME_DB_PASSWORD';
+CREATE USER IF NOT EXISTS 'roadwatch'@'127.0.0.1' IDENTIFIED BY 'CHANGE_ME_DB_PASSWORD';
 
 GRANT ALL PRIVILEGES ON `roadwatch`.* TO 'roadwatch'@'localhost';
 GRANT ALL PRIVILEGES ON `roadwatch`.* TO 'roadwatch'@'127.0.0.1';

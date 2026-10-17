@@ -145,14 +145,14 @@ one repository**.
   [`docs/independent-verification-report.md`](docs/independent-verification-report.md).
 
 In one paragraph: push the repository to GitHub, create a Railway project with a
-MySQL-compatible database (the Railway **MySQL** plugin, or TiDB Cloud Starter), then add
+MySQL database (the Railway **MySQL** plugin), then add
 two services from this repo — one with root directory `backend/` (uses
 `backend/Dockerfile.php` + `backend/railway.json`) and one with root directory `web/`
 (uses `web/Dockerfile`). Set `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
 `CORS_ORIGINS` and `PUBLIC_BASE_URL` on the API service, run
 `php /app/database/migrate.php` once (or as a pre-deploy command), mount a volume at
-`/app/uploads` so photos survive redeploys, and set `window.RW_API_BASE_URL` in
-`web/config.js` to the API service URL before deploying the web service. Point the mobile
+`/app/uploads` so photos survive redeploys, and set the **`RW_API_BASE_URL`** variable
+on the web service to the API service URL. Point the mobile
 app at the same API with `--dart-define=API_BASE_URL=…`.
 
 > **Images:** without a persistent volume the container filesystem is ephemeral and uploaded

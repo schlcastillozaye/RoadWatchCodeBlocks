@@ -31,7 +31,7 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean),
 
-  databaseUrl: str('DATABASE_URL', 'mysql://roadwatch:RoadWatchDev2026@127.0.0.1:3306/roadwatch'),
+  databaseUrl: str('DATABASE_URL', 'mysql://roadwatch:CHANGE_ME_DB_PASSWORD@127.0.0.1:3306/roadwatch'),
 
   jwt: {
     accessSecret: str('JWT_ACCESS_SECRET', 'dev-access-secret-change-me-please-32chars'),

@@ -3,9 +3,11 @@
 *
 !index.html
 !config.js
+!rw-runtime-config.js
 !js
 !css
 !brand
 !vendor
 !nginx.conf.template
+!docker-entrypoint.d
 !Dockerfile

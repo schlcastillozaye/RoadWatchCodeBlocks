@@ -9,6 +9,9 @@ build/
 .env
 .env.local
 .env.*.local
+# production env files must never be committed
+.env.production
+.env.*.production
 
 # logs
 *.log

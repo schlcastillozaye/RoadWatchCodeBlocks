@@ -1,12 +1,38 @@
-node_modules
-dist
-uploads
-.git
-.gitignore
+# RoadWatch PHP API — Docker build-context exclusions.
+#
+# The image only needs the PHP runtime: public/, src/, database/, seed.php and
+# router.php. Everything else is excluded so the image stays small and — most
+# importantly — so local secrets (.env), uploaded files and the legacy
+# Node/Prisma tree are never baked into the image.
+
+# Local environment / secrets. The container gets real values from the host's
+# environment variables (Railway service variables), never from a file.
 .env
 .env.*
-*.log
-npm-debug.log*
+.env.example
+.env.production.example
+
+# Legacy Node + Prisma backend (not part of the PHP runtime)
+node_modules/
+dist/
+prisma/
+package.json
+package-lock.json
+tsconfig.json
+src/config/
+
+# Local tests, docs and uploaded images (uploads is a mounted volume in prod)
+tests/
+uploads/
 README.md
-docs
-.prisma
+
+# VCS / editor / deploy metadata
+.git/
+.gitignore
+.vscode/
+*.log
+Dockerfile
+Dockerfile.php
+docker-compose*.yml
+railway.json
+.dockerignore

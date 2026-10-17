@@ -1,4 +1,12 @@
-# RoadWatch — Local Setup
+# RoadWatch — Local Setup (LEGACY: Node / Prisma / Vite)
+
+> ⚠️ **LEGACY — NOT THE TARGET STACK.** The project now runs on **PHP 8.2 +
+> vanilla JS**; there is no npm/Prisma step, and MySQL/MariaDB works fine with PDO
+> (the old "MariaDB is not supported" note applied only to the retired Prisma
+> client). Use the quick start in the repository [`README.md`](../README.md); the
+> current deployment guide is [`deployment-checklist.md`](deployment-checklist.md).
+> This page is kept only for the historical Node workflow and does not describe
+> what is deployed.
 
 Everything needed to run the full system on one Windows development machine.
 
@@ -40,7 +48,8 @@ Enter your MySQL **root** password when prompted.
 What the script does:
 
 - creates the `roadwatch` schema (utf8mb4 / utf8mb4_unicode_ci),
-- creates the `roadwatch` user with the password `RoadWatchDev2026`,
+- creates the `roadwatch` user with the password you set on the `CREATE USER`
+  lines in `db/setup.sql` (replace the `CHANGE_ME_DB_PASSWORD` placeholder first),
 - grants it full rights on the `roadwatch` schema only.
 
 > If your MySQL is on a non-default host or port, or you would rather reuse another
@@ -49,7 +58,7 @@ What the script does:
 Verify:
 
 ```powershell
-& "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u roadwatch -pRoadWatchDev2026 -e "SHOW DATABASES;"
+& "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u roadwatch -p -e "SHOW DATABASES;"   # prompts for the password
 ```
 
 ---

@@ -1,5 +1,11 @@
 # ===========================================================================
-#  RoadWatch — Render Blueprint
+#  RoadWatch — Render Blueprint   (LEGACY — NOT THE TARGET ARCHITECTURE)
+# ===========================================================================
+#  ⚠️  This file describes the OLD Node + Express + Prisma stack on Render and is
+#      NOT what this project deploys. The target is a PHP API + vanilla-JS web
+#      app on **Railway** — see docs/deployment-checklist.md. It also references
+#      TiDB Cloud, which is no longer part of the architecture.
+#      Kept for reference only; do not use it to deploy.
 # ===========================================================================
 #  Deploys two services from this repository:
 #    1. roadwatch-api  — the shared Node + Express API (Docker)

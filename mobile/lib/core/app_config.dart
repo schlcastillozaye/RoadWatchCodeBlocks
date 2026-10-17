@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 ///
 /// Override at build/run time, e.g.:
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.20:4000
+///   flutter build apk --release --dart-define=API_BASE_URL=https://your-api.up.railway.app
 class AppConfig {
   AppConfig._();
 
@@ -16,13 +17,39 @@ class AppConfig {
     defaultValue: 'http://localhost:4000',
   );
 
-  /// On the Android emulator `localhost` is the emulator itself; the host
-  /// machine is reachable at 10.0.2.2.
-  static String get apiBaseUrl {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android && _apiBaseUrl.contains('localhost')) {
-      return _apiBaseUrl.replaceAll('localhost', '10.0.2.2');
+  /// The API origin this build talks to.
+  ///
+  /// A **release** build must be given a real, publicly reachable origin via
+  /// `--dart-define=API_BASE_URL=…`; otherwise this throws instead of silently
+  /// shipping an app that can only reach a developer's localhost.
+  static String get apiBaseUrl => resolveApiBaseUrl(
+        _apiBaseUrl,
+        release: kReleaseMode,
+        android: !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+      );
+
+  /// Pure resolver so the behaviour is unit-testable without a real build.
+  ///
+  /// - `release` + a `localhost`/`127.0.0.1` origin → throws (misconfiguration).
+  /// - `android` + a `localhost` origin → rewritten to `10.0.2.2` (the emulator's
+  ///   view of the host machine) — development only.
+  @visibleForTesting
+  static String resolveApiBaseUrl(
+    String raw, {
+    required bool release,
+    required bool android,
+  }) {
+    if (release && (raw.contains('localhost') || raw.contains('127.0.0.1'))) {
+      throw FlutterError(
+        'API_BASE_URL was not configured for this release build.\n'
+        'Rebuild with the deployed API origin, e.g.\n'
+        '  flutter build apk --release --dart-define=API_BASE_URL=https://your-api.up.railway.app',
+      );
     }
-    return _apiBaseUrl;
+    if (android && raw.contains('localhost')) {
+      return raw.replaceAll('localhost', '10.0.2.2');
+    }
+    return raw;
   }
 
   /// Normalises a possibly-relative URL returned by the API into an absolute one.

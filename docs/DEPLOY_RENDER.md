@@ -1,4 +1,9 @@
-# RoadWatch — Deploying to Render (step by step)
+# RoadWatch — Deploying to Render (LEGACY: not the target)
+
+> ⚠️ **LEGACY — NOT THE TARGET.** This guide deploys the retired **Node + React**
+> stack to **Render**, and references TiDB Cloud. The project now deploys a **PHP
+> API + vanilla-JS web app to Railway** — see
+> [`deployment-checklist.md`](deployment-checklist.md). Kept for reference only.
 
 This guide puts the **web platform** and the **shared API** on the public internet using
 [Render](https://render.com). The Flutter mobile app is not hosted here — it is built and

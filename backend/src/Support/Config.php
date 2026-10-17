@@ -26,24 +26,40 @@ class Config
     /** @return string[] */
     public static function corsOrigins(): array
     {
-        $raw = Env::str('CORS_ORIGINS', 'http://localhost:5173');
+        $raw = Env::str('CORS_ORIGINS', 'http://localhost:8080,http://localhost:3000,http://localhost:5173');
         $parts = array_map('trim', explode(',', $raw));
         return array_values(array_filter($parts, static fn ($v) => $v !== ''));
     }
 
     public static function databaseUrl(): string
     {
-        return Env::str('DATABASE_URL', 'mysql://roadwatch:RoadWatchDev2026@127.0.0.1:3306/roadwatch');
+        return Env::str('DATABASE_URL', 'mysql://roadwatch:CHANGE_ME_DB_PASSWORD@127.0.0.1:3306/roadwatch');
     }
 
     public static function jwtAccessSecret(): string
     {
-        return Env::str('JWT_ACCESS_SECRET', 'dev-access-secret-change-me-please-32chars');
+        return self::guardSecret('JWT_ACCESS_SECRET', 'dev-access-secret-change-me-please-32chars');
     }
 
     public static function jwtRefreshSecret(): string
     {
-        return Env::str('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-me-please-32chars');
+        return self::guardSecret('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-me-please-32chars');
+    }
+
+    /**
+     * Refuse to start in production with a placeholder / development JWT secret.
+     * Tokens signed with a publicly known key can be forged by anyone, so a
+     * missing secret must fail loudly at boot rather than run insecurely.
+     */
+    private static function guardSecret(string $key, string $devDefault): string
+    {
+        $value = Env::str($key, $devDefault);
+        if (self::isProd() && ($value === $devDefault || str_starts_with($value, 'change-me') || strlen($value) < 32)) {
+            throw new \RuntimeException(
+                "Refusing to start: {$key} must be a strong, unique value of at least 32 characters in production."
+            );
+        }
+        return $value;
     }
 
     public static function jwtAccessTtl(): string

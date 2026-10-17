@@ -1,4 +1,9 @@
-# RoadWatch — Deployment
+# RoadWatch — Deployment (LEGACY: Node / React / Render)
+
+> ⚠️ **LEGACY — NOT THE TARGET.** This page documents the retired **Node +
+> Express + React** stack (Render, Vite, `tsc`). The project now deploys a **PHP
+> API + vanilla-JS web app on Railway** — see
+> [`deployment-checklist.md`](deployment-checklist.md). Kept for reference only.
 
 This project is delivered with configuration and documentation rather than a live hosted
 environment. Everything below is what you change to put it on real infrastructure.

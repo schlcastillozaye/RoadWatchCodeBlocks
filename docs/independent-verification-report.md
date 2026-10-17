@@ -131,6 +131,14 @@ Correction banners were added to the top of `docs/FINAL_STATUS.md`, `docs/MIGRAT
 | 5 | **Web app not runnable** (syntax, mount, routing, endpoints, multipart, Leaflet, CSS). | Rewrote/fixed `web/js/app.js`, `web/index.html`, `web/css/styles.css`; added `web/tests/e2e.mjs`. | `node --check` clean; browser E2E (§7). |
 | 6 | **Docs overstated completion** and mis-counted the schema. | Correction banners + this report + README updated to the actual architecture. | Files updated. |
 | 7 | **Linux-breaking path case in git (deployment-blocker).** The dirs were `Modules`/`Services` **on disk** (matching the namespaces) but git tracked them as **`modules`/`services`** — inherited from the legacy Node tree via Windows' case-insensitive filesystem. A Linux checkout (Railway/Docker) would create `src/modules/`, and the autoloader (`RoadWatch\Modules\X` → `src/Modules/X.php`) would fail to load **every** module/service class → the whole API fatal-errors. | Two-step `git mv` case rename → `Modules`/`Services` in the index. | `git ls-tree HEAD` now lists `src/Modules/…` and `src/Services/…`. |
+| 8 | **Exposed dev DB credential in tracked files** (`db/setup.sql`, `backend/src/Support/Config.php`, `backend/src/config/env.ts`, `backend/.env.example`, `docs/SETUP.md`). | Scrubbed **without ever printing the value** (derived at runtime from `db/setup.sql`, replaced with `CHANGE_ME_DB_PASSWORD`). | `git grep -l -F <value>` → **zero** tracked files. The value still exists in **git history** (`e37b370`, `52ac7c0`), so rotate, don't just edit. |
+| 9 | **JWT secrets could be left at placeholder values in production** → anyone could forge tokens. | `Config::guardSecret()` refuses to boot when `NODE_ENV=production` and a secret is the default, starts with `change-me`, or is <32 chars. | CLI probe: production + placeholder → throws; development → OK; production + strong → OK. |
+| 10 | **`.gitignore` did not ignore `.env.production`** (a future leak path). | Added `.env.production` and `.env.*.production`. | inspection. |
+| 11 | **Web app's API URL was build-time only** — the split Railway setup (web origin ≠ api origin) had no rebuild-free way to point the site at the API. | Added `web/rw-runtime-config.js` (loaded after `config.js`) + `web/docker-entrypoint.d/40-roadwatch-config.sh`: the container writes `RW_API_BASE_URL` at start-up. | web E2E still **7/7**; script is LF-only (`.gitattributes`). |
+| 12 | **Flutter release builds could silently ship the `localhost` default.** | `AppConfig.resolveApiBaseUrl()` throws in a release build if the origin is `localhost`/`127.0.0.1`; `--dart-define=API_BASE_URL=…` documented in README + checklist. | 3 new unit tests; `flutter test` **15/15**. |
+| 13 | **Stale TiDB / Render references** in `.env.example`, `README.md`, `docs/deployment-checklist.md`, `backend/.env.production.example`, `.vscode/launch.json`, `render.yaml`. | TiDB removed from the target architecture; corrected to Railway + MySQL; legacy Render docs/configs get explicit **"LEGACY — NOT THE TARGET"** banners. | inspection. |
+| 14 | **`backend/.dockerignore`** (this file already existed and **already** excluded `.env`, so secrets were never baked into images — the earlier "(no .dockerignore)" note was a glob miss on a dotfile). | Refined to also exclude `prisma/`, `tests/`, `src/config/`, `package.json`, `docs`. Added missing `web/` whitelist entries. | inspection. |
+| 15 | **Local `CORS_ORIGINS` did not include the vanilla web dev port (8080)** → local web dev on 8080 was CORS-blocked. | Added `http://localhost:8080` to the `Config.php` default and both `.env.example` files (and the local `.env`). | inspection. |
 
 > **Cross-platform caveat on verification.** All runtime testing (API, browser E2E, builds) ran on **Windows**, whose case-insensitive filesystem **cannot** surface path-case bugs — the browser E2E would pass even with a broken `Modules` path. Issue #7 was found by comparing `git ls-tree` against the PHP namespaces, and the same audit was run across every PHP `require` path and every web asset reference (all consistent). This is the one class of bug the automated suites cannot catch on Windows; a CI job that checks out on Linux would be the durable guard.
 
@@ -140,7 +148,7 @@ Correction banners were added to the top of `docs/FINAL_STATUS.md`, `docs/MIGRAT
 
 ## 6. Issues found, **not** fixed (need a decision)
 
-1. **Secrets committed in tracked files.** A real-looking dev credential for the local MySQL user, and weak `change-me…` JWT defaults, appear in **tracked** files (`backend/src/config/env.ts`, `db/setup.sql`, `backend/.env.example`, `docs/SETUP.md`). `backend/.env` / `web/.env` are correctly git-ignored. **Recommend:** rotate the DB password, replace literals with placeholders, and remember the value already exists in **git history** (rewrite or rotate, don't just edit).
+1. **~~Secrets committed in tracked files~~ — RESOLVED (partly).** The dev credential has been scrubbed from **all tracked files** (§5 #8) and weak production secrets now fail fast (§5 #9). **Rotation is prepared but NOT executed:** the live credential belongs to the **local** MySQL 8 accounts `roadwatch@localhost` / `roadwatch@127.0.0.1` (localhost-only), and the application account holds only `USAGE` + `ALL ON roadwatch.*` — it **cannot** rotate itself, and MySQL `root` needs a password the verifier does not have. Run `db/rotate_password.sql` as an administrator. Because the value is still in git history, rotation remains the durable fix (a history rewrite is **not** done here — it would rewrite shared history).
 2. **Legacy stacks still present.** `backend/prisma/`, `backend/src/config`, `backend/Dockerfile`, `backend/package.json`, `web/src/`, `web/vite.config.ts`, `web/package.json`, `web/dist/`, and `render.yaml` remain. They are **not** the target and should not be deployed, but removing them is a product decision (they are also the only committed backend today). **Not deleted.** Note: the legacy `src/modules/**` + `src/services/**` TypeScript files now also sit under the capitalized `Modules/` + `Services/` paths (they share the directory with the PHP code); their lowercase relative imports still resolve on Windows but would need case fixes if the legacy Node backend were ever run on Linux.
 3. **Extra `users` table** in the live MySQL DB (schema drift). Safe to drop manually.
 4. **Mobile tests** now cover the API layer (`api_client_test.dart`, 8 tests); state/provider and full network flows are still untested.
@@ -165,10 +173,14 @@ Correction banners were added to the top of `docs/FINAL_STATUS.md`, `docs/MIGRAT
 | CORS | OPTIONS/GET with allowed + disallowed origins | 204 + ACAO / no ACAO |
 | DB-failure safety | server with unreachable DB | `/health` `database:down`; API generic `DB_ERROR` |
 | Flutter analyze | `flutter analyze` | **No issues found!** |
-| Flutter tests | `flutter test` | **12/12 pass** (4 widget/enum + 8 API-layer) |
+| Flutter tests | `flutter test` | **15/15 pass** (4 widget/enum + 8 API-layer + 3 release-guard) |
 | Flutter builds | `flutter build web --release`, `flutter build apk --debug` | both exit 0 |
+| JWT production guard | CLI probe, `NODE_ENV=production` + placeholder secret | guard throws (as designed) |
+| Credential scrub | `git grep -l -F <value>` | **no tracked file matches** |
 | Web syntax | `node --check web/js/app.js` | exit 0 (after repair) |
-| Web browser E2E | `node web/tests/e2e.mjs` | **7/7 scenarios passed**, exit 0 (Edge, live API) |
+| Web browser E2E | `node web/tests/e2e.mjs` | **7/7 scenarios passed**, exit 0 (Edge, live API) — re-run after adding `rw-runtime-config.js` |
+| PHP lint (this pass) | `php -l src/Support/Config.php` … | No syntax errors (all) |
+| API suite re-run (this pass) | `node backend/tests/api_integration.mjs` | **103 passed, 0 failed** |
 
 ---
 
@@ -176,23 +188,25 @@ Correction banners were added to the top of `docs/FINAL_STATUS.md`, `docs/MIGRAT
 
 | Component | Functional | Deployment-ready |
 |---|---|---|
-| PHP backend | ✅ yes | 🟡 code + Dockerfile/config added; needs a volume + env vars + one migrate run |
-| Database | ✅ yes | 🟡 needs a managed MySQL/TiDB instance (schema is idempotent) |
-| Web app | ✅ yes (7/7 browser scenarios) | 🟡 needs `config.js` pointed at the API URL; serve from a CORS-allowed origin |
-| Mobile app | ✅ yes | 🟡 set `API_BASE_URL`; set API `PUBLIC_BASE_URL` empty or reachable |
-| Repo | ❌ untracked migration | ❌ **commit + push required** before any Git-based deploy |
+| PHP backend | ✅ yes | 🟡 code + Dockerfile/config + `.dockerignore`; needs a volume + env vars + one migrate run |
+| Database | ✅ yes | 🟡 needs a managed MySQL 8 / MariaDB instance (Railway MySQL plugin); schema is idempotent |
+| Web app | ✅ yes (7/7 browser scenarios) | 🟡 set `RW_API_BASE_URL` on the web service (runtime); serve from the API's CORS allow-list |
+| Mobile app | ✅ yes | 🟡 build with `--dart-define=API_BASE_URL=<public api>`; set API `PUBLIC_BASE_URL` |
+| Repo | 🟡 migration **committed locally** | ❌ **push required** before any Git-based deploy (see §9 #1) |
+
+> **Not verifiable here:** the Docker **image build** and the **live Railway run**. Docker is not installed in the verification environment and there is no Railway account/remote auth available. Everything expressible as a non-Docker command was executed and passed.
 
 ---
 
 ## 9. Prioritized remaining manual tasks
 
-1. **Commit & push the migration** (highest priority — nothing deploys until this happens):
-   `git add -A && git commit -m "Migrate backend to PHP + vanilla web; add Railway config"` (verify no secrets are staged — `.env` is ignored).
-2. **Follow `docs/deployment-checklist.md`** to create the two Railway services, the MySQL/TiDB database, the `/app/uploads` volume, and the env vars.
-3. **Set `PUBLIC_BASE_URL`** so image URLs are reachable (empty = relative, best for mobile).
-4. **Rotate the exposed dev DB password** and scrub placeholders from tracked docs; consider a history rewrite.
-5. **Decide the fate of the legacy Node/React code** (remove or keep as reference).
-6. **Add mobile API tests** and, if used in production, an admin moderation UI for web.
+1. **Push the repository** (highest priority — nothing deploys until this happens). The migration + hardening commits are **local only**; `main` is ahead of `origin/main`. `git push origin main` (do **not** force-push).
+2. **Follow `docs/deployment-checklist.md`** to create the two Railway services, the MySQL database (Railway MySQL plugin), the `/app/uploads` volume, the `RW_API_BASE_URL` web variable and the API env vars.
+3. **Rotate the exposed dev DB password** (`db/rotate_password.sql`, as MySQL root). The value is still in git history — rotation is what actually retires it.
+4. **Set `PUBLIC_BASE_URL`** on the API so image URLs are reachable (absolute is needed by the mobile app).
+5. **Build the mobile app with `--dart-define=API_BASE_URL=<public api>`** (release builds now refuse the localhost default).
+6. **Decide the fate of the legacy Node/React code** (remove or keep as reference — it is not deployed).
+7. **Optional:** an admin moderation UI for web; a Linux CI checkout to catch path-case regressions durably.
 
 ---
 
@@ -207,3 +221,52 @@ C:\xampp\php\php.exe -S 127.0.0.1:4000 -t backend\public backend\router.php   # 
 node backend\tests\api_integration.mjs          # expect: 103 passed, 0 failed
 cd mobile; flutter analyze; flutter test
 ```
+
+---
+
+## 11. Deployment-hardening pass (2026-10-17, second session)
+
+A follow-up pass focused on **finishing deployment safely** without redoing the
+migration. Summary of what changed and what is still manual:
+
+### Done (verified)
+
+- **Credential scrubbed from tracked source.** All five tracked occurrences of the
+  local dev DB password were replaced with `CHANGE_ME_DB_PASSWORD`, **without the
+  value ever being typed or printed** (it was derived at runtime from
+  `db/setup.sql`). `git grep` now finds it in zero tracked files. It remains in git
+  history (`e37b370`, `52ac7c0`) — see the rotation note below.
+- **Live credential characterised.** It belongs to the **local** MySQL 8.0.45 on
+  `127.0.0.1:3306` (`roadwatch@localhost` / `roadwatch@127.0.0.1`, **localhost-only**,
+  not `@'%'`). The account holds `USAGE` + `ALL ON roadwatch.*` only, so it **cannot
+  rotate itself**; MySQL `root` is password-protected and unavailable to the agent.
+  → rotation is **prepared** in `db/rotate_password.sql` and must be run as root.
+- **JWT fail-fast.** Production now refuses to boot on placeholder/short JWT secrets.
+- **Web API URL is now runtime-configurable** (`RW_API_BASE_URL` service variable) —
+  no image rebuild needed when the API URL changes.
+- **Flutter release guard** for a missing/public API origin (+ 3 unit tests).
+- **TiDB removed** everywhere from the target; Render references corrected or
+  clearly marked legacy. `docs/deployment-checklist.md` rewritten for Railway.
+- **`.gitignore` hardened** for `.env.production`.
+- **Re-verified everything:** API **103/103**, Flutter **15/15** + analyze clean,
+  Web E2E **7/7**, PHP lint clean.
+
+### Still manual (needs a human / an account)
+
+| # | Task | Why it can't be automated here | How to verify success |
+|---|---|---|---|
+| 1 | **`git push origin main`** | remote credentials/approval not available to the agent | `git status` shows up-to-date; commits visible on GitHub |
+| 2 | **Rotate the dev DB password** (`db/rotate_password.sql` as root) | the app account lacks the privilege; root password unknown | re-run app against local DB → `/health` `database: up` |
+| 3 | **Create the Railway MySQL plugin + services** per the checklist | needs a Railway account (not available) | `curl .../health` → `database: up` |
+| 4 | **Mount `/app/uploads` volume** | dashboard action | redeploy → previously uploaded photos still load |
+| 5 | **Build the mobile app with the public API URL** | needs the deployed API URL | app loads data on a release device build |
+| 6 | **`docker build` the two images** | Docker is not installed here | both images build; web serves on `$PORT` |
+
+### Explicitly *not* done (and why)
+
+- **No git-history rewrite** — it would rewrite shared history; rotation is the
+  correct remedy for an exposed secret that is still live.
+- **No deletion of the legacy Node/React trees** — kept archived and documented
+  (§6 #2); deleting them is a product decision.
+- **No change to the live `roadwatch` MySQL data** — read-only inspection only.
+

@@ -1,0 +1,3 @@
+# Keep shell scripts on LF so they run inside the Linux containers unchanged,
+# regardless of the core.autocrlf setting on the machine that checked them out.
+*.sh text eol=lf

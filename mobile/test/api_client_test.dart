@@ -41,6 +41,37 @@ void main() {
     });
   });
 
+  group('AppConfig.resolveApiBaseUrl (release guard)', () {
+    test('rejects a release build left on the localhost default', () {
+      expect(
+        () => AppConfig.resolveApiBaseUrl('http://localhost:4000', release: true, android: false),
+        throwsA(isA<FlutterError>()),
+      );
+      expect(
+        () => AppConfig.resolveApiBaseUrl('http://127.0.0.1:4000', release: true, android: false),
+        throwsA(isA<FlutterError>()),
+      );
+    });
+
+    test('accepts a public HTTPS origin in a release build', () {
+      expect(
+        AppConfig.resolveApiBaseUrl('https://api.example.com', release: true, android: false),
+        'https://api.example.com',
+      );
+    });
+
+    test('rewrites localhost to 10.0.2.2 only for Android debug runs', () {
+      expect(
+        AppConfig.resolveApiBaseUrl('http://localhost:4000', release: false, android: true),
+        'http://10.0.2.2:4000',
+      );
+      expect(
+        AppConfig.resolveApiBaseUrl('http://localhost:4000', release: false, android: false),
+        'http://localhost:4000',
+      );
+    });
+  });
+
   group('ApiClient', () {
     test('sends a bearer token when one is stored', () async {
       String? seenAuth;
