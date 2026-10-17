@@ -916,6 +916,7 @@ body,
 :root[data-theme='dark'] .admin-page-title,
 :root[data-theme='dark'] .admin-panel-heading h2,
 :root[data-theme='dark'] .admin-stat-card strong { color: var(--ink); }
+:root[data-theme='dark'] .text-navy { color: var(--ink); }
 :root[data-theme='dark'] .admin-sidebar-nav a,
 :root[data-theme='dark'] .admin-sidebar-logout { color: var(--sky); }
 :root[data-theme='dark'] .rw-brand-lockup--dark { color: var(--ink); }

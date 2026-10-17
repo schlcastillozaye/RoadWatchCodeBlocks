@@ -616,13 +616,26 @@ async function main() {
       const userDarkSelected = await userPage.locator('html').getAttribute('data-theme') === 'dark';
       const userDarkSaved = await userPage.evaluate(() => localStorage.getItem('roadwatch_theme'));
       await userPage.keyboard.press('Escape');
+      await userPage.waitForFunction(
+        () => getComputedStyle(document.body).backgroundColor === 'rgb(11, 23, 41)',
+        { timeout: 3000 }
+      );
 
       const routes = ['/', '/reports', '/submit-report', '/map'];
+      const routeSelectors = {
+        '/': '#home-reports',
+        '/reports': '#reports-list',
+        '/submit-report': '#report-form',
+        '/map': '.leaflet-container',
+      };
+      let minimumRenderedTextContrast = Infinity;
       for (const route of routes) {
-        await nav(userPage, route, '#root');
+        await nav(userPage, route, routeSelectors[route]);
         const colors = await userPage.evaluate(() => {
           const root = getComputedStyle(document.documentElement);
           const parse = (value) => {
+            const rgb = value.match(/rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+            if (rgb) return rgb.slice(1, 4).map(Number);
             const match = value.match(/[\da-f]{2}/gi);
             return match ? match.slice(-3).map((part) => parseInt(part, 16)) : null;
           };
@@ -638,12 +651,23 @@ async function main() {
             const bg = luminance(parse(background));
             return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
           };
+          const renderedTextContrast = [...document.querySelectorAll('.text-navy')].map((element) => {
+            let background = element;
+            while (background && getComputedStyle(background).backgroundColor === 'rgba(0, 0, 0, 0)') {
+              background = background.parentElement;
+            }
+            return background
+              ? contrast(getComputedStyle(element).color, getComputedStyle(background).backgroundColor)
+              : 0;
+          });
           return {
             inkOnSheet: contrast(root.getPropertyValue('--ink').trim(), root.getPropertyValue('--sheet').trim()),
             secondaryOnSurface: contrast(root.getPropertyValue('--ink-2').trim(), root.getPropertyValue('--surface').trim()),
             mutedOnSurface: contrast(root.getPropertyValue('--ink-3').trim(), root.getPropertyValue('--surface').trim()),
+            renderedText: renderedTextContrast.length ? Math.min(...renderedTextContrast) : 0,
           };
         });
+        minimumRenderedTextContrast = Math.min(minimumRenderedTextContrast, colors.renderedText);
         if (Object.values(colors).some((value) => value < 4.5)) contrastOk = false;
         for (const viewport of [
           { width: 375, height: 667 },
@@ -676,7 +700,7 @@ async function main() {
         && contrastOk && responsive
         && mobileMenuOpens && escapeClosesMenu && mobileNavWorks && clean;
       record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', ok,
-        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, contrast: ${contrastOk}, responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
+        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, contrast: ${contrastOk} (minimum rendered navy text ${minimumRenderedTextContrast.toFixed(2)}:1), responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
     } catch (err) {
       record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', false,
         `  ${err.message}\n${col.summary()}`);
