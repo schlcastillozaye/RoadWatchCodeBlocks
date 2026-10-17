@@ -459,6 +459,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .btn-danger { background-color: var(--red); color: #fff; }
 .btn-danger:hover:not(:disabled) { background-color: #a93232; }
 .btn-sm { padding: 0.5rem 0.9rem; min-height: 38px; font-size: 0.8125rem; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
 
 /* ---- Forms ---- */
 .brand-input {
@@ -922,10 +923,47 @@ body,
 :root[data-theme='dark'] .rw-brand-lockup--dark { color: var(--ink); }
 :root[data-theme='dark'] .admin-sidebar-nav a:hover,
 :root[data-theme='dark'] .admin-sidebar-nav a.is-active { color: #fff; }
-:root[data-theme='dark'] .btn-secondary { color: var(--ink); border-color: var(--azure); }
-:root[data-theme='dark'] .btn-secondary:hover:not(:disabled),
+:root[data-theme='dark'] :focus-visible { outline-color: var(--sky); }
+:root[data-theme='dark'] .btn-primary {
+  border-color: var(--sky);
+  background-color: var(--sky);
+  color: var(--navy);
+}
+:root[data-theme='dark'] .btn-primary:hover:not(:disabled) {
+  border-color: #d9efff;
+  background-color: #d9efff;
+  color: var(--navy);
+}
+:root[data-theme='dark'] .btn-secondary {
+  border-color: var(--azure);
+  background-color: var(--surface);
+  color: var(--ink);
+}
+:root[data-theme='dark'] .btn-secondary:hover:not(:disabled) {
+  border-color: var(--sky);
+  background-color: #20344e;
+  color: #fff;
+}
+:root[data-theme='dark'] .btn-ghost { color: var(--ink); }
 :root[data-theme='dark'] .btn-ghost:hover:not(:disabled),
 :root[data-theme='dark'] .hover\:bg-slate-50:hover { background-color: var(--interactive-hover); }
+:root[data-theme='dark'] .btn-ghost:hover:not(:disabled) { color: #fff; }
+:root[data-theme='dark'] .btn-danger {
+  border-color: var(--red-ink);
+  background-color: var(--red-ink);
+  color: var(--navy);
+}
+:root[data-theme='dark'] .btn-danger:hover:not(:disabled) {
+  border-color: #ffc7c7;
+  background-color: #ffc7c7;
+  color: var(--navy);
+}
+:root[data-theme='dark'] .btn:disabled {
+  border-color: #53677d;
+  background-color: #344960;
+  color: var(--ink);
+  opacity: 1;
+}
 :root[data-theme='dark'] .rw-auth-brand .rw-brand-lockup--light {
   --rw-mark-base: var(--sky);
   --rw-mark-accent: var(--cream);
@@ -935,6 +973,39 @@ body,
 :root[data-theme='dark'] .leaflet-control-attribution,
 :root[data-theme='dark'] .leaflet-control-zoom a { background: var(--input-surface); color: var(--ink); }
 :root[data-theme='dark'] .leaflet-control-attribution a { color: var(--blue-ink); }
+
+.rw-report-location-map {
+  width: 100%;
+  height: clamp(15rem, 34vw, 20rem);
+  min-height: 15rem;
+  background: var(--input-surface);
+  touch-action: pan-x pan-y;
+}
+@media (max-width: 640px) {
+  .rw-report-form-card { padding: 1rem; }
+}
+.rw-report-location-map .leaflet-control-zoom a {
+  min-width: 34px;
+  min-height: 34px;
+  line-height: 34px;
+}
+.rw-location-coords {
+  min-height: 1.5rem;
+  color: var(--ink-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.rw-location-feedback {
+  margin-top: 0.4rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--red);
+  border-radius: 10px;
+  background: var(--error-surface);
+  color: var(--red-ink);
+  font-size: 0.82rem;
+}
+.rw-location-feedback[hidden] { display: none; }
 
 .rw-header {
   position: relative;

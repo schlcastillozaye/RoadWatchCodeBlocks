@@ -189,23 +189,75 @@ async function main() {
     const page = await context.newPage();
     const col = makeCollector(page, 'C');
     const title = `E2E pothole ${Date.now()}`;
+    let reportPostCount = 0;
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/reports') && request.method() === 'POST') reportPostCount += 1;
+    });
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
       else await login(page, 'citizen@example.com', 'Citizen@12345');
 
       await nav(page, '/submit-report', '#report-form');
-      // Set the location directly (and also exercise permissions).
-      await page.evaluate(() => {
-        document.querySelector('#lat-input').value = '14.7942';
-        document.querySelector('#lon-input').value = '120.879';
+      const locationMap = page.locator('#report-location-map');
+      await locationMap.waitFor({ state: 'visible', timeout: 10000 });
+      await page.locator('#report-form').evaluate((form) => {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       });
+      const missingLocationBlocked = await page.locator('#location-feedback').isVisible()
+        && (await page.locator('#location-feedback').innerText()).includes('Choose a valid issue location');
+      const noReportSentWithoutLocation = !reportPostCount
+        && await page.evaluate(() => !document.querySelector('#lat-input').value && !document.querySelector('#lon-input').value);
+      await page.click('#btn-get-location');
+      await page.waitForFunction(() => document.querySelector('#lat-input').value === '14.794200'
+        && document.querySelector('#lon-input').value === '120.879000', { timeout: 5000 });
+      const gpsLocationSelected = await page.locator('.leaflet-marker-draggable').isVisible()
+        && (await page.locator('#gps-coords').innerText()).includes('14.794200');
+      await context.clearPermissions();
+      await page.click('#btn-get-location');
+      await page.waitForFunction(() => !document.querySelector('#location-feedback').hidden, { timeout: 5000 });
+      const gpsPermissionError = (await page.locator('#location-feedback').innerText())
+        .includes('Location permission was denied');
+      await locationMap.click({ position: { x: 140, y: 110 } });
+      await page.locator('.leaflet-marker-draggable').waitFor({ state: 'visible', timeout: 5000 });
+      const initialLocation = await page.evaluate(() => ({
+        latitude: Number(document.querySelector('#lat-input').value),
+        longitude: Number(document.querySelector('#lon-input').value),
+      }));
+      const pin = page.locator('.leaflet-marker-draggable');
+      const pinBox = await pin.boundingBox();
+      if (!pinBox) throw new Error('The selected report location marker is not visible.');
+      await page.mouse.move(pinBox.x + pinBox.width / 2, pinBox.y + pinBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(pinBox.x + pinBox.width / 2 + 32, pinBox.y + pinBox.height / 2 + 18, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForFunction(
+        (before) => Number(document.querySelector('#lat-input').value) !== before.latitude
+          || Number(document.querySelector('#lon-input').value) !== before.longitude,
+        initialLocation,
+        { timeout: 5000 }
+      );
+      const selectedLocation = await page.evaluate(() => ({
+        latitude: Number(document.querySelector('#lat-input').value),
+        longitude: Number(document.querySelector('#lon-input').value),
+      }));
       await page.fill('input[name="title"]', title);
       await page.selectOption('select[name="category"]', 'POTHOLE');
       await page.fill('textarea[name="description"]', 'E2E automated submission: large pothole blocking the right lane.');
       await page.fill('input[name="areaLabel"]', 'E2E Area');
       await page.setInputFiles('input[name="photos"]', pngPath);
+      const submitted = page.waitForResponse((response) =>
+        response.url().endsWith('/api/reports') && response.request().method() === 'POST', { timeout: 20000 });
       await page.click('#report-form button[type="submit"]');
+      const submitResponse = await submitted;
+      const submitPayload = await submitResponse.json();
+      const savedLocation = {
+        latitude: Number(submitPayload.report?.latitude),
+        longitude: Number(submitPayload.report?.longitude),
+      };
+      const coordinatesSaved = submitResponse.status() === 201
+        && Math.abs(savedLocation.latitude - selectedLocation.latitude) < 0.000001
+        && Math.abs(savedLocation.longitude - selectedLocation.longitude) < 0.000001;
 
       await page.waitForSelector('#reports-list', { timeout: 15000 });
       await page.waitForFunction((t) => document.body.innerText.includes(t), title, { timeout: 15000 });
@@ -216,10 +268,12 @@ async function main() {
       await page.waitForFunction(() => document.querySelectorAll('#reports-list img[src^="blob:"]').length > 0, { timeout: 15000 }).catch(() => {});
       const authedImages = await page.locator('#reports-list img[src^="blob:"]').count();
       const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
-      record('c', 'Submit report (multipart + photo) and see it under /reports', found && authedImages > 0 && clean,
-        `  report card visible: ${found}, private photos hydrated: ${authedImages}\n${col.summary()}`);
+      record('c', 'Choose and adjust report location, submit photo, and verify saved coordinates',
+        missingLocationBlocked && noReportSentWithoutLocation && gpsLocationSelected && gpsPermissionError
+          && found && authedImages > 0 && coordinatesSaved && clean,
+        `  missing location blocked: ${missingLocationBlocked && noReportSentWithoutLocation}, GPS selected/error handling: ${gpsLocationSelected && gpsPermissionError}, map click + draggable pin: ${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}, saved location matches: ${coordinatesSaved}, report card visible: ${found}, private photos hydrated: ${authedImages}\n${col.summary()}`);
     } catch (err) {
-      record('c', 'Submit report (multipart + photo) and see it under /reports', false, `  ${err.message}\n${col.summary()}`);
+      record('c', 'Choose and adjust report location, submit photo, and verify saved coordinates', false, `  ${err.message}\n${col.summary()}`);
     } finally {
       await context.close();
     }
@@ -621,6 +675,68 @@ async function main() {
         { timeout: 3000 }
       );
 
+      await nav(userPage, '/submit-report', '#report-form');
+      const buttonContrast = await userPage.evaluate(() => {
+        const card = document.querySelector('#report-form').closest('.brand-card');
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:fixed;left:-10000px;top:0;display:grid;pointer-events:none;';
+        probe.className = 'rw-button-contrast-probe';
+        const variants = ['primary', 'secondary', 'ghost', 'danger', 'disabled'];
+        for (const variant of variants) {
+          const button = document.createElement('button');
+          button.className = `btn btn-${variant}`;
+          button.textContent = variant;
+          button.disabled = variant === 'disabled';
+          probe.appendChild(button);
+        }
+        card.appendChild(probe);
+        const parseColor = (value) => {
+          const values = value.match(/[\d.]+/g)?.map(Number);
+          return values ? { rgb: values.slice(0, 3), alpha: values[3] ?? 1 } : null;
+        };
+        const luminance = (rgb) => {
+          const channels = rgb.map((value) => {
+            const channel = value / 255;
+            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+        };
+        const contrast = (foreground, background) => {
+          const fg = parseColor(foreground);
+          const bg = parseColor(background);
+          if (!fg || !bg) return 0;
+          const composite = fg.rgb.map((channel, index) =>
+            channel * fg.alpha + bg.rgb[index] * (1 - fg.alpha));
+          const l1 = luminance(composite);
+          const l2 = luminance(bg.rgb);
+          return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+        };
+        const surface = getComputedStyle(card).backgroundColor;
+        const ratios = [...probe.querySelectorAll('button')].map((button) => {
+          const styles = getComputedStyle(button);
+          const background = parseColor(styles.backgroundColor);
+          const effectiveBackground = background && background.alpha
+            ? styles.backgroundColor
+            : surface;
+          return contrast(styles.color, effectiveBackground);
+        });
+        probe.remove();
+        return { minimum: Math.min(...ratios), variants: ratios };
+      });
+      await userPage.locator('#report-form button[type="submit"]').hover();
+      const primaryHoverContrast = await userPage.evaluate(() => {
+        const button = document.querySelector('#report-form button[type="submit"]');
+        const parse = (value) => value.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+        const luminance = (rgb) => rgb.map((value) => {
+          const channel = value / 255;
+          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        }).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+        const foreground = luminance(parse(getComputedStyle(button).color));
+        const background = luminance(parse(getComputedStyle(button).backgroundColor));
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      });
+      const buttonContrastOk = buttonContrast.minimum >= 4.5 && primaryHoverContrast >= 4.5;
+
       const routes = ['/', '/reports', '/submit-report', '/map'];
       const routeSelectors = {
         '/': '#home-reports',
@@ -678,6 +794,11 @@ async function main() {
           await userPage.setViewportSize(viewport);
           await wait(80);
           if (await userPage.evaluate(() => document.documentElement.scrollWidth > innerWidth)) responsive = false;
+          if (route === '/submit-report' && viewport.width === 375) {
+            const mapWidth = await userPage.locator('#report-location-map')
+              .evaluate((element) => element.getBoundingClientRect().width);
+            if (mapWidth < 260) responsive = false;
+          }
         }
       }
 
@@ -697,10 +818,10 @@ async function main() {
       const ok = systemTheme === 'dark' && selectedLight && savedLight === 'light'
         && systemPreferenceUpdates && lightSurvivesRefresh && selectedDark && savedDark === 'dark' && userSystemTheme === 'dark'
         && userLightSelected && userLightSaved === 'light' && userLightPersists && userDarkSelected && userDarkSaved === 'dark'
-        && contrastOk && responsive
+        && contrastOk && buttonContrastOk && responsive
         && mobileMenuOpens && escapeClosesMenu && mobileNavWorks && clean;
       record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', ok,
-        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, contrast: ${contrastOk} (minimum rendered navy text ${minimumRenderedTextContrast.toFixed(2)}:1), responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
+        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, text contrast: ${contrastOk} (minimum rendered navy text ${minimumRenderedTextContrast.toFixed(2)}:1), dark button contrast: ${buttonContrastOk} (base min ${buttonContrast.minimum.toFixed(2)}:1, primary hover ${primaryHoverContrast.toFixed(2)}:1), responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
     } catch (err) {
       record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', false,
         `  ${err.message}\n${col.summary()}`);

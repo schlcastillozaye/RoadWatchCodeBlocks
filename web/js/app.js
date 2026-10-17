@@ -447,7 +447,7 @@
 
   const pageSubmitReport = () => `
     <section class="py-8 max-w-2xl mx-auto px-6">
-      <div class="brand-card p-8 rounded-xl shadow-lg">
+      <div class="rw-report-form-card brand-card p-8 rounded-xl shadow-lg">
         <h2 class="text-2xl font-bold text-navy mb-4">Report a Road Issue</h2>
         <form id="report-form" class="space-y-4">
           <div>
@@ -469,13 +469,16 @@
             <label class="block text-sm font-medium text-ink-2 mb-2">Description</label>
             <textarea name="description" rows="3" required minlength="10" class="w-full brand-input" placeholder="Describe the issue (at least 10 characters)…"></textarea>
           </div>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-ink-2 mb-2">GPS Location</label>
-              <div class="flex items-center gap-2 p-3 rounded border border-slate-300">
-                <span id="gps-coords" class="text-slate-400 flex-1 text-sm">Tap to get GPS location</span>
-                <button type="button" id="btn-get-location" class="btn btn-sm btn-ghost">Get Location</button>
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <label class="block text-sm font-medium text-ink-2" for="report-location-map">Issue location</label>
+                <button type="button" id="btn-get-location" class="btn btn-sm btn-secondary">Use my location</button>
               </div>
+              <p class="text-sm text-slate-tint mb-2">Tap the map to place the pin, then drag it to fine-tune.</p>
+              <div id="report-location-map" class="rw-report-location-map rounded-lg overflow-hidden border border-slate-300" role="application" aria-label="Choose the road issue location on the map"></div>
+              <p id="gps-coords" class="rw-location-coords text-sm mt-2" role="status" aria-live="polite">No location selected yet.</p>
+              <p id="location-feedback" class="rw-location-feedback" role="alert" hidden></p>
               <input type="hidden" name="latitude" id="lat-input" />
               <input type="hidden" name="longitude" id="lon-input" />
             </div>
@@ -1022,18 +1025,93 @@
     const latInput = q('#lat-input');
     const lonInput = q('#lon-input');
     const gpsCoords = q('#gps-coords');
+    const locationFeedback = q('#location-feedback');
     const form = q('#report-form');
+    let locationMap = null;
+    let locationMarker = null;
 
-    on(q('#btn-get-location'), 'click', () => {
-      if (!navigator.geolocation) { notify('Geolocation is not supported by this browser.'); return; }
+    const setSelectedLocation = (latitude, longitude) => {
+      const lat = Number(latitude);
+      const lng = Number(longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        if (locationFeedback) {
+          locationFeedback.textContent = 'That location is not valid. Choose a point on the map or use your current location.';
+          locationFeedback.hidden = false;
+        }
+        return;
+      }
+
+      const position = [lat, lng];
+      if (locationMap) {
+        if (!locationMarker) {
+          locationMarker = window.L.marker(position, { draggable: true, autoPan: true }).addTo(locationMap);
+          locationMarker.on('dragend', () => {
+            const point = locationMarker.getLatLng();
+            setSelectedLocation(point.lat, point.lng);
+          });
+        } else {
+          locationMarker.setLatLng(position);
+        }
+      }
+
+      latInput.value = lat.toFixed(6);
+      lonInput.value = lng.toFixed(6);
+      if (gpsCoords) gpsCoords.textContent = `Selected: Lat ${lat.toFixed(6)}, Lng ${lng.toFixed(6)}`;
+      if (locationFeedback) {
+        locationFeedback.textContent = '';
+        locationFeedback.hidden = true;
+      }
+    };
+
+    const locationMapElement = q('#report-location-map');
+    if (locationMapElement && window.L) {
+      locationMap = window.L.map(locationMapElement, {
+        scrollWheelZoom: false,
+        zoomControl: true,
+      }).setView([14.7942, 120.879], 11);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(locationMap);
+      locationMap.on('click', (event) => setSelectedLocation(event.latlng.lat, event.latlng.lng));
+      window.setTimeout(() => locationMap.invalidateSize(), 0);
+    } else if (locationMapElement) {
+      locationMapElement.textContent = 'The location map could not be loaded. You can still use your device location.';
+      console.error('Leaflet (window.L) is not available — the report location map cannot be rendered.');
+    }
+
+    on(q('#btn-get-location'), 'click', (event) => {
+      const button = event.currentTarget;
+      if (!navigator.geolocation) {
+        if (locationFeedback) {
+          locationFeedback.textContent = 'Location access is not supported by this browser. Select the issue location on the map instead.';
+          locationFeedback.hidden = false;
+        }
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Finding location…';
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          latInput.value = pos.coords.latitude;
-          lonInput.value = pos.coords.longitude;
-          if (gpsCoords) gpsCoords.textContent = `Lat: ${pos.coords.latitude.toFixed(6)}, Lng: ${pos.coords.longitude.toFixed(6)}`;
+          setSelectedLocation(pos.coords.latitude, pos.coords.longitude);
+          if (locationMap) locationMap.setView([pos.coords.latitude, pos.coords.longitude], Math.max(locationMap.getZoom(), 15));
+          button.disabled = false;
+          button.textContent = 'Use my location';
         },
-        (err) => notify('Unable to get location: ' + err.message),
-        { enableHighAccuracy: true }
+        (err) => {
+          const message = {
+            1: 'Location permission was denied. Allow location access in your browser, or select the issue location on the map.',
+            2: 'Your current location is unavailable. Try again or select the issue location on the map.',
+            3: 'Finding your location timed out. Try again or select the issue location on the map.',
+          }[err.code] || 'Unable to get your location. Select the issue location on the map instead.';
+          if (locationFeedback) {
+            locationFeedback.textContent = message;
+            locationFeedback.hidden = false;
+          }
+          button.disabled = false;
+          button.textContent = 'Use my location';
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
       );
     });
 
@@ -1058,7 +1136,17 @@
       e.preventDefault();
       const lat = (latInput.value || '').trim();
       const lon = (lonInput.value || '').trim();
-      if (!lat || !lon) { notify('Please set the GPS location first.'); return; }
+      const latitude = Number(lat);
+      const longitude = Number(lon);
+      if (!lat || !lon || !Number.isFinite(latitude) || !Number.isFinite(longitude)
+        || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        if (locationFeedback) {
+          locationFeedback.textContent = 'Choose a valid issue location by tapping the map, dragging its pin, or using your current location.';
+          locationFeedback.hidden = false;
+        }
+        q('#report-location-map')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
       if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
         notify('Please attach at least one photo of the issue.');
         return;
