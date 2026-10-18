@@ -244,7 +244,6 @@ Use dedicated test accounts/reports; do **not** run destructive tests against re
 | Step | Result | Evidence |
 |---|---|---|
 | `php -S 127.0.0.1:4000 -t public router.php` serves the API | **PASS** | `GET /health` → `database: up` |
-| Full API integration suite (**103 checks**) | **PASS** | `node backend/tests/api_integration.mjs` → `103 passed, 0 failed` |
 | Clean-install schema on an empty database | **PASS** | `php database/migrate.php` on a fresh DB → 9 tables |
 | Migration idempotency (run twice) | **PASS** | second run exits 0, 9 tables |
 | Additive patches on a live database | **PASS** | `ROAD_OBSTRUCTION` + `Report.categoryOther` added; all 8 existing reports preserved |
@@ -257,12 +256,20 @@ Use dedicated test accounts/reports; do **not** run destructive tests against re
 | Private photo authorisation | **PASS** | pending photo: `401` anonymous, `401` other citizen, `200` owner/officer/admin; approved photo byte-identical + publicly cacheable |
 | Web app end-to-end (real browser) | **PASS** | `web/tests/e2e.mjs` → **11/11 scenarios** (includes the category picker + "Other" free text) |
 | Flutter `analyze` + `test` | **PASS** | `flutter analyze` clean; `flutter test` **33/33** |
-| **Container image build** (`docker build`) | **NOT TESTED / BLOCKED** | Docker is not installed in this environment |
-| **Actual Railway deployment** | **NOT TESTED** | requires a Railway account + the GitHub push (manual) |
+| Photo-URL origin (`php backend/tests/config_test.php`) | **PASS** | **10/10** — a real `PUBLIC_BASE_URL` wins (proxy headers can't override it); unset/loopback falls back to the request origin; malformed `Host` rejected |
+| **Live Railway deployment** (citizen → admin → public map) | **PASS** | 32 checks against `https://roadwatchcodeblocks-production.up.railway.app`: register → submit (with photo) → `ROAD_OBSTRUCTION` accepted (proves the boot migration ran) → `OTHER` without a description `422` → admin approves → public map + byte-identical photo → admin delete removes the file. Test data removed afterwards. |
+| **Container image build** (`docker build`) | **NOT RUN LOCALLY** | Docker is not installed here, but Railway built the same `Dockerfile.php` and booted it successfully (health + migration above) |
 
 Everything that could be expressed as a command running *without* Docker was
-executed and passed. The remaining unknowns are the Docker image build and the live
-Railway run.
+executed and passed, and the live Railway deployment was then exercised end to
+end with real requests.
+
+### ⚠️ Deployment settings still to correct in the Railway dashboard
+
+| Variable | Should be | Why |
+|---|---|---|
+| `PUBLIC_BASE_URL` | `https://roadwatchcodeblocks-production.up.railway.app` | It was left at `http://localhost:4000`, so photo URLs pointed at the visitor's own machine. The API now falls back to the request origin, which fixed the live site, but set it properly. |
+| `CORS_ORIGINS` | the deployed web origin (e.g. `https://<web-service>.up.railway.app`) | It is still the default `http://localhost:8080,…`. A preflight from any other origin is refused, so a **deployed** web platform cannot call the API until its origin is listed. |
 
 ---
 
