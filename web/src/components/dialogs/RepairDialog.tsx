@@ -121,7 +121,7 @@ export function RepairDialog({
             value={status}
             onChange={(event) => setStatus(event.target.value as TargetStatus)}
           >
-            {(['AWAITING_MAINTENANCE', 'IN_PROGRESS', 'COMPLETED'] as TargetStatus[]).map((key) => (
+            {[NEXT_STATUS[report.repairStatus]].map((key) => (
               <option key={key} value={key}>
                 {REPAIR_LABELS[key]}
               </option>

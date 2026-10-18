@@ -140,6 +140,7 @@
   let user = null;
   let flash = null; // one-shot success message handed between pages
   const deletingReportIds = new Set();
+  let assignmentFocusBound = false;
 
   // --- Auth ------------------------------------------------------------------
   const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -768,6 +769,18 @@
     <section class="admin-panel">
       <div class="admin-panel-heading">
         <div>
+          <h2>Pending reports</h2>
+          <p>Review new submissions and decide whether they should enter the maintenance workflow.</p>
+        </div>
+        <a href="/admin/reports" data-nav="/admin/reports" class="btn btn-ghost btn-sm">View all reports</a>
+      </div>
+      <div id="admin-dashboard-pending">
+        <div class="loading-block"><span class="spinner"></span> Loading pending reports…</div>
+      </div>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-heading">
+        <div>
           <h2>Latest reports</h2>
           <p>Recently submitted reports across the network.</p>
         </div>
@@ -858,13 +871,34 @@
   `);
 
   const pageAssignments = () => `
-    <section class="py-8 max-w-2xl mx-auto px-6">
-      <div class="brand-card p-8 rounded-xl shadow-lg">
-        <h2 class="text-2xl font-bold text-navy mb-4">My Assignments</h2>
+    <section class="py-8 max-w-7xl mx-auto px-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div>
+          <h2 class="text-2xl font-bold text-navy">Maintenance dashboard</h2>
+          <p class="text-sm text-slate-tint mt-1">Assigned work, repair progress and officer notifications.</p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-assignments">Refresh dashboard</button>
+      </div>
+      <div id="officer-summary" class="admin-stat-grid" aria-label="Maintenance summary">
+        <div class="loading-block"><span class="spinner"></span> Loading your summary…</div>
+      </div>
+      <section class="brand-card p-5 sm:p-6 mt-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <h3 class="font-bold text-navy">Assignment notifications</h3>
+            <p class="text-xs text-slate-tint" id="officer-unread-count">Loading unread count…</p>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-mark-all-notifications-read">Mark all read</button>
+        </div>
+        <div id="officer-notification-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+        <div id="officer-notifications"><div class="loading-block"><span class="spinner"></span> Loading notifications…</div></div>
+      </section>
+      <section class="brand-card p-5 sm:p-6 mt-5">
+        <h3 class="font-bold text-navy mb-3">My assignments</h3>
         <div id="assignments-list" class="space-y-3">
           <div class="loading-block"><span class="spinner"></span> Loading assignments…</div>
         </div>
-      </div>
+      </section>
     </section>
   `;
 
@@ -1151,13 +1185,209 @@
       const history = (historyData && historyData.history) || [];
       host.innerHTML = reportDetailHtml(report, history);
       hydrateAuthedImages(host);
+      bindReportDetailActions(host, report);
     } catch (err) {
       host.innerHTML = `<p class="text-red-400">Error loading report: ${escapeHtml(err.message)}</p>`;
     }
   };
 
+  const bindReportDetailActions = (host, report) => {
+    const refresh = () => initReportDetailPage({ id: report.id });
+    const setBusy = (button, busy, label) => {
+      if (!button) return;
+      button.disabled = busy;
+      if (busy) button.textContent = label;
+    };
+
+    const approveButton = host.querySelector('[data-report-approve]');
+    on(approveButton, 'click', async () => {
+      if (!window.confirm('Approve this report? It will become eligible for maintenance assignment.')) return;
+      setBusy(approveButton, true, 'Approving…');
+      try {
+        await api(`/reports/${encodeURIComponent(report.id)}/moderation`, {
+          method: 'PATCH',
+          body: JSON.stringify({ decision: 'APPROVE' }),
+        });
+        notify('Report approved. Assign a maintenance officer to start the repair workflow.');
+        await refresh();
+      } catch (err) {
+        notify(`Could not approve report: ${err.message}`);
+        setBusy(approveButton, false);
+      }
+    });
+
+    const rejectButton = host.querySelector('[data-report-reject]');
+    on(rejectButton, 'click', async () => {
+      const reason = window.prompt('Enter the reason for rejecting this report (at least 5 characters):');
+      if (reason === null) return;
+      if (reason.trim().length < 5) {
+        notify('A rejection reason of at least 5 characters is required.');
+        return;
+      }
+      setBusy(rejectButton, true, 'Rejecting…');
+      try {
+        await api(`/reports/${encodeURIComponent(report.id)}/moderation`, {
+          method: 'PATCH',
+          body: JSON.stringify({ decision: 'REJECT', reason: reason.trim() }),
+        });
+        notify('Report rejected. It will remain off the public map and repair queue.');
+        await refresh();
+      } catch (err) {
+        notify(`Could not reject report: ${err.message}`);
+        setBusy(rejectButton, false);
+      }
+    });
+
+    const assignButton = host.querySelector('[data-report-assign]');
+    on(assignButton, 'click', async () => {
+      setBusy(assignButton, true, 'Loading officers…');
+      try {
+        const data = await api('/users/officers');
+        const officers = (data.officers || []).filter((officer) => (officer.status || 'ACTIVE') === 'ACTIVE');
+        if (!officers.length) throw new Error('No active maintenance officers are available.');
+        const dialog = document.createElement('dialog');
+        dialog.className = 'rw-confirm-dialog';
+        dialog.innerHTML = `
+          <form method="dialog" class="rw-confirm-content" data-assignment-form>
+            <p class="rw-confirm-eyebrow">MAINTENANCE ASSIGNMENT</p>
+            <h2>Assign this report</h2>
+            <label class="block text-sm font-medium text-ink-2 mt-4" for="assignment-officer">Maintenance officer</label>
+            <select class="brand-input mt-2" id="assignment-officer" name="officerId" required>
+              <option value="">Select an active officer</option>
+              ${officers.map((officer) => `<option value="${escapeHtml(officer.id)}">${escapeHtml(officer.fullName)}${officer.email ? ` · ${escapeHtml(officer.email)}` : ''}</option>`).join('')}
+            </select>
+            <label class="block text-sm font-medium text-ink-2 mt-4" for="assignment-note">Assignment note (optional)</label>
+            <textarea class="brand-input mt-2" id="assignment-note" name="note" maxlength="1000" rows="2" placeholder="Add instructions for the officer."></textarea>
+            <div class="rw-confirm-actions mt-5">
+              <button type="button" class="btn btn-secondary" data-assignment-cancel>Cancel</button>
+              <button type="submit" class="btn btn-primary">Assign report</button>
+            </div>
+          </form>`;
+        document.body.appendChild(dialog);
+        const close = () => {
+          if (dialog.open) dialog.close();
+          dialog.remove();
+        };
+        dialog.querySelector('[data-assignment-cancel]').addEventListener('click', close);
+        dialog.addEventListener('cancel', (event) => {
+          event.preventDefault();
+          close();
+        });
+        dialog.addEventListener('click', (event) => {
+          if (event.target === dialog) close();
+        });
+        dialog.querySelector('form').addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
+          const officerId = String(form.get('officerId') || '');
+          if (!officerId) return;
+          const submit = dialog.querySelector('[type="submit"]');
+          submit.disabled = true;
+          submit.textContent = 'Assigning…';
+          try {
+            await api(`/reports/${encodeURIComponent(report.id)}/assign`, {
+              method: 'POST',
+              body: JSON.stringify({ officerId, note: String(form.get('note') || '').trim() }),
+            });
+            close();
+            notify('Report assigned. A persistent notification was sent to the officer.');
+            await refresh();
+          } catch (err) {
+            notify(`Could not assign report: ${err.message}`);
+            submit.disabled = false;
+            submit.textContent = 'Assign report';
+          }
+        });
+        dialog.showModal();
+        dialog.querySelector('select').focus();
+      } catch (err) {
+        notify(`Could not load maintenance officers: ${err.message}`);
+      } finally {
+        if (assignButton.isConnected) setBusy(assignButton, false);
+      }
+    });
+
+    const startButton = host.querySelector('[data-repair-start]');
+    on(startButton, 'click', async () => {
+      if (!window.confirm('Start work on this assigned report?')) return;
+      setBusy(startButton, true, 'Starting…');
+      try {
+        await api(`/reports/${encodeURIComponent(report.id)}/repair`, {
+          method: 'PATCH',
+          body: JSON.stringify({ repairStatus: 'IN_PROGRESS', note: 'Repair work started.' }),
+        });
+        notify('Repair status updated to in progress.');
+        await refresh();
+      } catch (err) {
+        notify(`Could not start repair: ${err.message}`);
+        setBusy(startButton, false);
+      }
+    });
+
+    const completionForm = host.querySelector('[data-repair-complete-form]');
+    on(completionForm, 'submit', async (event) => {
+      event.preventDefault();
+      const notes = String(new FormData(completionForm).get('completionNotes') || '').trim();
+      const files = Array.from(host.querySelector('#repair-after-photos').files || []);
+      if (notes.length < 5 || files.length < 1) {
+        notify('Add completion notes and at least one after-repair photo.');
+        return;
+      }
+      if (!window.confirm('Submit this repair as completed?')) return;
+      const submit = completionForm.querySelector('[type="submit"]');
+      setBusy(submit, true, 'Uploading and submitting…');
+      try {
+        const upload = new FormData();
+        upload.append('kind', 'AFTER');
+        files.forEach((file) => upload.append('afterPhotos[]', file));
+        await api(`/reports/${encodeURIComponent(report.id)}/photos`, { method: 'POST', body: upload });
+        await api(`/reports/${encodeURIComponent(report.id)}/repair`, {
+          method: 'PATCH',
+          body: JSON.stringify({ repairStatus: 'COMPLETED', completionNotes: notes }),
+        });
+        notify('Repair completed and saved.');
+        await refresh();
+      } catch (err) {
+        notify(`Could not complete repair: ${err.message}`);
+        setBusy(submit, false);
+      }
+    });
+  };
+
   const reportDetailHtml = (report, history) => {
     const photos = report.photos || [];
+    const currentUser = getUser();
+    const isAdmin = currentUser && currentUser.role === 'ADMIN';
+    const isAssignedOfficer = currentUser
+      && currentUser.role === 'MAINTENANCE_OFFICER'
+      && report.assignedOfficer
+      && report.assignedOfficer.id === currentUser.id;
+    const canModerate = isAdmin && report.moderationStatus === 'PENDING_REVIEW';
+    const canAssign = isAdmin && report.moderationStatus === 'APPROVED' && report.repairStatus !== 'COMPLETED';
+    const canMaintain = report.moderationStatus === 'APPROVED'
+      && report.repairStatus !== 'NOT_ASSIGNED'
+      && report.repairStatus !== 'COMPLETED'
+      && (isAdmin || isAssignedOfficer);
+    const staffActions = (canModerate || canAssign || canMaintain) ? `
+      <section class="brand-card p-5 sm:p-6 mt-6">
+        <h2 class="font-bold text-navy text-lg mb-3">Staff actions</h2>
+        <div class="flex flex-wrap gap-2">
+          ${canModerate ? `
+            <button type="button" class="btn btn-primary" data-report-approve>Approve report</button>
+            <button type="button" class="btn btn-danger" data-report-reject>Reject report</button>` : ''}
+          ${canAssign ? `<button type="button" class="btn btn-primary" data-report-assign>${report.assignedOfficer ? 'Reassign officer' : 'Assign to officer'}</button>` : ''}
+          ${canMaintain && report.repairStatus === 'AWAITING_MAINTENANCE'
+            ? '<button type="button" class="btn btn-primary" data-repair-start>Start work</button>' : ''}
+        </div>
+        ${canMaintain && report.repairStatus === 'IN_PROGRESS' ? `
+          <form class="mt-4 space-y-3" data-repair-complete-form>
+            <label class="block text-sm font-medium text-ink-2" for="repair-completion-notes">Completion notes</label>
+            <textarea id="repair-completion-notes" name="completionNotes" required minlength="5" rows="3" class="w-full brand-input" placeholder="Describe the repair completed."></textarea>
+            <label class="block text-sm font-medium text-ink-2" for="repair-after-photos">After-repair photo (required)</label>
+            <input id="repair-after-photos" name="afterPhotos" type="file" accept="image/*" multiple required class="w-full brand-input" />
+            <button type="submit" class="btn btn-primary">Submit completion</button>
+          </form>` : ''}
+      </section>` : '';
     const historyItems = history.map((h) => `
       <div class="p-3 rounded border border-slate-200">
         <div class="flex justify-between items-start gap-4">
@@ -1201,10 +1431,13 @@
             <div><span class="font-medium text-ink-2">Reference:</span> ${escapeHtml(report.referenceNo)}</div>
             <div><span class="font-medium text-ink-2">Reported:</span> ${escapeHtml(relativeDate(report.createdAt))}</div>
             <div><span class="font-medium text-ink-2">Assigned to:</span> ${report.assignedOfficer ? escapeHtml(report.assignedOfficer.fullName || 'Officer') : 'Unassigned'}</div>
+            <div><span class="font-medium text-ink-2">Coordinates:</span> ${escapeHtml(Number(report.latitude).toFixed(6))}, ${escapeHtml(Number(report.longitude).toFixed(6))}</div>
           </div>
           ${report.rejectionReason ? `<p class="mt-4 text-sm text-red-400">Rejected: ${escapeHtml(report.rejectionReason)}</p>` : ''}
         </div>
       </div>
+
+      ${staffActions}
 
       <div class="brand-card p-8 rounded-xl shadow-lg mt-6">
         <h2 class="font-bold text-navy text-lg mb-4">History</h2>
@@ -1214,7 +1447,10 @@
       </div>
 
       <div class="mt-6">
-        <a href="/reports" data-nav="/reports" class="btn btn-secondary">Back to my reports</a>
+        <a href="${isAdmin ? '/admin/reports' : isAssignedOfficer ? '/assignments' : '/reports'}"
+          data-nav="${isAdmin ? '/admin/reports' : isAssignedOfficer ? '/assignments' : '/reports'}" class="btn btn-secondary">
+          Back to ${isAdmin ? 'report management' : isAssignedOfficer ? 'assignments' : 'my reports'}
+        </a>
       </div>
     `;
   };
@@ -1662,8 +1898,15 @@
   const initAdminDashboard = async () => {
     const refresh = async () => {
       const params = new URLSearchParams({ page: '1', pageSize: '8', sort: 'newest' });
+      const pendingParams = new URLSearchParams({
+        page: '1',
+        pageSize: '8',
+        sort: 'newest',
+        moderationStatus: 'PENDING_REVIEW',
+      });
       await Promise.all([
         refreshAdminStatistics('admin-dashboard-feedback'),
+        loadAdminReportList('admin-dashboard-pending', 'admin-dashboard-feedback', pendingParams),
         loadAdminReportList('admin-dashboard-reports', 'admin-dashboard-feedback', params),
       ]);
     };
@@ -1735,34 +1978,145 @@
   const initAssignmentsPage = async () => {
     const host = q('#assignments-list');
     if (!host) return;
-    try {
-      const data = await api('/maintenance/assignments');
-      const items = (data && data.items) || [];
-      if (items.length === 0) {
-        html(host, '<p class="text-slate-tint text-sm">No assignments yet.</p>');
-        return;
+    const summaryHost = q('#officer-summary');
+    const notificationsHost = q('#officer-notifications');
+    const feedbackHost = q('#officer-notification-feedback');
+    const unreadCountHost = q('#officer-unread-count');
+    const refresh = async () => {
+      const refreshButton = q('#btn-refresh-assignments');
+      if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.textContent = 'Refreshing…';
       }
-      html(host, items.map((r) => {
+      const results = await Promise.allSettled([
+        api('/maintenance/summary'),
+        api('/maintenance/assignments'),
+        api('/maintenance/notifications?limit=50'),
+      ]);
+      const [summaryResult, assignmentsResult, notificationsResult] = results;
+
+      if (summaryResult.status === 'fulfilled' && summaryHost) {
+        const summary = summaryResult.value || {};
+        const stats = [
+          ['Assigned reports', summary.assigned],
+          ['New assignments', summary.awaiting],
+          ['In progress', summary.inProgress],
+          ['Completed', summary.completed],
+        ];
+        html(summaryHost, stats.map(([label, value]) => `
+          <article class="admin-stat-card">
+            <p>${escapeHtml(label)}</p>
+            <strong class="admin-stat-value">${escapeHtml(value ?? 0)}</strong>
+          </article>`).join(''));
+      } else if (summaryHost) {
+        html(summaryHost, `<div class="admin-error-block">Could not load summary. ${escapeHtml(summaryResult.reason.message)}</div>`);
+      }
+
+      if (assignmentsResult.status === 'fulfilled') {
+        const items = (assignmentsResult.value && assignmentsResult.value.items) || [];
+        if (!items.length) {
+          html(host, '<div class="empty-state"><h3 class="text-lg font-bold text-navy mb-1">No assignments yet</h3><p class="text-slate-tint text-sm">New work assigned by an administrator will appear here.</p></div>');
+        } else {
+          html(host, items.map((r) => {
         const firstPhoto = Array.isArray(r.photos) ? r.photos[0] : null;
         const thumb = firstPhoto
           ? `<button type="button" class="rw-photo-trigger flex-shrink-0" ${photoViewerAttrs(r, 0)} aria-label="View photo for ${escapeHtml(r.title || 'report')}"><img ${firstPhoto.isPublic === false ? `data-authed-src="${escapeHtml(absoluteUrl(firstPhoto.url))}"` : `src="${escapeHtml(absoluteUrl(firstPhoto.url))}"`} alt="" class="w-14 h-14 rounded object-cover" /></button>`
           : '';
         return `
-        <div class="p-3 rounded border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors" data-nav="/report/${encodeURIComponent(r.id)}">
-          <div class="flex items-start gap-3">
-            ${thumb}
-            <div class="min-w-0">
-              <h3 class="font-medium text-navy line-clamp-1">${escapeHtml(r.title)}</h3>
-              <p class="text-slate-tint text-xs">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
-              <span class="text-amber text-sm">${escapeHtml(r.repairStatus)}</span>
+          <article class="p-4 rounded border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors" data-nav="/report/${encodeURIComponent(r.id)}">
+            <div class="flex items-start gap-3">
+              ${thumb}
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                  <h3 class="font-medium text-navy break-words">${escapeHtml(r.title)}</h3>
+                  ${statusBadge(r.moderationStatus, r.repairStatus)}
+                </div>
+                <p class="text-slate-tint text-sm mt-1">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
+                <div class="text-slate-tint text-xs mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                  <span>Reported ${escapeHtml(relativeDate(r.createdAt))}</span>
+                  ${r.priority ? `<span>Priority: ${escapeHtml(r.priority)}</span>` : ''}
+                </div>
+                <p class="text-xs text-ink-2 mt-2 line-clamp-2">${escapeHtml(r.description || '')}</p>
+              </div>
             </div>
-          </div>
-        </div>`;
-      }).join(''));
-      hydrateAuthedImages(host);
-    } catch (err) {
-      html(host, `<p class="text-red-400">Error: ${escapeHtml(err.message)}</p>`);
+          </article>`;
+          }).join(''));
+          hydrateAuthedImages(host);
+        }
+      } else {
+        html(host, `<div class="admin-error-block">Could not load assignments. ${escapeHtml(assignmentsResult.reason.message)}</div>`);
+      }
+
+      if (notificationsResult.status === 'fulfilled') {
+        const notificationData = notificationsResult.value || {};
+        const items = notificationData.items || [];
+        const unread = Number(notificationData.unreadCount) || 0;
+        const markAllButton = q('#btn-mark-all-notifications-read');
+        if (markAllButton) markAllButton.disabled = unread === 0;
+        if (unreadCountHost) unreadCountHost.textContent = `${unread} unread notification${unread === 1 ? '' : 's'}`;
+        if (feedbackHost) feedbackHost.textContent = '';
+        if (!items.length) {
+          html(notificationsHost, '<div class="empty-state"><p class="text-slate-tint text-sm">No assignment notifications yet.</p></div>');
+        } else {
+          html(notificationsHost, `<div class="space-y-2">${items.map((item) => `
+            <button type="button" class="w-full text-left p-3 rounded border ${item.isRead ? 'border-slate-200 bg-white' : 'border-azure bg-sheet'} hover:bg-slate-50 transition-colors"
+              data-open-notification="${escapeHtml(item.id)}" data-notification-report="${escapeHtml(item.reportId)}">
+              <span class="flex items-start gap-3">
+                <span class="mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${item.isRead ? 'bg-slate-300' : 'bg-blue-600'}" aria-hidden="true"></span>
+                <span class="min-w-0 flex-1">
+                  <span class="block font-semibold text-navy">${escapeHtml(item.title || 'Assignment notification')}</span>
+                  <span class="block text-sm text-ink-2 mt-1 break-words">${escapeHtml(item.message || '')}</span>
+                  <span class="block text-xs text-slate-tint mt-2">${escapeHtml(relativeDate(item.createdAt))} · ${escapeHtml(item.repairStatus || 'AWAITING_MAINTENANCE')}</span>
+                </span>
+              </span>
+            </button>`).join('')}</div>`);
+          notificationsHost.querySelectorAll('[data-open-notification]').forEach((button) => {
+            button.addEventListener('click', async () => {
+              button.disabled = true;
+              try {
+                await api(`/maintenance/notifications/${encodeURIComponent(button.dataset.openNotification)}/read`, { method: 'PATCH' });
+              } catch (err) {
+                if (feedbackHost) feedbackHost.textContent = `Could not mark notification read: ${err.message}`;
+              }
+              navigateTo(`/report/${encodeURIComponent(button.dataset.notificationReport)}`);
+            });
+          });
+        }
+      } else {
+        if (unreadCountHost) unreadCountHost.textContent = 'Unread count unavailable';
+        html(notificationsHost, `<div class="admin-error-block">Could not load notifications. ${escapeHtml(notificationsResult.reason.message)}</div>`);
+        if (feedbackHost) feedbackHost.textContent = 'Refresh the dashboard to retry. If your session expired, sign in again.';
+      }
+
+      const refreshButtonAfter = q('#btn-refresh-assignments');
+      if (refreshButtonAfter) {
+        refreshButtonAfter.disabled = false;
+        refreshButtonAfter.textContent = 'Refresh dashboard';
+      }
+    };
+
+    const refreshButton = q('#btn-refresh-assignments');
+    if (refreshButton) refreshButton.onclick = () => void refresh();
+    const markAllButton = q('#btn-mark-all-notifications-read');
+    if (markAllButton) markAllButton.onclick = async () => {
+      markAllButton.disabled = true;
+      try {
+        await api('/maintenance/notifications/read-all', { method: 'PATCH' });
+        await refresh();
+      } catch (err) {
+        if (feedbackHost) feedbackHost.textContent = `Could not mark notifications read: ${err.message}`;
+        markAllButton.disabled = false;
+      }
+    };
+    if (!assignmentFocusBound) {
+      assignmentFocusBound = true;
+      window.addEventListener('focus', () => {
+        if (window.location.pathname === '/assignments' && getUser()?.role === 'MAINTENANCE_OFFICER') {
+          void initAssignmentsPage();
+        }
+      });
     }
+    await refresh();
   };
 
   const initAuditPage = async () => {

@@ -110,6 +110,7 @@ model User {
   auditLogs         AuditLog[]
   refreshTokens     RefreshToken[]
   analysisResults   ImageAnalysisResult[]
+  notifications     Notification[]
 
   @@index([role])
   @@index([status])
@@ -177,6 +178,7 @@ model Report {
 
   photos       ReportPhoto[]
   assignments  Assignment[]
+  notifications Notification[]
   history      StatusHistory[]
   analysis     ImageAnalysisResult[]
 
@@ -226,10 +228,32 @@ model Assignment {
   report     Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
   officer    User   @relation("AssignmentOfficer", fields: [officerId], references: [id])
   assignedBy User   @relation("AssignmentAssigner", fields: [assignedById], references: [id])
+  notifications Notification[]
 
   @@index([reportId])
   @@index([officerId])
   @@index([status])
+}
+
+model Notification {
+  id           String   @id @default(cuid())
+  userId       String
+  assignmentId String   @unique
+  reportId     String
+  title        String
+  message      String   @db.Text
+  category     String
+  location     String   @db.VarChar(500)
+  repairStatus String
+  readAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  report     Report     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([reportId])
 }
 
 /// Immutable trail of moderation / repair / assignment changes.

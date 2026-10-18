@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ErrorState, LoadingBlock, SkeletonRows } from '../components/Feedback';
 import { ModerationBadge, PriorityBadge, RepairBadge } from '../components/StatusBadge';
@@ -5,6 +6,7 @@ import { PageHeader, Section, StatCard } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { CATEGORY_LABELS, relativeTime } from '../lib/format';
+import { errorMessage } from '../lib/errors';
 import { useAsync } from '../lib/useAsync';
 
 export function DashboardPage() {
@@ -179,8 +181,22 @@ function AdminDashboard() {
 function OfficerDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [notificationActionError, setNotificationActionError] = useState<string | null>(null);
   const { data, error, loading, reload } = useAsync(() => api.officerSummary(), []);
   const assignments = useAsync(() => api.listAssignments({ pageSize: 5, sort: 'priority' }), []);
+  const notifications = useAsync(() => api.officerNotifications(), []);
+
+  useEffect(() => {
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') void notifications.reload();
+    };
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
+  }, [notifications.reload]);
 
   if (loading && !data) return <LoadingBlock label="Loading your assignments…" />;
   if (error && !data) return <ErrorState message={error} onRetry={reload} />;
@@ -211,6 +227,85 @@ function OfficerDashboard() {
         <StatCard label="In progress" value={summary.inProgress} tone="amber" />
         <StatCard label="Completed" value={summary.completed} tone="green" />
       </div>
+
+      <Section
+        className="mt-6"
+        title="Assignment notifications"
+        description={`${notifications.data?.unreadCount ?? 0} unread`}
+        actions={
+          <>
+            {(notifications.data?.unreadCount ?? 0) > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={async () => {
+                  setNotificationActionError(null);
+                  try {
+                    await api.markAllOfficerNotificationsRead();
+                    await notifications.reload();
+                  } catch (actionError) {
+                    setNotificationActionError(errorMessage(actionError));
+                  }
+                }}
+              >
+                Mark all read
+              </button>
+            )}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void notifications.reload()}>
+              Refresh
+            </button>
+          </>
+        }
+      >
+        {notificationActionError && (
+          <p role="alert" className="mb-3 rounded-brand-sm bg-red-tint p-3 text-sm text-red">
+            {notificationActionError}
+          </p>
+        )}
+        {notifications.loading && !notifications.data ? (
+          <SkeletonRows rows={2} />
+        ) : notifications.error ? (
+          <ErrorState message={notifications.error} onRetry={notifications.reload} />
+        ) : (notifications.data?.items.length ?? 0) === 0 ? (
+          <p className="text-sm text-ink-3">No assignment notifications yet.</p>
+        ) : (
+          <ul className="divide-y divide-azure/70">
+            {notifications.data!.items.slice(0, 5).map((notification) => (
+              <li key={notification.id}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setNotificationActionError(null);
+                    try {
+                      if (!notification.isRead) await api.markOfficerNotificationRead(notification.id);
+                      navigate(`/reports/${notification.reportId}`);
+                    } catch (actionError) {
+                      setNotificationActionError(errorMessage(actionError));
+                    }
+                  }}
+                  className={`flex w-full items-start gap-3 py-3 text-left transition hover:opacity-80 ${
+                    notification.isRead ? 'opacity-75' : 'font-semibold'
+                  }`}
+                >
+                  <span
+                    aria-label={notification.isRead ? 'Read' : 'Unread'}
+                    className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                      notification.isRead ? 'bg-azure' : 'bg-amber'
+                    }`}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm text-navy">{notification.title}</span>
+                    <span className="mt-1 block text-xs font-normal text-ink-3">
+                      {notification.message} · {relativeTime(notification.createdAt)}
+                    </span>
+                  </span>
+                  <span className="text-xs text-navy">Open →</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
 
       <Section
         className="mt-6"

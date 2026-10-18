@@ -1,0 +1,20 @@
+CREATE TABLE `Notification` (
+  `id` VARCHAR(191) NOT NULL,
+  `userId` VARCHAR(191) NOT NULL,
+  `assignmentId` VARCHAR(191) NOT NULL,
+  `reportId` VARCHAR(191) NOT NULL,
+  `title` VARCHAR(191) NOT NULL,
+  `message` TEXT NOT NULL,
+  `category` VARCHAR(191) NOT NULL,
+  `location` VARCHAR(500) NOT NULL,
+  `repairStatus` VARCHAR(191) NOT NULL,
+  `readAt` DATETIME(3) NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `Notification_assignmentId_key` (`assignmentId`),
+  INDEX `Notification_userId_readAt_createdAt_idx` (`userId`, `readAt`, `createdAt`),
+  INDEX `Notification_reportId_idx` (`reportId`),
+  CONSTRAINT `Notification_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `Notification_assignmentId_fkey` FOREIGN KEY (`assignmentId`) REFERENCES `Assignment`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `Notification_reportId_fkey` FOREIGN KEY (`reportId`) REFERENCES `Report`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

@@ -4,6 +4,7 @@ import type {
   AuthSession,
   IssueCategory,
   Officer,
+  OfficerNotification,
   Paginated,
   PlaceSearchResponse,
   Priority,
@@ -290,6 +291,21 @@ class ApiClient {
 
   officerSummary(): Promise<{ assigned: number; awaiting: number; inProgress: number; completed: number }> {
     return this.request('/api/maintenance/summary');
+  }
+
+  officerNotifications(): Promise<{ items: OfficerNotification[]; unreadCount: number }> {
+    return this.request<{ items: OfficerNotification[]; unreadCount: number }>('/api/maintenance/notifications');
+  }
+
+  markOfficerNotificationRead(id: string): Promise<{ items: OfficerNotification[]; unreadCount: number }> {
+    return this.json<{ items: OfficerNotification[]; unreadCount: number }>(
+      `/api/maintenance/notifications/${encodeURIComponent(id)}/read`,
+      'PATCH',
+    );
+  }
+
+  markAllOfficerNotificationsRead(): Promise<{ items: OfficerNotification[]; unreadCount: number }> {
+    return this.json<{ items: OfficerNotification[]; unreadCount: number }>('/api/maintenance/notifications/read-all', 'PATCH');
   }
 
   // -------------------------------------------------------------------- users

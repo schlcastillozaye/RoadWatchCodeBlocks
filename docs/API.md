@@ -303,7 +303,11 @@ officers may add progress and completion photos.
 }
 ```
 
-Sets the repair track to `AWAITING_MAINTENANCE`. **200** `{ "report": { … } }`
+Sets the repair track to `AWAITING_MAINTENANCE`. Repeating assignment to the
+current officer is idempotent and does not create a second assignment or
+notification. Assigning a different officer creates one persistent in-app
+notification in the same database transaction as the new assignment; push
+notifications are not configured. **200** `{ "report": { … } }`
 
 ### `PATCH /api/reports/:id/repair`
 
@@ -329,6 +333,9 @@ Business rules:
 
 - Only **approved** reports accept maintenance updates.
 - Only the **assigned officer** (or an admin) may update.
+- Repair status transitions are sequential: `AWAITING_MAINTENANCE` →
+  `IN_PROGRESS` → `COMPLETED`. Skips, backwards transitions and duplicate
+  status decisions return **409**.
 - `COMPLETED` requires `completionNotes` (≥ 5 characters) **and** at least one `AFTER` photo.
 - An **admin** may set `"overrideCompletion": true` to complete without a photo; this is
   recorded in the audit log and flagged on the report.
@@ -361,6 +368,45 @@ Approved reports assigned to the caller. Supports the [list query parameters](#l
 ```json
 { "assigned": 12, "awaiting": 3, "inProgress": 5, "completed": 4 }
 ```
+
+### `GET /api/maintenance/notifications`
+
+Returns up to 50 newest notifications for the authenticated officer only:
+
+```json
+{
+  "items": [{
+    "id": "clx…",
+    "reportId": "clx…",
+    "assignmentId": "clx…",
+    "referenceNo": "RW-2026-000123",
+    "title": "New road issue assigned",
+    "message": "RW-2026-000123 · POTHOLE · Mabini St · District 1",
+    "category": "POTHOLE",
+    "location": "Mabini St · District 1",
+    "repairStatus": "AWAITING_MAINTENANCE",
+    "isRead": false,
+    "readAt": null,
+    "createdAt": "2026-10-18T06:00:00.000Z"
+  }],
+  "unreadCount": 1
+}
+```
+
+Notifications are database-backed and scoped to the target officer. A unique
+assignment key prevents duplicate notifications for assignment retries.
+Approval itself does not broadcast to officers: an administrator must assign
+the approved report first, preserving the existing admin-controlled assignment
+model.
+
+### `PATCH /api/maintenance/notifications/:id/read`
+
+Marks the caller's notification as read. A notification belonging to another
+officer returns **404**.
+
+### `PATCH /api/maintenance/notifications/read-all`
+
+Marks all notifications belonging to the caller as read.
 
 ---
 

@@ -41,9 +41,10 @@ export function ReportDetailPage() {
   if (!report) return null;
 
   const canModerate = isAdmin && report.moderationStatus === 'PENDING_REVIEW';
-  const canAssign = isAdmin && report.moderationStatus === 'APPROVED';
+  const canAssign = isAdmin && report.moderationStatus === 'APPROVED' && report.repairStatus !== 'COMPLETED';
   const canMaintain =
     report.moderationStatus === 'APPROVED' &&
+    report.repairStatus !== 'NOT_ASSIGNED' &&
     (isAdmin || (isOfficer && report.assignedOfficer?.id === user?.id)) &&
     report.repairStatus !== undefined;
 

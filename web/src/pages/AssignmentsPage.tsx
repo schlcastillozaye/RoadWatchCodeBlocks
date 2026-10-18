@@ -127,9 +127,11 @@ export function AssignmentsPage() {
 
                         <div className="mt-2.5 flex flex-wrap items-center gap-2">
                           <CategoryChip category={report.category} />
-                          <button type="button" className="btn btn-primary btn-sm" onClick={() => openRepair(report)}>
-                            Update status
-                          </button>
+                          {report.repairStatus !== 'COMPLETED' && (
+                            <button type="button" className="btn btn-primary btn-sm" onClick={() => openRepair(report)}>
+                              Update status
+                            </button>
+                          )}
                           <Link to={`/reports/${report.id}`} className="btn btn-secondary btn-sm">
                             View details
                           </Link>

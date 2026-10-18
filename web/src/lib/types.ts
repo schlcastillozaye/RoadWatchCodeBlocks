@@ -6,6 +6,7 @@ export type IssueCategory =
   | 'ROAD_CRACK'
   | 'FLOODING'
   | 'DAMAGED_DRAINAGE'
+  | 'ROAD_OBSTRUCTION'
   | 'OTHER';
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -161,6 +162,21 @@ export interface AuditLog {
   ipAddress: string | null;
   createdAt: string;
   actor: { id: string; fullName: string; role: Role } | null;
+}
+
+export interface OfficerNotification {
+  id: string;
+  assignmentId: string;
+  reportId: string;
+  referenceNo: string;
+  title: string;
+  message: string;
+  category: IssueCategory;
+  location: string;
+  repairStatus: RepairStatus;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
 }
 
 export interface AuthSession {

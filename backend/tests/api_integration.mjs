@@ -361,6 +361,22 @@ async function main() {
     });
     check('invalid decision 422', badDecision.status === 422, `status=${badDecision.status}`);
 
+    const pendingQueue = await api('GET', '/api/reports?moderationStatus=PENDING_REVIEW', { token: adminToken });
+    check(
+      'submitted report appears in admin pending queue',
+      pendingQueue.status === 200 && pendingQueue.body?.items?.some((report) => report.id === reportId),
+      `status=${pendingQueue.status}`
+    );
+    const pendingDetail = await api('GET', `/api/reports/${reportId}`, { token: adminToken });
+    check(
+      'admin can review pending description, location, photo and submission date',
+      pendingDetail.status === 200 &&
+        pendingDetail.body?.report?.description === goodReport.description &&
+        pendingDetail.body?.report?.latitude === Number(goodReport.latitude) &&
+        pendingDetail.body?.report?.photos?.length === 1 &&
+        !!pendingDetail.body?.report?.createdAt
+    );
+
     const approve = await api('PATCH', `/api/reports/${reportId}/moderation`, {
       token: adminToken,
       json: { decision: 'APPROVE' },
@@ -372,6 +388,29 @@ async function main() {
       json: { decision: 'APPROVE' },
     });
     check('double moderation 409', again.status === 409, `status=${again.status}`);
+
+    const rejected = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({ ...goodReport, title: 'IT rejected issue report' }),
+    });
+    const rejectedId = rejected.body?.report?.id;
+    const rejection = await api('PATCH', `/api/reports/${rejectedId}/moderation`, {
+      token: adminToken,
+      json: { decision: 'REJECT', reason: 'This report is a duplicate submission.' },
+    });
+    check(
+      'admin rejection persists reason and REJECTED status',
+      rejection.status === 200 &&
+        rejection.body?.report?.moderationStatus === 'REJECTED' &&
+        rejection.body?.report?.rejectionReason === 'This report is a duplicate submission.'
+    );
+    const rejectedPublic = await api('GET', `/api/map/reports/${rejectedId}`);
+    check('rejected report is not visible on the public map (404)', rejectedPublic.status === 404);
+    const rejectedAssignment = await api('POST', `/api/reports/${rejectedId}/assign`, {
+      token: adminToken,
+      json: { officerId: officer1Id },
+    });
+    check('rejected report cannot enter the maintenance queue (409)', rejectedAssignment.status === 409);
   }
 
   // ---------------------------------------------------------------------
@@ -507,6 +546,45 @@ async function main() {
     check('assign to officer 200 -> AWAITING_MAINTENANCE', ok.status === 200 && ok.body?.report?.repairStatus === 'AWAITING_MAINTENANCE', `status=${ok.status}`);
     check('assignment sets officer + priority', ok.body?.report?.assignedOfficer?.id === officer1Id && ok.body?.report?.priority === 'HIGH');
 
+    const notifications = await api('GET', '/api/maintenance/notifications', { token: officer1Token });
+    const assignedNotification = notifications.body?.items?.find((item) => item.reportId === reportId);
+    check(
+      'assignment creates one persisted notification with report, category, location and status',
+      notifications.status === 200 &&
+        assignedNotification?.title === 'New road issue assigned' &&
+        assignedNotification?.category === 'POTHOLE' &&
+        !!assignedNotification?.location &&
+        assignedNotification?.repairStatus === 'AWAITING_MAINTENANCE' &&
+        !!assignedNotification?.createdAt &&
+        notifications.body?.unreadCount > 0
+    );
+    const citizenNotifications = await api('GET', '/api/maintenance/notifications', { token: citizenToken });
+    check('citizens cannot read maintenance notifications (403)', citizenNotifications.status === 403);
+    const privateRead = await api('PATCH', `/api/maintenance/notifications/${assignedNotification?.id}/read`, {
+      token: officer2Token,
+    });
+    check('another officer cannot read or modify a private notification (404)', privateRead.status === 404);
+
+    const retryAssignment = await api('POST', `/api/reports/${reportId}/assign`, {
+      token: adminToken,
+      json: { officerId: officer1Id, note: 'Retry the same assignment' },
+    });
+    const afterRetryNotifications = await api('GET', '/api/maintenance/notifications', { token: officer1Token });
+    check(
+      'retrying the same assignment does not create duplicate notifications',
+      retryAssignment.status === 200 &&
+        afterRetryNotifications.body?.items?.filter((item) => item.reportId === reportId).length === 1
+    );
+    const markRead = await api('PATCH', `/api/maintenance/notifications/${assignedNotification?.id}/read`, {
+      token: officer1Token,
+    });
+    check(
+      'officer can mark notification read and unread count decreases',
+      markRead.status === 200 &&
+        markRead.body?.items?.some((item) => item.id === assignedNotification?.id && item.isRead) &&
+        markRead.body?.unreadCount < notifications.body?.unreadCount
+    );
+
     const assignedList = await api('GET', '/api/maintenance/assignments', { token: officer1Token });
     check('officer sees the assignment', assignedList.status === 200 && assignedList.body?.items?.some((r) => r.id === reportId), `status=${assignedList.status}`);
 
@@ -531,6 +609,12 @@ async function main() {
       json: { repairStatus: 'IN_PROGRESS' },
     });
     check('citizen cannot update repair (403)', citizen.status === 403, `status=${citizen.status}`);
+
+    const skipToComplete = await api('PATCH', `/api/reports/${reportId}/repair`, {
+      token: officer1Token,
+      json: { repairStatus: 'COMPLETED', completionNotes: 'Attempted to skip the required in-progress stage.' },
+    });
+    check('server rejects skipped repair transitions (409)', skipToComplete.status === 409, `status=${skipToComplete.status}`);
 
     const inProgress = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: officer1Token,

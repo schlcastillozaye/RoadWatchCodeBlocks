@@ -18,14 +18,14 @@ Project/
 ├─ backend/        PHP 8.2 API (PDO + MySQL) — the current backend
 │  ├─ public/      Front controller (index.php)
 │  ├─ src/         Http controllers · Modules (ReportService, …) · Services · Support
-│  ├─ database/    schema.sql (9 tables) + migrate.php (idempotent)
+│  ├─ database/    schema.sql (10 tables) + migrate.php (idempotent)
 │  ├─ seed.php     Demo accounts + sample reports
 │  ├─ router.php   Router for the PHP built-in dev server
 │  ├─ tests/       api_integration.mjs  (103 end-to-end API checks)
 │  └─ Dockerfile.php · railway.json     (Railway deploy)
 ├─ db/
 │  └─ setup.sql    One-time MySQL database + user setup
-├─ mobile/         Flutter citizen app (Android, iOS, Web)
+├─ mobile/         Flutter app (Android, iOS, Web) with citizen and staff workflows
 ├─ web/            Plain HTML + CSS + vanilla JS app (no build step)
 │  ├─ config.js    Runtime API base URL / brand config
 │  ├─ js/app.js    Application entry point

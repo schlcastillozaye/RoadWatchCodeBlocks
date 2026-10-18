@@ -507,17 +507,20 @@ class ReportService
 
     public static function moderate(string $reportId, array $actor, array $input): array
     {
-        $report = self::getOrThrow($reportId);
-
-        if ($report['moderationStatus'] !== 'PENDING_REVIEW') {
-            throw AppError::conflict('This report has already been ' . strtolower((string) $report['moderationStatus']) . '.');
-        }
-
         $approve = $input['decision'] === 'APPROVE';
         $nextStatus = $approve ? 'APPROVED' : 'REJECTED';
         $now = Dates::now();
+        $referenceNo = '';
 
-        Db::transaction(function () use ($reportId, $actor, $input, $approve, $nextStatus, $report, $now) {
+        Db::transaction(function () use ($reportId, $actor, $input, $approve, $nextStatus, $now, &$referenceNo) {
+            $report = Db::one('SELECT * FROM `Report` WHERE `id` = ? FOR UPDATE', [$reportId]);
+            if ($report === null) {
+                throw AppError::notFound('Report not found.');
+            }
+            if ($report['moderationStatus'] !== 'PENDING_REVIEW') {
+                throw AppError::conflict('This report has already been ' . strtolower((string) $report['moderationStatus']) . '.');
+            }
+            $referenceNo = (string) $report['referenceNo'];
             $sets = [
                 '`moderationStatus` = ?',
                 '`rejectionReason` = ?',
@@ -539,7 +542,13 @@ class ReportService
                 $params[] = $input['priority'];
             }
             $params[] = $reportId;
-            Db::execute('UPDATE `Report` SET ' . implode(', ', $sets) . ' WHERE `id` = ?', $params);
+            $changed = Db::execute(
+                'UPDATE `Report` SET ' . implode(', ', $sets) . " WHERE `id` = ? AND `moderationStatus` = 'PENDING_REVIEW'",
+                $params
+            );
+            if ($changed !== 1) {
+                throw AppError::conflict('This report was moderated by another administrator.');
+            }
 
             Audit::history([
                 'reportId' => $reportId,
@@ -558,7 +567,7 @@ class ReportService
             'action' => $approve ? 'REPORT_APPROVED' : 'REPORT_REJECTED',
             'entityType' => 'Report',
             'entityId' => $reportId,
-            'metadata' => ['reason' => $input['reason'] ?? null, 'referenceNo' => $report['referenceNo']],
+            'metadata' => ['reason' => $input['reason'] ?? null, 'referenceNo' => $referenceNo],
         ], Audit::actorContext()));
 
         return Dto::report(self::getOrThrow($reportId));
@@ -570,24 +579,35 @@ class ReportService
 
     public static function assign(string $reportId, array $actor, array $input): array
     {
-        $report = self::getOrThrow($reportId);
-
-        if ($report['moderationStatus'] !== 'APPROVED') {
-            throw AppError::conflict('Only approved reports can be assigned to maintenance.');
-        }
-
-        $officer = Db::one('SELECT * FROM `User` WHERE `id` = ?', [$input['officerId']]);
-        if ($officer === null || $officer['role'] !== 'MAINTENANCE_OFFICER') {
-            throw AppError::badRequest('Selected user is not a maintenance officer.');
-        }
-        if ($officer['status'] === 'SUSPENDED') {
-            throw AppError::badRequest('Selected officer account is suspended.');
-        }
-
-        $previousOfficer = $report['assignedOfficerId'] ?? null;
         $now = Dates::now();
+        $officer = null;
+        $alreadyAssigned = false;
+        $assignmentId = '';
 
-        Db::transaction(function () use ($reportId, $actor, $input, $officer, $previousOfficer, $now) {
+        Db::transaction(function () use ($reportId, $actor, $input, $now, &$officer, &$alreadyAssigned, &$assignmentId) {
+            $report = Db::one('SELECT * FROM `Report` WHERE `id` = ? FOR UPDATE', [$reportId]);
+            if ($report === null) {
+                throw AppError::notFound('Report not found.');
+            }
+            if ($report['moderationStatus'] !== 'APPROVED') {
+                throw AppError::conflict('Only approved reports can be assigned to maintenance.');
+            }
+            if ($report['repairStatus'] === 'COMPLETED') {
+                throw AppError::conflict('A completed report cannot be assigned again.');
+            }
+            $officer = Db::one('SELECT * FROM `User` WHERE `id` = ? FOR UPDATE', [$input['officerId']]);
+            if ($officer === null || $officer['role'] !== 'MAINTENANCE_OFFICER') {
+                throw AppError::badRequest('Selected user is not a maintenance officer.');
+            }
+            if ($officer['status'] === 'SUSPENDED') {
+                throw AppError::badRequest('Selected officer account is suspended.');
+            }
+
+            $previousOfficer = $report['assignedOfficerId'] ?? null;
+            if ($previousOfficer === $officer['id']) {
+                $alreadyAssigned = true;
+                return;
+            }
             if ($previousOfficer && $previousOfficer !== $officer['id']) {
                 Db::execute(
                     "UPDATE `Assignment` SET `status` = 'CANCELLED'
@@ -596,11 +616,12 @@ class ReportService
                 );
             }
 
+            $assignmentId = Ids::cuid();
             Db::execute(
                 'INSERT INTO `Assignment` (`id`,`reportId`,`officerId`,`assignedById`,`status`,`note`,`dueDate`,`createdAt`,`completedAt`)
                  VALUES (?,?,?,?,?,?,?,?,?)',
                 [
-                    Ids::cuid(),
+                    $assignmentId,
                     $reportId,
                     $officer['id'],
                     $actor['id'],
@@ -632,7 +653,15 @@ class ReportService
                 'actorId' => $actor['id'],
                 'actorRole' => $actor['role'],
             ]);
+            NotificationService::createAssignment(
+                ['id' => $assignmentId, 'officerId' => $officer['id']],
+                array_merge($report, ['repairStatus' => 'AWAITING_MAINTENANCE'])
+            );
         });
+
+        if ($alreadyAssigned) {
+            return Dto::report(self::getOrThrow($reportId));
+        }
 
         Audit::record(array_merge([
             'actorId' => $actor['id'],
@@ -640,7 +669,7 @@ class ReportService
             'action' => 'REPORT_ASSIGNED',
             'entityType' => 'Report',
             'entityId' => $reportId,
-            'metadata' => ['officerId' => $officer['id'], 'officerName' => $officer['fullName']],
+            'metadata' => ['officerId' => $officer['id'], 'officerName' => $officer['fullName'], 'assignmentId' => $assignmentId],
         ], Audit::actorContext()));
 
         return Dto::report(self::getOrThrow($reportId));
@@ -658,6 +687,12 @@ class ReportService
         return ($report['assignedOfficerId'] ?? null) === $actor['id'];
     }
 
+    private static function repairTransitionAllowed(string $from, string $to): bool
+    {
+        return ($from === 'AWAITING_MAINTENANCE' && $to === 'IN_PROGRESS')
+            || ($from === 'IN_PROGRESS' && $to === 'COMPLETED');
+    }
+
     public static function updateRepair(string $reportId, array $actor, array $input): array
     {
         $report = self::getOrThrow($reportId);
@@ -670,6 +705,11 @@ class ReportService
         }
 
         $targetStatus = $input['repairStatus'] ?? null;
+        if ($targetStatus !== null && !self::repairTransitionAllowed((string) $report['repairStatus'], $targetStatus)) {
+            throw AppError::conflict(
+                'Invalid repair transition from ' . $report['repairStatus'] . ' to ' . $targetStatus . '.'
+            );
+        }
         $wantsCompletion = $targetStatus === 'COMPLETED';
 
         $completionOverride = false;
@@ -692,7 +732,36 @@ class ReportService
 
         $now = Dates::now();
 
-        Db::transaction(function () use ($reportId, $actor, $input, $targetStatus, $wantsCompletion, $completionNotes, $completionOverride, $report, $now) {
+        Db::transaction(function () use ($reportId, $actor, $input, $targetStatus, $wantsCompletion, $completionNotes, $completionOverride, $now) {
+            $report = Db::one('SELECT * FROM `Report` WHERE `id` = ? FOR UPDATE', [$reportId]);
+            if ($report === null) {
+                throw AppError::notFound('Report not found.');
+            }
+            if ($report['moderationStatus'] !== 'APPROVED') {
+                throw AppError::conflict('Only approved reports can receive maintenance updates.');
+            }
+            if (!self::actorMayMaintain($report, $actor)) {
+                throw AppError::forbidden('This report is not assigned to you.');
+            }
+            if ($targetStatus !== null && !self::repairTransitionAllowed((string) $report['repairStatus'], $targetStatus)) {
+                throw AppError::conflict(
+                    'Invalid repair transition from ' . $report['repairStatus'] . ' to ' . $targetStatus . '.'
+                );
+            }
+            if ($wantsCompletion) {
+                $afterPhotoCount = (int) Db::scalar(
+                    'SELECT COUNT(*) FROM `ReportPhoto` WHERE `reportId` = ? AND `kind` = ?',
+                    [$reportId, 'AFTER']
+                );
+                $notesOk = is_string($completionNotes) && mb_strlen(trim($completionNotes)) >= 5;
+                if (!$notesOk) {
+                    throw AppError::unprocessable('Completion notes are required to mark a repair as completed.');
+                }
+                if ($afterPhotoCount < 1 && (($actor['role'] ?? null) !== 'ADMIN' || empty($input['overrideCompletion']))) {
+                    throw AppError::unprocessable('At least one completion (after) photo is required. An administrator may override this requirement.');
+                }
+            }
+
             $sets = ['`updatedAt` = ?'];
             $params = [Dates::toDb($now)];
             if ($targetStatus !== null) {
@@ -710,7 +779,15 @@ class ReportService
                 $params[] = $completionOverride ? 1 : 0;
             }
             $params[] = $reportId;
-            Db::execute('UPDATE `Report` SET ' . implode(', ', $sets) . ' WHERE `id` = ?', $params);
+            $where = '`id` = ?';
+            if ($targetStatus !== null) {
+                $where .= ' AND `repairStatus` = ?';
+                $params[] = $report['repairStatus'];
+            }
+            $changed = Db::execute('UPDATE `Report` SET ' . implode(', ', $sets) . ' WHERE ' . $where, $params);
+            if ($changed !== 1) {
+                throw AppError::conflict('This repair was updated by another user. Refresh and try again.');
+            }
 
             if ($targetStatus !== null) {
                 Audit::history([

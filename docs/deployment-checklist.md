@@ -184,9 +184,9 @@ flutter build web --release     --dart-define=API_BASE_URL=https://<api-service>
 
 ## 5. Database notes
 
-- **Fresh install:** `backend/database/schema.sql` creates **9 tables**
-  (`User`, `RefreshToken`, `Report`, `ReportPhoto`, `Assignment`, `StatusHistory`,
-  `AuditLog`, `ImageAnalysisResult`, `ReferenceCounter`); `migrate.php` applies it
+- **Fresh install:** `backend/database/schema.sql` creates **10 tables**
+  (`User`, `RefreshToken`, `Report`, `ReportPhoto`, `Assignment`, `Notification`,
+  `StatusHistory`, `AuditLog`, `ImageAnalysisResult`, `ReferenceCounter`); `migrate.php` applies it
   idempotently.
 - **Already-deployed database:** `schema.sql` is all `CREATE TABLE IF NOT EXISTS`,
   so it can never evolve an existing table. `migrate.php` therefore also applies
@@ -200,6 +200,10 @@ flutter build web --release     --dart-define=API_BASE_URL=https://<api-service>
 - **Existing data:** table/column names keep their Prisma PascalCase form, so a
   database created by the old Prisma migrations stays usable — no data migration.
   Verified read-only against MySQL 8.0.45 (§8).
+- Assignment notifications are durable in-app records created in the same
+  transaction as an admin assignment. No push provider or additional secret is
+  required; push delivery would require a separately configured provider and
+  device-token lifecycle.
 - **Never seed or reset a production database.** Seed scripts require passwords from
   secure `RW_SEED_*_PASSWORD` environment variables and are for disposable development
   databases only; do not use them to provision production accounts.

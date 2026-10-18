@@ -6,6 +6,7 @@ export const CATEGORY_LABELS: Record<IssueCategory, string> = {
   ROAD_CRACK: 'Road crack',
   FLOODING: 'Flooding',
   DAMAGED_DRAINAGE: 'Damaged drainage',
+  ROAD_OBSTRUCTION: 'Road obstruction',
   OTHER: 'Other road issue',
 };
 
@@ -15,6 +16,7 @@ export const CATEGORY_ICONS: Record<IssueCategory, string> = {
   ROAD_CRACK: '〰',
   FLOODING: '≈',
   DAMAGED_DRAINAGE: '⬡',
+  ROAD_OBSTRUCTION: '↔',
   OTHER: '⚑',
 };
 

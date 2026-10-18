@@ -6,6 +6,7 @@ use RoadWatch\Http\FilesController;
 use RoadWatch\Http\HealthController;
 use RoadWatch\Http\MaintenanceController;
 use RoadWatch\Http\MapController;
+use RoadWatch\Http\NotificationsController;
 use RoadWatch\Http\ReportsController;
 use RoadWatch\Http\UsersController;
 use RoadWatch\Support\Router;
@@ -38,6 +39,9 @@ Router::get('/api/reports/{id}', [ReportsController::class, 'show']);
 // -- Maintenance -------------------------------------------------------------
 Router::get('/api/maintenance/assignments', [MaintenanceController::class, 'assignments']);
 Router::get('/api/maintenance/summary', [MaintenanceController::class, 'summary']);
+Router::get('/api/maintenance/notifications', [NotificationsController::class, 'index']);
+Router::patch('/api/maintenance/notifications/read-all', [NotificationsController::class, 'markAllRead']);
+Router::patch('/api/maintenance/notifications/{id}/read', [NotificationsController::class, 'markRead']);
 
 // -- Public map --------------------------------------------------------------
 Router::get('/api/map/reports', [MapController::class, 'reports']);

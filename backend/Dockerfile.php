@@ -61,10 +61,10 @@ EXPOSE 4000
 # $PORT is injected by Railway. NODE_ENV=production requires real JWT secrets
 # and DATABASE_URL to be provided as service variables.
 #
-# The schema is applied on boot, mirroring what docker-entrypoint.sh does for the
-# legacy Node service: `database/migrate.php` is idempotent (CREATE TABLE IF NOT
-# EXISTS plus guarded ADD COLUMN / MODIFY patches), so it is safe to run on every
-# start and is what delivers additive migrations such as Report.categoryOther to
-# an already-deployed database. A failure is logged and the server starts anyway
-# so /health can report the problem. Set RUN_MIGRATIONS=false to skip.
-CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS:-true}\" = \"true\" ]; then echo '[entrypoint] Applying schema...'; php database/migrate.php || echo '[entrypoint] WARN: migration failed; starting anyway so /health can report it.'; fi; exec php -S 0.0.0.0:${PORT:-4000} -t public router.php"]
+# The schema is applied on boot: `database/migrate.php` is idempotent (CREATE
+# TABLE IF NOT EXISTS plus guarded patches) and delivers additive migrations
+# such as persistent assignment notifications to existing databases. A schema
+# failure must prevent the API starting so requests cannot report success
+# against an incomplete schema. Set RUN_MIGRATIONS=false only when migrations
+# are managed externally and have already been applied.
+CMD ["sh", "-c", "set -e; if [ \"${RUN_MIGRATIONS:-true}\" = \"true\" ]; then echo '[entrypoint] Applying schema...'; php database/migrate.php; fi; exec php -S 0.0.0.0:${PORT:-4000} -t public router.php"]

@@ -7,6 +7,7 @@ class SectionCard extends StatelessWidget {
   const SectionCard({
     super.key,
     this.title,
+    this.subtitle,
     this.trailing,
     required this.child,
     this.padding = const EdgeInsets.all(16),
@@ -14,6 +15,7 @@ class SectionCard extends StatelessWidget {
   });
 
   final String? title;
+  final String? subtitle;
   final Widget? trailing;
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -42,6 +44,10 @@ class SectionCard extends StatelessWidget {
                 ?trailing,
               ],
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 3),
+              Text(subtitle!, style: AppTypography.caption(size: 12, color: AppColors.textMuted)),
+            ],
             const SizedBox(height: AppSpacing.md),
           ],
           child,
