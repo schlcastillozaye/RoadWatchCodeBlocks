@@ -447,6 +447,22 @@ Serves a stored image.
 - Files are served with their stored content type and `X-Content-Type-Options: nosniff`.
 - Storage keys are random and never expose the reporter's identity.
 
+#### Building those URLs
+
+Every `url` / `thumbnailUrl` the API returns is **absolute**, built from the
+`PUBLIC_BASE_URL` variable so the mobile app (which cannot resolve a relative
+path the way a browser does) can fetch the image directly.
+
+`PUBLIC_BASE_URL` must be the deployment's public origin, for example
+`https://<api-service>.up.railway.app`. If it is **unset, empty, or still a
+loopback address** (`http://localhost:4000` — the development default that is
+easy to copy into a host's variables), the API falls back to the origin of the
+incoming request (`X-Forwarded-Proto` / `X-Forwarded-Host` / `Host`, so a reverse
+proxy such as Railway's is handled). That fallback exists only to keep a
+misconfigured deployment usable; it never overrides a real configured origin, so
+request headers cannot influence the URLs a correctly configured deployment
+serves. Set the variable properly anyway.
+
 ---
 
 ## Users — `/api/users`

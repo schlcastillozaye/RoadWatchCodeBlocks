@@ -62,7 +62,7 @@ Two Railway services from this one repository:
    | `JWT_ACCESS_TTL` | `15m` | |
    | `JWT_REFRESH_TTL` | `30d` | |
    | `CORS_ORIGINS` | `https://<web-service>.up.railway.app` | the web app origin, no trailing slash |
-   | `PUBLIC_BASE_URL` | `https://<api-service>.up.railway.app` | builds absolute photo URLs (needed by mobile) |
+   | `PUBLIC_BASE_URL` | `https://<api-service>.up.railway.app` | the public origin used to build absolute photo URLs (needed by mobile). **Never** leave it on `http://localhost:4000` |
    | `STORAGE_DRIVER` | `local` | only `local` is implemented in PHP |
    | `STORAGE_LOCAL_DIR` | `/app/uploads` | must match the volume mount |
    | `MAX_UPLOAD_BYTES` | `8388608` | 8 MB — enforced by the app; the image's `php.ini` keeps PHP's own limits above it so this is the error the client sees |
@@ -174,6 +174,11 @@ flutter build web --release     --dart-define=API_BASE_URL=https://<api-service>
   `10.0.2.2` automatically — that path is for development only.
 - Set the API's `PUBLIC_BASE_URL` to its public origin so photo URLs returned to the
   mobile app are absolute.
+  > ⚠️ If it is left unset or on a loopback value such as `http://localhost:4000`,
+  > every photo URL the API hands out points at the *visitor's own machine*, so
+  > images fail to load on both the web platform and the mobile app. The API does
+  > fall back to the request's own origin in that case (see `docs/API.md`), but the
+  > variable should still be set correctly.
 
 ---
 
@@ -224,7 +229,8 @@ curl https://<api>.up.railway.app/api/map/reports  # public approved reports
 ```
 
 - Log in on the web app (register a citizen, or seed demo data once).
-- Submit a report with a photo; confirm the photo URL loads.
+- Submit a report with a photo; confirm the photo URL loads **and that its host is
+  the API's public origin** (not `localhost`).
 - Submit a report with category **Other** and confirm the description field is
   required and the text shows in the report details, admin list and mobile app.
 - **Redeploy the API; confirm uploaded photos still load** (proves the volume persists).

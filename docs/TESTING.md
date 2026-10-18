@@ -202,6 +202,9 @@ Every call should return data, not an error envelope.
 $env:RW_API_BASE = "http://127.0.0.1:4000"
 node backend/tests/api_integration.mjs
 
+# Config unit checks (photo-URL origin fallback; no server needed)
+php backend/tests/config_test.php
+
 # Exercise the upload-size limit deterministically: start the API with a low
 # MAX_UPLOAD_BYTES and tell the suite about it, which enables the 413 check.
 $env:MAX_UPLOAD_BYTES = "1048576"; $env:RW_MAX_UPLOAD_MB = "1"

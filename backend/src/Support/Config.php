@@ -90,9 +90,64 @@ class Config
         return rtrim(base_path($dir), '/\\');
     }
 
+    /**
+     * Public origin used to build absolute photo URLs.
+     *
+     * `PUBLIC_BASE_URL` wins when it is set to a real, externally reachable
+     * origin. When it is unset — or has been left at a loopback value such as
+     * `http://localhost:4000` (the development default that is easy to copy
+     * into a host's variables) — the origin of the current request is used
+     * instead. Without that fallback every photo URL handed to the mobile app
+     * and the web platform would point at the *visitor's own machine*, so
+     * images would silently fail to load on a real deployment.
+     *
+     * It is only consulted in that misconfigured case, so a correct deployment
+     * never lets a request header influence the URLs it serves. Under a
+     * reverse proxy (Railway, nginx) the forwarded headers are honoured.
+     */
     public static function publicBaseUrl(): string
     {
-        return Env::str('PUBLIC_BASE_URL', '');
+        $configured = rtrim(Env::str('PUBLIC_BASE_URL', ''), '/');
+        if ($configured !== '' && !self::isLoopbackOrigin($configured)) {
+            return $configured;
+        }
+
+        $derived = self::requestOrigin();
+        return $derived !== '' ? $derived : $configured;
+    }
+
+    /** True when a URL's host is localhost / 127.0.0.1 / ::1 (or a bare path). */
+    private static function isLoopbackOrigin(string $url): bool
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            return false;
+        }
+        $host = strtolower(trim($host, '[]'));
+        return $host === 'localhost' || $host === '127.0.0.1' || $host === '::1';
+    }
+
+    /** Origin of the current HTTP request, or '' outside one (CLI, cron). */
+    private static function requestOrigin(): string
+    {
+        $host = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? '';
+        if (!is_string($host) || $host === '') {
+            return '';
+        }
+        $host = trim(explode(',', $host)[0]);
+        // A host with a port (example.com:8443) or a bracketed IPv6 literal.
+        if ($host === '' || preg_match('#[^A-Za-z0-9.\-:\[\]]#', $host) === 1) {
+            return '';
+        }
+
+        $proto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['REQUEST_SCHEME'] ?? '';
+        $proto = strtolower(trim(explode(',', (string) $proto)[0]));
+        if ($proto !== 'http' && $proto !== 'https') {
+            $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+            $proto = ($https !== '' && $https !== 'off') ? 'https' : 'http';
+        }
+
+        return $proto . '://' . $host;
     }
 
     public static function maxUploadBytes(): int
