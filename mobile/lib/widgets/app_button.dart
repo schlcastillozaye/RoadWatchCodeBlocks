@@ -30,38 +30,55 @@ class AppButton extends StatelessWidget {
     // button is transparent, so the old `onPrimary` spinner was invisible in
     // both cases.
     final spinnerColor = switch (variant) {
-      AppButtonVariant.primary => AppColors.isDark ? AppColors.darkBlue : AppColors.onPrimary,
+      AppButtonVariant.primary =>
+        AppColors.isDark ? AppColors.darkBlue : AppColors.onPrimary,
       AppButtonVariant.secondary => AppColors.textPrimary,
+      AppButtonVariant.danger => AppColors.statusRedInk,
     };
 
     final child = loading
         ? SizedBox(
             height: 20,
             width: 20,
-            child: CircularProgressIndicator(strokeWidth: 2.2, color: spinnerColor),
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              color: spinnerColor,
+            ),
           )
         : Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[Icon(icon, size: 19), const SizedBox(width: 8)],
+              if (icon != null) ...[
+                Icon(icon, size: 19),
+                const SizedBox(width: 8),
+              ],
               Text(label),
             ],
           );
 
     final button = switch (variant) {
       AppButtonVariant.primary => ElevatedButton(
-          onPressed: loading ? null : onPressed,
-          child: child,
-        ),
+        onPressed: loading ? null : onPressed,
+        child: child,
+      ),
       AppButtonVariant.secondary => OutlinedButton(
-          onPressed: loading ? null : onPressed,
-          child: child,
+        onPressed: loading ? null : onPressed,
+        child: child,
+      ),
+      AppButtonVariant.danger => OutlinedButton(
+        onPressed: loading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.statusRedInk,
+          backgroundColor: AppColors.tintRed,
+          side: BorderSide(color: AppColors.statusRedInk),
         ),
+        child: child,
+      ),
     };
 
     return expand ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
 
-enum AppButtonVariant { primary, secondary }
+enum AppButtonVariant { primary, secondary, danger }

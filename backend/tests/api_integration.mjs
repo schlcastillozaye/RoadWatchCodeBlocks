@@ -598,17 +598,54 @@ async function main() {
   // ---------------------------------------------------------------------
   section('Repair workflow');
   {
+    const unauthenticatedUpdate = await api('PATCH', `/api/reports/${reportId}/repair`, {
+      json: { repairStatus: 'IN_PROGRESS' },
+    });
+    check('unauthenticated user cannot update repair (401)', unauthenticatedUpdate.status === 401, `status=${unauthenticatedUpdate.status}`);
+
+    const unauthenticatedAfterPhoto = await api('POST', `/api/reports/${reportId}/photos`, {
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    check('unauthenticated user cannot upload repair evidence (401)', unauthenticatedAfterPhoto.status === 401, `status=${unauthenticatedAfterPhoto.status}`);
+
+    const adminMonitor = await api('GET', `/api/reports/${reportId}`, { token: adminToken });
+    check(
+      'admin can monitor an assigned report without changing its status',
+      adminMonitor.status === 200 && adminMonitor.body?.report?.repairStatus === 'AWAITING_MAINTENANCE',
+      `status=${adminMonitor.status}`
+    );
+
+    const adminStart = await api('PATCH', `/api/reports/${reportId}/repair`, {
+      token: adminToken,
+      json: { repairStatus: 'IN_PROGRESS', note: 'Admin must monitor, not perform repair work.' },
+    });
+    check('admin cannot start or update an assigned repair (403)', adminStart.status === 403, `status=${adminStart.status}`);
+    const stillAwaiting = await api('GET', `/api/reports/${reportId}`, { token: adminToken });
+    check('unauthorized admin update leaves repair awaiting maintenance', stillAwaiting.body?.report?.repairStatus === 'AWAITING_MAINTENANCE');
+
     const otherOfficer = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: officer2Token,
       json: { repairStatus: 'IN_PROGRESS' },
     });
     check('unassigned officer cannot update repair (403)', otherOfficer.status === 403, `status=${otherOfficer.status}`);
 
+    const otherOfficerAfterPhoto = await api('POST', `/api/reports/${reportId}/photos`, {
+      token: officer2Token,
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    check('unassigned officer cannot upload repair evidence (403)', otherOfficerAfterPhoto.status === 403, `status=${otherOfficerAfterPhoto.status}`);
+
     const citizen = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: citizenToken,
       json: { repairStatus: 'IN_PROGRESS' },
     });
     check('citizen cannot update repair (403)', citizen.status === 403, `status=${citizen.status}`);
+
+    const citizenAfterPhoto = await api('POST', `/api/reports/${reportId}/photos`, {
+      token: citizenToken,
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    check('citizen cannot upload repair evidence (403)', citizenAfterPhoto.status === 403, `status=${citizenAfterPhoto.status}`);
 
     const skipToComplete = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: officer1Token,
@@ -621,6 +658,20 @@ async function main() {
       json: { repairStatus: 'IN_PROGRESS', note: 'Crew dispatched' },
     });
     check('assigned officer sets IN_PROGRESS 200', inProgress.status === 200 && inProgress.body?.report?.repairStatus === 'IN_PROGRESS', `status=${inProgress.status}`);
+
+    const adminComplete = await api('PATCH', `/api/reports/${reportId}/repair`, {
+      token: adminToken,
+      json: { repairStatus: 'COMPLETED', completionNotes: 'Admin override without performing the repair.', overrideCompletion: true },
+    });
+    check('admin cannot complete an officer repair or override evidence (403)', adminComplete.status === 403, `status=${adminComplete.status}`);
+    const stillInProgress = await api('GET', `/api/reports/${reportId}`, { token: adminToken });
+    check('unauthorized admin completion leaves report in progress', stillInProgress.body?.report?.repairStatus === 'IN_PROGRESS');
+
+    const adminAfterPhoto = await api('POST', `/api/reports/${reportId}/photos`, {
+      token: adminToken,
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    check('admin cannot submit a repair completion photo (403)', adminAfterPhoto.status === 403, `status=${adminAfterPhoto.status}`);
 
     const completeNoNotes = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: officer1Token,
@@ -647,25 +698,6 @@ async function main() {
     });
     check('complete with notes + after photo 200', complete.status === 200 && complete.body?.report?.repairStatus === 'COMPLETED', `status=${complete.status}`);
     check('completion recorded completedAt', !!complete.body?.report?.completedAt && complete.body?.report?.completionOverride === false);
-
-    // Admin override path on a fresh report.
-    const r2 = await api('POST', '/api/reports', { token: citizenToken, form: pngForm({ ...goodReport, title: 'IT override report' }) });
-    const id2 = r2.body?.report?.id;
-    await api('PATCH', `/api/reports/${id2}/moderation`, { token: adminToken, json: { decision: 'APPROVE' } });
-    await api('POST', `/api/reports/${id2}/assign`, { token: adminToken, json: { officerId: officer1Id } });
-
-    const officerNoOverride = await api('PATCH', `/api/reports/${id2}/repair`, {
-      token: officer1Token,
-      json: { repairStatus: 'COMPLETED', completionNotes: 'Done without a photo.' },
-    });
-    check('officer cannot complete without photo even with override flag', officerNoOverride.status === 422, `status=${officerNoOverride.status}`);
-
-    const adminOverride = await api('PATCH', `/api/reports/${id2}/repair`, {
-      token: adminToken,
-      json: { repairStatus: 'COMPLETED', completionNotes: 'Admin override, photo not required.', overrideCompletion: true },
-    });
-    check('admin override completes without photo 200', adminOverride.status === 200 && adminOverride.body?.report?.repairStatus === 'COMPLETED', `status=${adminOverride.status}`);
-    check('override flag recorded true', adminOverride.body?.report?.completionOverride === true);
   }
 
   // ---------------------------------------------------------------------

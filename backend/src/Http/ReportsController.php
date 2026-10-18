@@ -158,18 +158,16 @@ class ReportsController
 
     public static function repair(array $params): array
     {
-        $actor = Auth::requireStaff();
+        $actor = Auth::requireRole('MAINTENANCE_OFFICER');
         $body = Request::body();
         $repairStatus = Validate::enum($body['repairStatus'] ?? null, 'repairStatus', Schema::REPAIR_UPDATABLE, false);
         $note = Validate::string($body['note'] ?? null, 'note', false, 0, 2000);
         $completionNotes = Validate::string($body['completionNotes'] ?? null, 'completionNotes', false, 0, 4000);
-        $override = Validate::boolean($body['overrideCompletion'] ?? false);
 
         return ['report' => ReportService::updateRepair($params['id'], $actor, [
             'repairStatus' => $repairStatus,
             'note' => $note,
             'completionNotes' => $completionNotes,
-            'overrideCompletion' => $override,
         ])];
     }
 }

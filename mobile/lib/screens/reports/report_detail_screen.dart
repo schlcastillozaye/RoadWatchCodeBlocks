@@ -424,10 +424,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         report.moderationStatus == ModerationStatus.approved &&
         report.repairStatus != RepairStatus.completed;
     final canMaintain =
+        user?.isOfficer == true &&
+        report.assignedOfficerId == user?.id &&
         report.moderationStatus == ModerationStatus.approved &&
         report.repairStatus != RepairStatus.notAssigned &&
-        report.repairStatus != RepairStatus.completed &&
-        (user?.isAdmin == true || user?.isOfficer == true);
+        report.repairStatus != RepairStatus.completed;
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -440,26 +441,54 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             const SizedBox(height: 14),
             SectionCard(
               title: 'Staff actions',
+              subtitle: canModerate
+                  ? 'Review this report and choose a moderation decision.'
+                  : user?.isAdmin == true
+                  ? 'Manage assignments and monitor repair progress. The assigned officer reports completion.'
+                  : 'Update your assigned repair and submit completion evidence when it is finished.',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (canModerate) ...[
-                    AppButton(
-                      label: 'Approve report',
-                      icon: Icons.check_circle_outline_rounded,
-                      onPressed: _actionBusy
-                          ? null
-                          : () => _moderate('APPROVE'),
-                    ),
-                    const SizedBox(height: 8),
-                    AppButton(
-                      label: 'Reject report',
-                      variant: AppButtonVariant.secondary,
-                      icon: Icons.cancel_outlined,
-                      onPressed: _actionBusy ? null : () => _moderate('REJECT'),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final approve = AppButton(
+                          label: 'Approve report',
+                          icon: Icons.check_circle_outline_rounded,
+                          onPressed: _actionBusy
+                              ? null
+                              : () => _moderate('APPROVE'),
+                        );
+                        final reject = AppButton(
+                          label: 'Reject report',
+                          variant: AppButtonVariant.danger,
+                          icon: Icons.cancel_outlined,
+                          onPressed: _actionBusy
+                              ? null
+                              : () => _moderate('REJECT'),
+                        );
+                        if (constraints.maxWidth < 360) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              approve,
+                              const SizedBox(height: 8),
+                              reject,
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: approve),
+                            const SizedBox(width: 10),
+                            Expanded(child: reject),
+                          ],
+                        );
+                      },
                     ),
                   ],
                   if (canAssign) ...[
+                    if (canModerate) const SizedBox(height: 12),
                     AppButton(
                       label: report.officerName == null
                           ? 'Assign to officer'
@@ -470,11 +499,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   ],
                   if (canMaintain &&
                       report.repairStatus == RepairStatus.awaitingMaintenance)
+                    if (canAssign) const SizedBox(height: 12),
+                  if (canMaintain &&
+                      report.repairStatus == RepairStatus.awaitingMaintenance)
                     AppButton(
                       label: 'Start work',
                       icon: Icons.play_arrow_rounded,
                       onPressed: _actionBusy ? null : _startRepair,
                     ),
+                  if (canMaintain &&
+                      report.repairStatus == RepairStatus.inProgress)
+                    if (canAssign) const SizedBox(height: 12),
                   if (canMaintain &&
                       report.repairStatus == RepairStatus.inProgress)
                     AppButton(
@@ -491,6 +526,25 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                         ),
                       ),
                     ),
+                  if (user?.isAdmin == true &&
+                      report.moderationStatus == ModerationStatus.approved) ...[
+                    if (canAssign) const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.sheetBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        'Current repair status: ${report.repairStatus.label}. The assigned maintenance officer submits completion notes and after-photos.',
+                        style: AppTypography.caption(
+                          size: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

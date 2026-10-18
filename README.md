@@ -54,16 +54,17 @@ Every report carries **two independent statuses**. This is the core of the domai
 | Track | Values | Who changes it |
 | --- | --- | --- |
 | **Moderation** | `PENDING_REVIEW` → `APPROVED` / `REJECTED` | Administrators only |
-| **Repair** | `NOT_ASSIGNED` → `AWAITING_MAINTENANCE` → `IN_PROGRESS` → `COMPLETED` | Assigned officer (or an administrator) |
+| **Repair** | `NOT_ASSIGNED` → `AWAITING_MAINTENANCE` → `IN_PROGRESS` → `COMPLETED` | Assigned maintenance officer only |
 
 Rules enforced on the server:
 
 - Rejecting requires a reason.
 - `PENDING_REVIEW` and `REJECTED` reports are **never** returned by the public map API.
 - A repair can only be completed with **completion notes** and at least **one after photo**.
-  An administrator may override the photo requirement, and the override is audited.
 - Maintenance updates are only accepted for **approved** reports.
 - Officers can only update reports assigned to them; they cannot approve or reject.
+- Administrators can approve/reject reports, assign or reassign officers, and monitor repair history;
+  they cannot submit repair updates, after-photos, or completion reports.
 
 ---
 

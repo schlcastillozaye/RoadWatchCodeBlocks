@@ -420,17 +420,29 @@ class ReportService
         $report = self::getOrThrow($reportId);
 
         $isOwner = ($report['citizenId'] ?? null) === $actor['id'];
-        $isAdmin = ($actor['role'] ?? null) === 'ADMIN';
-        $isAssignedOfficer = ($report['assignedOfficerId'] ?? null) === $actor['id'];
+        $isAssignedOfficer = ($actor['role'] ?? null) === 'MAINTENANCE_OFFICER'
+            && ($report['assignedOfficerId'] ?? null) === $actor['id'];
 
-        if (!$isOwner && !$isAdmin && !$isAssignedOfficer) {
-            throw AppError::forbidden('You cannot add photos to this report.');
-        }
-        if ($isOwner && !$isAdmin && $kind !== 'BEFORE') {
-            throw AppError::forbidden('Only maintenance staff can add progress or completion photos.');
-        }
-        if ($isOwner && !$isAdmin && $report['moderationStatus'] !== 'PENDING_REVIEW') {
-            throw AppError::conflict('Photos can only be added while the report is pending review.');
+        if ($kind === 'BEFORE') {
+            if (!$isOwner || ($actor['role'] ?? null) !== 'CITIZEN') {
+                throw AppError::forbidden('Only the reporting citizen can add initial report photos.');
+            }
+            if ($report['moderationStatus'] !== 'PENDING_REVIEW') {
+                throw AppError::conflict('Initial report photos can only be added while the report is pending review.');
+            }
+        } else {
+            if (!$isAssignedOfficer) {
+                throw AppError::forbidden('Only the assigned maintenance officer can add repair photos.');
+            }
+            if ($report['moderationStatus'] !== 'APPROVED') {
+                throw AppError::conflict('Repair photos can only be added to approved reports.');
+            }
+            if ($report['repairStatus'] === 'COMPLETED') {
+                throw AppError::conflict('Repair photos cannot be added after the report is completed.');
+            }
+            if ($kind === 'AFTER' && $report['repairStatus'] !== 'IN_PROGRESS') {
+                throw AppError::conflict('After-repair photos can only be added while repair work is in progress.');
+            }
         }
 
         $photos = self::persistPhotos($reportId, $files, $kind, $actor['id']);
@@ -677,15 +689,13 @@ class ReportService
     }
 
     // -----------------------------------------------------------------------
-    //  Maintenance (assigned officer, or admin)
+    //  Maintenance (assigned officer only)
     // -----------------------------------------------------------------------
 
     private static function actorMayMaintain(array $report, array $actor): bool
     {
-        if (($actor['role'] ?? null) === 'ADMIN') {
-            return true;
-        }
-        return ($report['assignedOfficerId'] ?? null) === $actor['id'];
+        return ($actor['role'] ?? null) === 'MAINTENANCE_OFFICER'
+            && ($report['assignedOfficerId'] ?? null) === $actor['id'];
     }
 
     private static function repairTransitionAllowed(string $from, string $to): bool
@@ -713,7 +723,6 @@ class ReportService
         }
         $wantsCompletion = $targetStatus === 'COMPLETED';
 
-        $completionOverride = false;
         $completionNotes = $input['completionNotes'] ?? $report['completionNotes'];
 
         if ($wantsCompletion) {
@@ -724,16 +733,13 @@ class ReportService
                 throw AppError::unprocessable('Completion notes are required to mark a repair as completed.');
             }
             if ($afterPhotoCount < 1) {
-                if (($actor['role'] ?? null) !== 'ADMIN' || empty($input['overrideCompletion'])) {
-                    throw AppError::unprocessable('At least one completion (after) photo is required. An administrator may override this requirement.');
-                }
-                $completionOverride = true;
+                throw AppError::unprocessable('At least one completion (after) photo is required.');
             }
         }
 
         $now = Dates::now();
 
-        Db::transaction(function () use ($reportId, $actor, $input, $targetStatus, $wantsCompletion, $completionNotes, $completionOverride, $now) {
+        Db::transaction(function () use ($reportId, $actor, $input, $targetStatus, $wantsCompletion, $completionNotes, $now) {
             $report = Db::one('SELECT * FROM `Report` WHERE `id` = ? FOR UPDATE', [$reportId]);
             if ($report === null) {
                 throw AppError::notFound('Report not found.');
@@ -758,8 +764,8 @@ class ReportService
                 if (!$notesOk) {
                     throw AppError::unprocessable('Completion notes are required to mark a repair as completed.');
                 }
-                if ($afterPhotoCount < 1 && (($actor['role'] ?? null) !== 'ADMIN' || empty($input['overrideCompletion']))) {
-                    throw AppError::unprocessable('At least one completion (after) photo is required. An administrator may override this requirement.');
+                if ($afterPhotoCount < 1) {
+                    throw AppError::unprocessable('At least one completion (after) photo is required.');
                 }
             }
 
@@ -777,7 +783,7 @@ class ReportService
                 $sets[] = '`completedAt` = ?';
                 $params[] = Dates::toDb($now);
                 $sets[] = '`completionOverride` = ?';
-                $params[] = $completionOverride ? 1 : 0;
+                $params[] = 0;
             }
             $params[] = $reportId;
             $where = '`id` = ?';
@@ -833,7 +839,7 @@ class ReportService
             'action' => $wantsCompletion ? 'REPAIR_COMPLETED' : 'REPAIR_UPDATED',
             'entityType' => 'Report',
             'entityId' => $reportId,
-            'metadata' => ['to' => $targetStatus ?? $report['repairStatus'], 'override' => $completionOverride],
+            'metadata' => ['to' => $targetStatus ?? $report['repairStatus'], 'override' => false],
         ], Audit::actorContext()));
 
         return Dto::report(self::getOrThrow($reportId));

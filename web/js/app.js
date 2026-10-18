@@ -1377,13 +1377,76 @@
     const refresh = () => initReportDetailPage({ id: report.id });
     const setBusy = (button, busy, label) => {
       if (!button) return;
+      if (!button.dataset.defaultLabel) button.dataset.defaultLabel = button.textContent;
       button.disabled = busy;
-      if (busy) button.textContent = label;
+      button.textContent = busy ? label : button.dataset.defaultLabel;
     };
+    const setActionFeedback = (message, tone = 'info') => {
+      const feedback = host.querySelector('[data-report-action-feedback]');
+      if (!feedback) return;
+      feedback.textContent = message;
+      feedback.className = `rw-staff-feedback is-${tone}`;
+    };
+    const requestModerationDecision = (decision) => new Promise((resolve) => {
+      const rejecting = decision === 'REJECT';
+      const dialog = document.createElement('dialog');
+      dialog.className = 'rw-confirm-dialog';
+      dialog.setAttribute('aria-labelledby', 'rw-decision-title');
+      dialog.setAttribute('aria-describedby', 'rw-decision-description');
+      dialog.innerHTML = `
+        <form class="rw-confirm-content rw-report-decision">
+          <p class="rw-confirm-eyebrow">REPORT REVIEW · ${rejecting ? 'REJECTION' : 'APPROVAL'}</p>
+          <h2 id="rw-decision-title">${rejecting ? 'Reject this report?' : 'Approve this report?'}</h2>
+          <p id="rw-decision-description">${rejecting
+            ? 'The report will remain off the public map. Provide a clear reason so the citizen understands the decision.'
+            : 'The report will become eligible for the public map and maintenance assignment.'}</p>
+          <p class="rw-confirm-identity"><strong>${escapeHtml(report.referenceNo || '')}</strong><span>${escapeHtml(report.title || 'Road issue report')}</span></p>
+          ${rejecting ? `
+            <label for="rw-rejection-reason">Rejection reason <span>(at least 5 characters)</span></label>
+            <textarea id="rw-rejection-reason" name="reason" class="brand-input" rows="3" minlength="5" maxlength="1000" required></textarea>
+            <p class="rw-decision-error" role="alert" aria-live="polite"></p>` : ''}
+          <div class="rw-confirm-actions">
+            <button type="button" class="btn btn-secondary" data-decision-cancel>Cancel</button>
+            <button type="submit" class="btn ${rejecting ? 'btn-danger' : 'btn-primary'}">${rejecting ? 'Reject report' : 'Approve report'}</button>
+          </div>
+        </form>`;
+      document.body.appendChild(dialog);
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        if (dialog.open) dialog.close();
+        dialog.remove();
+        resolve(value);
+      };
+      const form = dialog.querySelector('form');
+      dialog.querySelector('[data-decision-cancel]').addEventListener('click', () => finish(null));
+      dialog.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        finish(null);
+      });
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const reason = String(new FormData(form).get('reason') || '').trim();
+        if (rejecting && reason.length < 5) {
+          const textarea = form.querySelector('textarea');
+          const error = form.querySelector('.rw-decision-error');
+          error.textContent = 'Enter a rejection reason of at least 5 characters.';
+          textarea.setCustomValidity('Enter at least 5 characters.');
+          textarea.reportValidity();
+          textarea.addEventListener('input', () => textarea.setCustomValidity(''), { once: true });
+          textarea.focus();
+          return;
+        }
+        finish({ decision, reason });
+      });
+      dialog.showModal();
+      if (rejecting) form.querySelector('textarea').focus();
+    });
 
     const approveButton = host.querySelector('[data-report-approve]');
     on(approveButton, 'click', async () => {
-      if (!window.confirm('Approve this report? It will become eligible for maintenance assignment.')) return;
+      if (!await requestModerationDecision('APPROVE')) return;
       setBusy(approveButton, true, 'Approving…');
       try {
         await api(`/reports/${encodeURIComponent(report.id)}/moderation`, {
@@ -1393,6 +1456,7 @@
         notify('Report approved. Assign a maintenance officer to start the repair workflow.');
         await refresh();
       } catch (err) {
+        setActionFeedback(`Could not approve report: ${err.message}`, 'error');
         notify(`Could not approve report: ${err.message}`);
         setBusy(approveButton, false);
       }
@@ -1400,21 +1464,18 @@
 
     const rejectButton = host.querySelector('[data-report-reject]');
     on(rejectButton, 'click', async () => {
-      const reason = window.prompt('Enter the reason for rejecting this report (at least 5 characters):');
-      if (reason === null) return;
-      if (reason.trim().length < 5) {
-        notify('A rejection reason of at least 5 characters is required.');
-        return;
-      }
+      const decision = await requestModerationDecision('REJECT');
+      if (!decision) return;
       setBusy(rejectButton, true, 'Rejecting…');
       try {
         await api(`/reports/${encodeURIComponent(report.id)}/moderation`, {
           method: 'PATCH',
-          body: JSON.stringify({ decision: 'REJECT', reason: reason.trim() }),
+          body: JSON.stringify({ decision: 'REJECT', reason: decision.reason }),
         });
         notify('Report rejected. It will remain off the public map and repair queue.');
         await refresh();
       } catch (err) {
+        setActionFeedback(`Could not reject report: ${err.message}`, 'error');
         notify(`Could not reject report: ${err.message}`);
         setBusy(rejectButton, false);
       }
@@ -1501,6 +1562,7 @@
         notify('Repair status updated to in progress.');
         await refresh();
       } catch (err) {
+        setActionFeedback(`Could not start repair: ${err.message}`, 'error');
         notify(`Could not start repair: ${err.message}`);
         setBusy(startButton, false);
       }
@@ -1530,6 +1592,7 @@
         notify('Repair completed and saved.');
         await refresh();
       } catch (err) {
+        setActionFeedback(`Could not complete repair: ${err.message}`, 'error');
         notify(`Could not complete repair: ${err.message}`);
         setBusy(submit, false);
       }
@@ -1549,23 +1612,47 @@
     const canMaintain = report.moderationStatus === 'APPROVED'
       && report.repairStatus !== 'NOT_ASSIGNED'
       && report.repairStatus !== 'COMPLETED'
-      && (isAdmin || isAssignedOfficer);
+      && isAssignedOfficer;
     const staffActions = (canModerate || canAssign || canMaintain) ? `
-      <section class="brand-card p-5 sm:p-6 mt-6">
-        <h2 class="font-bold text-navy text-lg mb-3">Staff actions</h2>
-        <div class="flex flex-wrap gap-2">
-          ${canModerate ? `
-            <button type="button" class="btn btn-primary" data-report-approve>Approve report</button>
-            <button type="button" class="btn btn-danger" data-report-reject>Reject report</button>` : ''}
-          ${canAssign ? `<button type="button" class="btn btn-primary" data-report-assign>${report.assignedOfficer ? 'Reassign officer' : 'Assign to officer'}</button>` : ''}
-          ${canMaintain && report.repairStatus === 'AWAITING_MAINTENANCE'
-            ? '<button type="button" class="btn btn-primary" data-repair-start>Start work</button>' : ''}
+      <section class="brand-card rw-staff-actions mt-6">
+        <div class="rw-staff-actions-heading">
+          <div>
+            <p class="rw-staff-eyebrow">${canModerate ? 'ADMIN REVIEW' : isAdmin ? 'ADMIN WORKSPACE' : 'MAINTENANCE WORKSPACE'}</p>
+            <h2>Staff actions</h2>
+            <p>${canModerate
+              ? 'Review the report details and choose one moderation decision.'
+              : isAdmin
+                ? 'Manage assignment and monitor progress. The assigned officer reports completion.'
+                : 'Update your assigned repair and submit completion evidence when the work is finished.'}</p>
+          </div>
         </div>
+        ${canModerate ? `
+          <div class="rw-staff-action-group">
+            <p class="rw-staff-group-label">Moderation decision</p>
+            <div class="rw-staff-review-actions">
+              <button type="button" class="btn btn-primary" data-report-approve>Approve report</button>
+              <button type="button" class="btn btn-danger" data-report-reject>Reject report</button>
+            </div>
+          </div>` : ''}
+        ${canAssign ? `
+          <div class="rw-staff-action-group">
+            <p class="rw-staff-group-label">${report.assignedOfficer ? 'Current assignment' : 'Next step'}</p>
+            <button type="button" class="btn btn-primary rw-staff-assign" data-report-assign>${report.assignedOfficer ? 'Reassign officer' : 'Assign to officer'}</button>
+          </div>` : ''}
+        ${canMaintain && report.repairStatus === 'AWAITING_MAINTENANCE' ? `
+          <div class="rw-staff-action-group">
+            <p class="rw-staff-group-label">Repair progress</p>
+            <button type="button" class="btn btn-primary rw-staff-assign" data-repair-start>Start work</button>
+          </div>` : ''}
+        ${isAdmin && report.moderationStatus === 'APPROVED' ? `
+          <p class="rw-staff-monitor" role="status">Current repair status: <strong>${escapeHtml(adminRepairLabel(report.repairStatus))}</strong>. Completion notes and after-photos are submitted by the assigned maintenance officer.</p>` : ''}
+        <p class="rw-staff-feedback" data-report-action-feedback role="status" aria-live="polite"></p>
         ${canMaintain && report.repairStatus === 'IN_PROGRESS' ? `
-          <form class="mt-4 space-y-3" data-repair-complete-form>
-            <label class="block text-sm font-medium text-ink-2" for="repair-completion-notes">Completion notes</label>
-            <textarea id="repair-completion-notes" name="completionNotes" required minlength="5" rows="3" class="w-full brand-input" placeholder="Describe the repair completed."></textarea>
-            <label class="block text-sm font-medium text-ink-2" for="repair-after-photos">After-repair photo (required)</label>
+          <form class="rw-staff-completion" data-repair-complete-form>
+            <p class="rw-staff-group-label">Report completed repair</p>
+            <label for="repair-completion-notes">Completion notes</label>
+            <textarea id="repair-completion-notes" name="completionNotes" required minlength="5" maxlength="4000" rows="3" class="w-full brand-input" placeholder="Describe the repair completed."></textarea>
+            <label for="repair-after-photos">After-repair photo <span>(required)</span></label>
             <input id="repair-after-photos" name="afterPhotos" type="file" accept="image/*" multiple required class="w-full brand-input" />
             <button type="submit" class="btn btn-primary">Submit completion</button>
           </form>` : ''}

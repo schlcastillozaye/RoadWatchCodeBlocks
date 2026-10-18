@@ -268,8 +268,11 @@ Auth required. **`multipart/form-data`**. Adds photos to an existing report.
 | `kind` | `BEFORE` (default), `PROGRESS` or `AFTER` |
 | `photos` / `progressPhotos` / `afterPhotos` | Files for the given kind |
 
-Citizens may add `BEFORE` photos **only while the report is pending**. Staff/assigned
-officers may add progress and completion photos.
+The reporting citizen may add `BEFORE` photos only to their own pending report.
+Only its currently assigned maintenance officer may add `PROGRESS` or `AFTER`
+photos to an approved, incomplete report; `AFTER` photos are accepted only
+while repair status is `IN_PROGRESS`. Administrators may review photos but
+cannot upload repair evidence.
 
 **201** `{ "report": { … } }`
 
@@ -311,7 +314,9 @@ notifications are not configured. **200** `{ "report": { … } }`
 
 ### `PATCH /api/reports/:id/repair`
 
-**Admin, or the assigned officer.** JSON body.
+**Assigned maintenance officer only.** Administrators can monitor the report and
+assign or reassign officers, but cannot update repair progress or submit a
+completion report. JSON body.
 
 ```json
 {
@@ -324,21 +329,22 @@ notifications are not configured. **200** `{ "report": { … } }`
 {
   "repairStatus": "COMPLETED",
   "note": "Work finished and the road reopened.",
-  "completionNotes": "Cold-mix patched, compacted and levelled with surrounding asphalt.",
-  "overrideCompletion": false
+  "completionNotes": "Cold-mix patched, compacted and levelled with surrounding asphalt."
 }
 ```
 
 Business rules:
 
 - Only **approved** reports accept maintenance updates.
-- Only the **assigned officer** (or an admin) may update.
+- Only the **currently assigned maintenance officer** may update; other officers,
+  administrators, and citizens receive **403**.
 - Repair status transitions are sequential: `AWAITING_MAINTENANCE` →
   `IN_PROGRESS` → `COMPLETED`. Skips, backwards transitions and duplicate
   status decisions return **409**.
 - `COMPLETED` requires `completionNotes` (≥ 5 characters) **and** at least one `AFTER` photo.
-- An **admin** may set `"overrideCompletion": true` to complete without a photo; this is
-  recorded in the audit log and flagged on the report.
+- Only the assigned officer may add `PROGRESS` and `AFTER` photos. `AFTER`
+  photos can be added while the report is `IN_PROGRESS`; citizens may add
+  `BEFORE` photos only to their own pending report.
 
 **200** `{ "report": { … } }`
 

@@ -26,6 +26,7 @@ class RoadReport {
     this.completionOverride = false,
     this.citizenName,
     this.officerName,
+    this.assignedOfficerId,
     this.photos = const [],
     this.createdAt,
     this.updatedAt,
@@ -55,6 +56,7 @@ class RoadReport {
   final bool completionOverride;
   final String? citizenName;
   final String? officerName;
+  final String? assignedOfficerId;
   final List<ReportPhoto> photos;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -109,6 +111,7 @@ class RoadReport {
         completionOverride: asBool(json['completionOverride']),
         citizenName: json['citizen'] is Map ? asStringOrNull((json['citizen'] as Map)['fullName']) : null,
         officerName: json['assignedOfficer'] is Map ? asStringOrNull((json['assignedOfficer'] as Map)['fullName']) : null,
+        assignedOfficerId: json['assignedOfficer'] is Map ? asStringOrNull((json['assignedOfficer'] as Map)['id']) : null,
         photos: asList(json['photos']).map((p) => ReportPhoto.fromJson(asMap(p))).toList(),
         createdAt: asDate(json['createdAt']),
         updatedAt: asDate(json['updatedAt']),
@@ -136,7 +139,9 @@ class RoadReport {
         'completionNotes': completionNotes,
         'completionOverride': completionOverride,
         'citizen': citizenName != null ? {'fullName': citizenName} : null,
-        'assignedOfficer': officerName != null ? {'fullName': officerName} : null,
+        'assignedOfficer': officerName != null
+            ? {'id': assignedOfficerId, 'fullName': officerName}
+            : null,
         'photos': photos.map((p) => p.toJson()).toList(),
         'createdAt': createdAt?.toIso8601String(),
         'updatedAt': updatedAt?.toIso8601String(),

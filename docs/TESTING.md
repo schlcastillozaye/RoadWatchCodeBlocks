@@ -51,6 +51,10 @@ These cover most of the checklist below without manual clicking:
 | Officer → `PATCH /api/reports/:id/moderation` | **403** |
 | Officer → `POST /api/reports/:id/assign` | **403** |
 | Officer → `PATCH /api/reports/:id/repair` for a report **not** assigned to them | **403** |
+| Unauthenticated → `PATCH /api/reports/:id/repair` | **401** |
+| Unauthenticated → `POST /api/reports/:id/photos` with `kind=AFTER` | **401** |
+| Citizen / unassigned officer → upload `AFTER` photo | **403** |
+| Admin → `PATCH /api/reports/:id/repair` | **403** |
 | Admin → `PATCH /api/reports/:id/moderation` | **200** |
 | Admin → `POST /api/reports/:id/assign` | **200** |
 | Officer → `GET /api/users` | **403** |
@@ -108,12 +112,13 @@ These cover most of the checklist below without manual clicking:
 - [ ] Completing with notes + an after photo succeeds.
 - [ ] The repair status becomes `COMPLETED` and `completedAt` is set.
 
-## 7. Completion override (web, admin)
+## 7. Role boundaries for repair evidence
 
-- [ ] An **officer** cannot complete a repair without an after photo (**422**).
-- [ ] An **admin** can, by setting `overrideCompletion: true`.
-- [ ] The report shows the override warning.
-- [ ] The audit log entry records `"override": true`.
+- [ ] An **admin** cannot change repair status or submit an after-photo (**403**).
+- [ ] An **officer not assigned** to the report cannot change repair status or add repair photos (**403**).
+- [ ] The currently assigned officer cannot complete without completion notes or an after photo (**422**).
+- [ ] The assigned officer can complete only after moving the report to `IN_PROGRESS` and adding an after-photo.
+- [ ] The report, assignment, timeline and audit log reflect the officer's completion.
 
 ## 8. Public map
 
