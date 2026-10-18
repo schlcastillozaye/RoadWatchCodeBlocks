@@ -6,6 +6,7 @@ use RoadWatch\Services\ImageProcessing;
 use RoadWatch\Services\Storage;
 use RoadWatch\Support\AppError;
 use RoadWatch\Support\Audit;
+use RoadWatch\Support\Config;
 use RoadWatch\Support\Dates;
 use RoadWatch\Support\Db;
 use RoadWatch\Support\Ids;
@@ -321,17 +322,18 @@ class ReportService
 
                 Db::execute(
                     'INSERT INTO `Report`
-                        (`id`,`referenceNo`,`title`,`description`,`category`,`priority`,`latitude`,`longitude`,
+                        (`id`,`referenceNo`,`title`,`description`,`category`,`categoryOther`,`priority`,`latitude`,`longitude`,
                          `addressText`,`areaLabel`,`moderationStatus`,`rejectionReason`,`moderatedById`,`moderatedAt`,
                          `repairStatus`,`assignedOfficerId`,`assignedAt`,`completedAt`,`completionNotes`,`completionOverride`,
                          `citizenId`,`createdAt`,`updatedAt`)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     [
                         $id,
                         $referenceNo,
                         $input['title'],
                         $input['description'],
                         $input['category'],
+                        $input['categoryOther'] ?? null,
                         $input['priority'] ?? 'MEDIUM',
                         $input['latitude'],
                         $input['longitude'],
@@ -398,7 +400,7 @@ class ReportService
             'action' => 'REPORT_CREATED',
             'entityType' => 'Report',
             'entityId' => $reportId,
-            'metadata' => ['referenceNo' => $referenceNo, 'category' => $input['category']],
+            'metadata' => ['referenceNo' => $referenceNo, 'category' => $input['category'], 'categoryOther' => $input['categoryOther'] ?? null],
         ], Audit::actorContext()));
 
         $report = self::getOrThrow($reportId);
@@ -837,6 +839,14 @@ class ReportService
         $out = [];
         foreach ($files as $file) {
             self::assertUploadOk($file);
+            // Enforce the configured limit here too: PHP's own ini limits can be
+            // larger (or, on some hosts, swallowed before this code runs), and
+            // MAX_UPLOAD_BYTES is the documented contract for clients.
+            $limit = Config::maxUploadBytes();
+            if ($limit > 0 && (int) ($file['size'] ?? 0) > $limit) {
+                $mb = (int) round($limit / (1024 * 1024));
+                throw new AppError('File too large. Maximum size is ' . $mb . ' MB.', 413, 'UPLOAD_LIMIT_FILE_SIZE');
+            }
             $buffer = @file_get_contents($file['tmp_name']);
             if ($buffer === false || $buffer === '') {
                 continue;
@@ -889,7 +899,7 @@ class ReportService
             return;
         }
         if (in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
-            $mb = (int) round(\RoadWatch\Support\Config::maxUploadBytes() / (1024 * 1024));
+            $mb = (int) round(Config::maxUploadBytes() / (1024 * 1024));
             throw new AppError('File too large. Maximum size is ' . $mb . ' MB.', 413, 'UPLOAD_LIMIT_FILE_SIZE');
         }
         throw AppError::badRequest('One of the uploaded files failed to upload.');

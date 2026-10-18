@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/brand_logo.dart';
+import '../../widgets/theme_toggle.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -49,7 +50,20 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showError(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.statusRed));
+      // The error fill is a light red in dark mode, so the label flips to navy
+      // to stay readable — the same inversion the web applies to `.btn-danger`.
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: AppTypography.bodyStyle(
+              size: 14,
+              color: AppColors.isDark ? AppColors.darkBlue : AppColors.white,
+            ),
+          ),
+          backgroundColor: AppColors.statusRed,
+        ),
+      );
   }
 
   void _fillDemo() {
@@ -59,6 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final busy = context.watch<AuthProvider>().isBusy;
 
     return Scaffold(
@@ -76,7 +91,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const BrandLogo(onDark: true, size: LogoSize.large, showTagline: true),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const BrandLogo(onDark: true, size: LogoSize.large, showTagline: true),
+                            const Spacer(),
+                            const ThemeToggleButton(onDark: true),
+                          ],
+                        ),
                         const SizedBox(height: 26),
                         Text(
                           'Welcome back',
@@ -94,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   // --- Form card --------------------------------------------------
                   Container(
                     width: double.infinity,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.sheetBackground,
                       borderRadius: BorderRadius.only(
                         topLeft: Radius.circular(32),
@@ -190,6 +212,7 @@ class _DemoHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -201,7 +224,7 @@ class _DemoHint extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.darkBlue),
+            Icon(Icons.info_outline_rounded, size: 18, color: AppColors.darkBlue),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

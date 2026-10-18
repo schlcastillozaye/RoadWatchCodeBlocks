@@ -8,6 +8,7 @@ import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/brand_logo.dart';
 import '../../widgets/section_card.dart';
+import '../../widgets/theme_toggle.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -22,7 +23,7 @@ class ProfileScreen extends StatelessWidget {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sign out', style: TextStyle(color: AppColors.statusRed)),
+            child: Text('Sign out', style: TextStyle(color: AppColors.statusRedInk)),
           ),
         ],
       ),
@@ -34,6 +35,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final user = context.watch<AuthProvider>().user;
 
     return Scaffold(
@@ -42,7 +44,7 @@ class ProfileScreen extends StatelessWidget {
         padding: EdgeInsets.zero,
         children: [
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.darkBlue,
               borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
             ),
@@ -125,6 +127,21 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 SectionCard(
+                  title: 'Appearance',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Choose how RoadWatch looks. System follows your device setting.',
+                        style: AppTypography.bodyStyle(size: 13, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 12),
+                      const ThemeModeSelector(),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SectionCard(
                   title: 'App information',
                   child: Column(
                     children: [
@@ -189,6 +206,7 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(

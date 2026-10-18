@@ -2,6 +2,7 @@
 
 namespace RoadWatch\Http;
 
+use RoadWatch\Services\Geocoding;
 use RoadWatch\Services\ImageProcessing;
 use RoadWatch\Services\Storage;
 use RoadWatch\Support\Dates;
@@ -25,6 +26,7 @@ class HealthController
             'database' => $database,
             'storage' => Storage::name(),
             'imageProcessing' => ImageProcessing::enabled() ? ImageProcessing::name() : 'disabled',
+            'geocoding' => Geocoding::status(),
             'time' => Dates::iso(Dates::now()),
         ];
     }

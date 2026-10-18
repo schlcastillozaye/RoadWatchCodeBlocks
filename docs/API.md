@@ -73,9 +73,15 @@ No authentication. Reports service and dependency status.
   "database": "up",
   "storage": "local",
   "imageProcessing": "disabled",
+  "geocoding": "nominatim",
   "time": "2026-01-01T00:00:00.000Z"
 }
 ```
+
+`geocoding` reports the active address-lookup provider (`nominatim`, `google`),
+or `unavailable` when the host has no PHP cURL extension — in which case the
+geocoding endpoints answer `200` with `available: false` and a clear reason
+instead of failing.
 
 ---
 
@@ -146,17 +152,36 @@ Auth required (any role). **`multipart/form-data`**.
 | --- | --- | --- | --- |
 | `title` | text | yes | 4–160 characters |
 | `description` | text | yes | 10–4000 characters |
-| `category` | text | yes | `POTHOLE`, `DAMAGED_PAVEMENT`, `ROAD_CRACK`, `FLOODING`, `DAMAGED_DRAINAGE`, `OTHER` |
+| `category` | text | yes | One of `POTHOLE`, `ROAD_CRACK`, `DAMAGED_PAVEMENT`, `FLOODING`, `ROAD_OBSTRUCTION`, `DAMAGED_DRAINAGE`, `OTHER` (see [Issue categories](#issue-categories)) |
+| `categoryOther` | text | when `category=OTHER` | 5–300 characters. Required for `OTHER`; ignored (stored as `null`) for every other category |
 | `latitude` | text | yes | −90…90 |
 | `longitude` | text | yes | −180…180 |
 | `addressText` | text | no | ≤ 500 characters |
 | `areaLabel` | text | no | ≤ 160 characters |
 | `priority` | text | no | `LOW`, `MEDIUM`, `HIGH`, `URGENT` |
-| `photos` | files | yes (≥1) | Before photos, one or more |
+| `photos` | files | yes (≥1) | Before photos, one or more; see [upload limits](#upload-limits) |
 
 **201** `{ "report": { … } }`
 
 A unique human-readable reference number (`RW-2026-000123`) is generated in a transaction.
+
+#### Issue categories
+
+The API validates a **superset** of the values the apps offer, so reports created
+before a category was retired keep validating, filtering and rendering:
+
+| Value | Label shown to users | Offered for new reports |
+| --- | --- | --- |
+| `POTHOLE` | Pothole | yes |
+| `ROAD_CRACK` | Road cracks | yes |
+| `DAMAGED_PAVEMENT` | Damaged pavement | yes |
+| `FLOODING` | Flooding or water accumulation | yes |
+| `ROAD_OBSTRUCTION` | Road obstruction | yes |
+| `DAMAGED_DRAINAGE` | Damaged drainage | yes (retained for continuity with existing reports) |
+| `OTHER` | Other | yes — requires `categoryOther` |
+
+Both clients apply the same rule: choosing **Other** reveals a required
+description field, and the description is never sent for any other category.
 
 ```powershell
 curl -X POST http://localhost:4000/api/reports `
@@ -168,6 +193,14 @@ curl -X POST http://localhost:4000/api/reports `
   -F "areaLabel=Barangay San Jose" `
   -F "photos=@C:\path\pothole.jpg"
 ```
+
+#### Upload limits
+
+| Limit | Value | Enforced by |
+| --- | --- | --- |
+| Maximum size per file | `MAX_UPLOAD_BYTES` (default 8 MB) | `ReportService` → `413 UPLOAD_LIMIT_FILE_SIZE` |
+| Maximum files per request | 8 | `ReportService` → `400` |
+| Accepted types | JPEG, PNG, WebP, HEIC/HEIF | `ReportService` → `415 UNSUPPORTED_MEDIA_TYPE` |
 
 ### `GET /api/reports/mine`
 
@@ -409,7 +442,9 @@ one request per second its usage policy allows.
 Serves a stored image.
 
 - Photos on **approved** reports are public (`Cache-Control: public, max-age=86400`).
-- All other photos require a bearer token and are limited to the owning citizen or staff.
+- All other photos require a bearer token and are limited to the owning citizen,
+  a maintenance officer or an admin (`Cache-Control: private, no-store`).
+- Files are served with their stored content type and `X-Content-Type-Options: nosniff`.
 - Storage keys are random and never expose the reporter's identity.
 
 ---
@@ -484,6 +519,7 @@ Serves a stored image.
   "title": "Deep pothole on Mabini St",
   "description": "About 40cm wide and getting deeper every week.",
   "category": "POTHOLE",
+  "categoryOther": null,
   "priority": "HIGH",
   "latitude": 14.7942,
   "longitude": 120.879,

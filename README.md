@@ -67,6 +67,31 @@ Rules enforced on the server:
 
 ---
 
+## Issue categories
+
+Both clients offer the same required picker, validated by the same server rule:
+
+| Value | Label |
+| --- | --- |
+| `POTHOLE` | Pothole |
+| `ROAD_CRACK` | Road cracks |
+| `DAMAGED_PAVEMENT` | Damaged pavement |
+| `FLOODING` | Flooding or water accumulation |
+| `ROAD_OBSTRUCTION` | Road obstruction |
+| `DAMAGED_DRAINAGE` | Damaged drainage (retained so older reports keep working) |
+| `OTHER` | Other |
+
+- The category is **required** and is shown in the report details, the admin
+  report list, the officer's assignment list and the citizen's tracking list.
+- Choosing **Other** reveals a required description field
+  (`Report.categoryOther`, 5–300 characters). The API refuses `OTHER` without it
+  (**422**) and stores `null` for every other category, so the stored value always
+  matches the category.
+- The API validates a **superset** of what the pickers offer, and the change is
+  purely additive — reports filed before a value existed still load.
+
+---
+
 ## Quick start
 
 > Local setup for the PHP API, the no-build web app and the Flutter app is below.
@@ -98,7 +123,7 @@ Verify it works:
 
 ```powershell
 curl http://localhost:4000/health          # {"status":"ok","database":"up",…}
-node tests/api_integration.mjs             # 103 end-to-end API checks
+node tests/api_integration.mjs             # 137 end-to-end API checks
 ```
 
 ### 3. Web platform (no build step)
@@ -149,11 +174,15 @@ MySQL database (the Railway **MySQL** plugin), then add
 two services from this repo — one with root directory `backend/` (uses
 `backend/Dockerfile.php` + `backend/railway.json`) and one with root directory `web/`
 (uses `web/Dockerfile`). Set `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
-`CORS_ORIGINS` and `PUBLIC_BASE_URL` on the API service, run
-`php /app/database/migrate.php` once (or as a pre-deploy command), mount a volume at
+`CORS_ORIGINS` and `PUBLIC_BASE_URL` on the API service, mount a volume at
 `/app/uploads` so photos survive redeploys, and set the **`RW_API_BASE_URL`** variable
 on the web service to the API service URL. Point the mobile
 app at the same API with `--dart-define=API_BASE_URL=…`.
+
+> **Schema changes need no manual step.** The API image runs
+> `php database/migrate.php` on boot (`RUN_MIGRATIONS`, default on). It is
+> idempotent and only ever *adds* (new tables, new enum values, new nullable
+> columns), so an already-deployed database picks up changes without a reset.
 
 > **Images:** without a persistent volume the container filesystem is ephemeral and uploaded
 > photos are lost on redeploy — attach a Railway volume at `/app/uploads`. Note that the PHP

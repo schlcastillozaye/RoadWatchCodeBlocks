@@ -55,6 +55,10 @@ class Dto
             'title' => $report['title'],
             'description' => $report['description'],
             'category' => $report['category'],
+            // Free-text explanation supplied when category is OTHER. Null for
+            // every other category, and for rows created before the column
+            // existed (`?? null` keeps pre-migration databases working).
+            'categoryOther' => $report['categoryOther'] ?? null,
             'priority' => $report['priority'],
             'latitude' => (float) $report['latitude'],
             'longitude' => (float) $report['longitude'],
@@ -98,6 +102,7 @@ class Dto
             'referenceNo' => $report['referenceNo'],
             'title' => $report['title'],
             'category' => $report['category'],
+            'categoryOther' => $report['categoryOther'] ?? null,
             'priority' => $report['priority'],
             'latitude' => (float) $report['latitude'],
             'longitude' => (float) $report['longitude'],

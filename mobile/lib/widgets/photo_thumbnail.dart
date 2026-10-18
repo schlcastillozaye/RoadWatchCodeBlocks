@@ -29,6 +29,7 @@ class PhotoThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final image = CachedNetworkImage(
       imageUrl: photo.url,
       httpHeaders: SessionTokens.authHeaders(isPublic: photo.isPublic),
@@ -41,7 +42,7 @@ class PhotoThumbnail extends StatelessWidget {
         height: height,
         color: AppColors.sheetBackground,
         alignment: Alignment.center,
-        child: const SizedBox(
+        child: SizedBox(
           width: 18,
           height: 18,
           child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.lightAzure),
@@ -52,7 +53,7 @@ class PhotoThumbnail extends StatelessWidget {
         height: height,
         color: AppColors.sheetBackground,
         alignment: Alignment.center,
-        child: const Icon(Icons.broken_image_outlined, color: AppColors.textMuted),
+        child: Icon(Icons.broken_image_outlined, color: AppColors.textMuted),
       ),
     );
 
@@ -117,6 +118,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final photo = widget.photos[_index];
     return Scaffold(
       backgroundColor: AppColors.darkBlue,
@@ -150,14 +152,14 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
               imageUrl: widget.photos[i].url,
               httpHeaders: SessionTokens.authHeaders(isPublic: widget.photos[i].isPublic),
               fit: BoxFit.contain,
-              placeholder: (_, _) => const Center(
+              placeholder: (_, _) => Center(
                 child: SizedBox(
                   width: 28,
                   height: 28,
                   child: CircularProgressIndicator(color: AppColors.lightBlue),
                 ),
               ),
-              errorWidget: (_, _, _) => const Center(
+              errorWidget: (_, _, _) => Center(
                 child: Icon(Icons.broken_image_outlined, color: AppColors.lightBlue, size: 40),
               ),
             ),

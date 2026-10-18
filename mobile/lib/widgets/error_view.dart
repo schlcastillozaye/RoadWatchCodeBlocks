@@ -11,6 +11,7 @@ class ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -21,7 +22,7 @@ class ErrorView extends StatelessWidget {
               width: 68,
               height: 68,
               decoration: BoxDecoration(color: AppColors.tintRed, borderRadius: BorderRadius.circular(22)),
-              child: const Icon(Icons.cloud_off_rounded, size: 32, color: AppColors.statusRed),
+              child: Icon(Icons.cloud_off_rounded, size: 32, color: AppColors.statusRedInk),
             ),
             const SizedBox(height: 16),
             Text('Something went wrong', style: AppTypography.headingStyle(size: 17)),

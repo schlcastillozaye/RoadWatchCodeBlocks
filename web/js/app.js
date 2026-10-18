@@ -240,16 +240,38 @@
     return dd + (dd === 1 ? ' day ago' : ' days ago');
   };
 
+  // Single source of truth for issue categories on the web client. Values and
+  // wording mirror `Schema::CATEGORIES` (backend) and `IssueCategory` (mobile),
+  // so both apps validate and display the same thing.
+  // DAMAGED_DRAINAGE predates the current picker list: it stays here (and in the
+  // API) so older reports keep rendering, but is listed after the six current
+  // options for continuity.
   const CATEGORY_META = {
     POTHOLE: { icon: '🕳️', label: 'Pothole' },
-    DAMAGED_PAVEMENT: { icon: '🛣️', label: 'Damaged Pavement' },
-    ROAD_CRACK: { icon: '🩹', label: 'Road Crack' },
-    FLOODING: { icon: '🌊', label: 'Flooding' },
-    DAMAGED_DRAINAGE: { icon: '🚿', label: 'Damaged Drainage' },
+    ROAD_CRACK: { icon: '🩹', label: 'Road cracks' },
+    DAMAGED_PAVEMENT: { icon: '🛣️', label: 'Damaged pavement' },
+    FLOODING: { icon: '🌊', label: 'Flooding or water accumulation' },
+    ROAD_OBSTRUCTION: { icon: '🚧', label: 'Road obstruction' },
+    DAMAGED_DRAINAGE: { icon: '🚿', label: 'Damaged drainage' },
     OTHER: { icon: 'ℹ️', label: 'Other' },
   };
+  // Order offered when submitting a report.
+  const CATEGORY_OPTIONS = ['POTHOLE', 'ROAD_CRACK', 'DAMAGED_PAVEMENT', 'FLOODING', 'ROAD_OBSTRUCTION', 'DAMAGED_DRAINAGE', 'OTHER'];
+  // "Other" must be explained; bounds are mirrored by the API and the mobile form.
+  const CATEGORY_OTHER = 'OTHER';
+  const CATEGORY_OTHER_MIN = 5;
+  const CATEGORY_OTHER_MAX = 300;
+
   const categoryIcon = (cat) => (CATEGORY_META[String(cat || '').toUpperCase()] || CATEGORY_META.OTHER).icon;
   const categoryLabel = (cat) => (CATEGORY_META[String(cat || '').toUpperCase()] || CATEGORY_META.OTHER).label;
+  // A report's category as shown to users: "Other — <the reporter's own words>"
+  // when they supplied a description, plain label otherwise.
+  const categoryText = (report) => {
+    const value = String((report && report.category) || '').toUpperCase();
+    const typical = categoryLabel(value);
+    const other = report && typeof report.categoryOther === 'string' ? report.categoryOther.trim() : '';
+    return value === CATEGORY_OTHER && other ? `${typical} — ${other}` : typical;
+  };
 
   const reportLocation = (r) => r.areaLabel || r.addressText || 'Location not specified';
 
@@ -279,7 +301,7 @@
           : `<div class="w-16 h-16 rounded flex-shrink-0 bg-sheet flex items-center justify-center"><span class="text-sm font-medium text-ink-3">${categoryIcon(r.category)}</span></div>`}
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-navy line-clamp-1">${escapeHtml(r.title)}</h3>
-          <p class="text-sm text-slate-tint line-clamp-1">${escapeHtml(reportLocation(r))}</p>
+          <p class="text-sm text-slate-tint line-clamp-1">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
         </div>
       </div>
       <div class="mt-3 flex items-center justify-between text-xs">
@@ -455,15 +477,16 @@
             <input type="text" name="title" required minlength="4" class="w-full brand-input" placeholder="e.g. Large pothole on Main St" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-ink-2 mb-2">Issue Category</label>
-            <select name="category" required class="w-full brand-input">
-              <option value="POTHOLE">Pothole</option>
-              <option value="DAMAGED_PAVEMENT">Damaged Pavement</option>
-              <option value="ROAD_CRACK">Road Crack</option>
-              <option value="FLOODING">Flooding</option>
-              <option value="DAMAGED_DRAINAGE">Damaged Drainage</option>
-              <option value="OTHER">Other</option>
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="report-category">Issue Category</label>
+            <select name="category" id="report-category" required class="w-full brand-input">
+              ${CATEGORY_OPTIONS.map((value) => `<option value="${value}">${escapeHtml(categoryLabel(value))}</option>`).join('')}
             </select>
+          </div>
+          <div id="report-category-other-wrap" hidden>
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="report-category-other">Describe the issue</label>
+            <input type="text" name="categoryOther" id="report-category-other" maxlength="${CATEGORY_OTHER_MAX}"
+              class="w-full brand-input" placeholder="e.g. Fallen tree blocking the whole lane" />
+            <p class="text-sm text-slate-tint mt-1">Tell us what the issue is (at least ${CATEGORY_OTHER_MIN} characters).</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2">Description</label>
@@ -980,7 +1003,7 @@
             <h1 class="text-2xl font-bold text-navy">${escapeHtml(report.title)}</h1>
             <p class="text-slate-tint text-sm">${escapeHtml(report.description || '')}</p>
             <div class="mt-3 flex flex-wrap gap-2 items-center">
-              <span class="text-slate-tint text-xs uppercase tracking-wider">${escapeHtml(categoryLabel(report.category))}</span>
+              <span class="text-slate-tint text-xs uppercase tracking-wider">${escapeHtml(categoryText(report))}</span>
               ${statusBadge(report.moderationStatus, report.repairStatus)}
             </div>
           </div>
@@ -1132,6 +1155,23 @@
       });
     });
 
+    // "Other" is only meaningful with a description, so the field is revealed
+    // (and required) only for that category — the same rule the mobile form and
+    // the API enforce.
+    const categorySelect = form ? form.querySelector('select[name="category"]') : null;
+    const otherWrap = q('#report-category-other-wrap');
+    const otherInput = q('#report-category-other');
+    const syncCategoryOther = () => {
+      const isOther = String((categorySelect && categorySelect.value) || '').toUpperCase() === CATEGORY_OTHER;
+      if (otherWrap) otherWrap.hidden = !isOther;
+      if (otherInput) {
+        otherInput.required = isOther;
+        if (!isOther) otherInput.value = '';
+      }
+    };
+    on(categorySelect, 'change', syncCategoryOther);
+    syncCategoryOther();
+
     on(form, 'submit', async (e) => {
       e.preventDefault();
       const lat = (latInput.value || '').trim();
@@ -1152,10 +1192,22 @@
         return;
       }
 
+      const category = String((categorySelect && categorySelect.value) || '').toUpperCase();
+      const otherText = otherInput ? otherInput.value.trim() : '';
+      if (category === CATEGORY_OTHER && otherText.length < CATEGORY_OTHER_MIN) {
+        if (otherWrap) otherWrap.hidden = false;
+        notify(`Please describe the issue when the category is Other (at least ${CATEGORY_OTHER_MIN} characters).`);
+        if (otherInput) otherInput.focus();
+        return;
+      }
+
       const fd = new FormData(form);
       fd.set('latitude', lat);
       fd.set('longitude', lon);
-      fd.set('category', String(fd.get('category') || '').toUpperCase());
+      fd.set('category', category);
+      // The explanation is sent only for "Other"; every other category drops it
+      // so the stored value always matches the category.
+      if (category === CATEGORY_OTHER) fd.set('categoryOther', otherText); else fd.delete('categoryOther');
 
       const btn = q('button[type="submit"]', form);
       if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
@@ -1247,7 +1299,7 @@
           <a href="/report/${encodeURIComponent(report.id)}" data-nav="/report/${encodeURIComponent(report.id)}" class="admin-report-title">
             ${escapeHtml(report.title || 'Untitled report')}
           </a>
-          <span class="admin-report-reference">${escapeHtml(report.referenceNo || '')} · ${escapeHtml(categoryLabel(report.category))}</span>
+          <span class="admin-report-reference">${escapeHtml(report.referenceNo || '')} · ${escapeHtml(categoryText(report))}</span>
         </td>
         <td>
           <div class="admin-status-stack">
@@ -1506,7 +1558,7 @@
       html(host, items.map((r) => `
         <div class="p-3 rounded border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors" data-nav="/report/${encodeURIComponent(r.id)}">
           <h3 class="font-medium text-navy line-clamp-1">${escapeHtml(r.title)}</h3>
-          <p class="text-slate-tint text-xs">${escapeHtml(reportLocation(r))}</p>
+          <p class="text-slate-tint text-xs">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
           <span class="text-amber text-sm">${escapeHtml(r.repairStatus)}</span>
         </div>`).join(''));
     } catch (err) {

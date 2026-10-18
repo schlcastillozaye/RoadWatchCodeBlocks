@@ -70,6 +70,12 @@ These cover most of the checklist below without manual clicking:
 - [ ] Submitting with an empty title, a too-short description, or no photo is blocked with a readable message.
 - [ ] A unique reference number (`RW-YYYY-NNNNNN`) is issued and visible.
 - [ ] Photos are written to the storage directory, **not** into database rows.
+- [ ] The category picker offers Pothole, Road cracks, Damaged pavement,
+      Flooding or water accumulation, Road obstruction and Other.
+- [ ] Choosing **Other** reveals a required description field; submitting without
+      it is blocked; the text is saved and shown with the report.
+- [ ] Choosing any other category hides the description field and never sends it.
+- [ ] A report filed before this change still opens and shows its category.
 
 ## 4. Moderation (web, admin)
 
@@ -147,8 +153,8 @@ These cover most of the checklist below without manual clicking:
 
 ## 12. Errors and edge cases
 
-- [ ] Uploading a file larger than `MAX_UPLOAD_BYTES` is rejected clearly.
-- [ ] Uploading a non-image file is rejected.
+- [ ] Uploading a file larger than `MAX_UPLOAD_BYTES` is rejected clearly (**413**).
+- [ ] Uploading a non-image file is rejected (**415**).
 - [ ] Stopping the backend mid-submission shows a retryable error, and retrying works.
 - [ ] A very long description is rejected or truncated per the documented limits.
 - [ ] Requests past the rate limit receive **429** with a readable message.
@@ -188,3 +194,30 @@ Invoke-RestMethod "$api/api/map/reports?pageSize=5" | ConvertTo-Json -Depth 3
 ```
 
 Every call should return data, not an error envelope.
+
+### Automated suites
+
+```powershell
+# API (start the server first). Never point this at production data.
+$env:RW_API_BASE = "http://127.0.0.1:4000"
+node backend/tests/api_integration.mjs
+
+# Exercise the upload-size limit deterministically: start the API with a low
+# MAX_UPLOAD_BYTES and tell the suite about it, which enables the 413 check.
+$env:MAX_UPLOAD_BYTES = "1048576"; $env:RW_MAX_UPLOAD_MB = "1"
+node backend/tests/api_integration.mjs
+
+# Web (real browser via playwright-core + Edge; needs the API on :4000)
+cd web; node tests/e2e.mjs
+
+# Mobile: unit + widget tests are offline; analyze is clean by default.
+cd mobile; flutter analyze; flutter test
+
+# Optional: verify the mobile models against a *live* API's real payloads.
+flutter test test/live_contract_test.dart --dart-define=RW_LIVE_API=http://127.0.0.1:4000
+```
+
+The live contract test is read-only: it lists approved reports and the demo
+citizen's own reports, and asserts the mobile models parse the real responses
+(category, `categoryOther`, photo URLs, coordinates and statuses). It is skipped
+unless `RW_LIVE_API` is provided.

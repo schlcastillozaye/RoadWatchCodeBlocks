@@ -65,7 +65,7 @@ Two Railway services from this one repository:
    | `PUBLIC_BASE_URL` | `https://<api-service>.up.railway.app` | builds absolute photo URLs (needed by mobile) |
    | `STORAGE_DRIVER` | `local` | only `local` is implemented in PHP |
    | `STORAGE_LOCAL_DIR` | `/app/uploads` | must match the volume mount |
-   | `MAX_UPLOAD_BYTES` | `8388608` | 8 MB |
+   | `MAX_UPLOAD_BYTES` | `8388608` | 8 MB — enforced by the app; the image's `php.ini` keeps PHP's own limits above it so this is the error the client sees |
    | `SEED_ON_START` | `false` | set `true` once only if you want demo data |
 
    > 🔐 **The API refuses to boot in production if `JWT_ACCESS_SECRET` /
@@ -84,12 +84,22 @@ Two Railway services from this one repository:
    Service → **Settings → Volumes → New Volume**, mount path **`/app/uploads`**.
    Without it, uploaded photos are lost on every redeploy.
 
-6. **Apply the schema.** Choose ONE:
-   - **Pre-deploy command** (recommended): Service → Settings → Deploy →
-     **Pre-Deploy Command** = `php /app/database/migrate.php`.
-     `migrate.php` is idempotent (`CREATE TABLE IF NOT EXISTS`) — safe on every deploy.
-   - **One-off**: Service → **⋮ → Run a command** →
-     `php /app/database/migrate.php` (add `--seed` to load demo data once).
+6. **Schema.** Nothing to do — the image migrates on boot.
+
+   `backend/Dockerfile.php` runs `php database/migrate.php` before the server
+   starts (`RUN_MIGRATIONS`, default `true`; set `RUN_MIGRATIONS=false` to skip).
+   The migrator is safe to run repeatedly and only ever *adds*:
+
+   - `CREATE TABLE IF NOT EXISTS` for the base schema (`schema.sql`).
+   - Idempotent, backward-compatible **patches** that evolve an already-deployed
+     database (new enum values such as `ROAD_OBSTRUCTION`, new nullable columns
+     such as `Report.categoryOther`). It never drops a column or enumerates away
+     a value that existing rows use.
+
+   If a migration fails, the boot logs a warning and the service still starts;
+   check the deploy log and run `php /app/database/migrate.php` manually.
+
+   - Opt out with `RUN_MIGRATIONS=false` only if you manage the schema yourself.
    - **Never** run `--seed` (or `RESET_DATABASE`) against a database that holds real data.
 
 7. Deploy. Verify: `curl https://<api-service>.up.railway.app/health` →
@@ -97,9 +107,12 @@ Two Railway services from this one repository:
 
 ### Railway config files (already in the repo)
 
-- `backend/Dockerfile.php` — `php:8.2-cli`; installs `pdo_mysql` + `mbstring`
-  (`curl` ships with the official image and is used for OSM geocoding); runs
-  `php -S 0.0.0.0:$PORT -t public router.php`.
+- `backend/Dockerfile.php` — `php:8.2-cli`; installs `pdo_mysql`, `mbstring`
+  **and `curl`** (`curl` is required for OSM Nominatim / Google geocoding and for
+  the optional image-analysis API — `GET /health` reports `geocoding:
+  "unavailable"` if it is ever missing); a `php.ini` setting that keeps PHP's own
+  upload limits above `MAX_UPLOAD_BYTES`; runs `php database/migrate.php` on boot
+  (`RUN_MIGRATIONS`) and then `php -S 0.0.0.0:$PORT -t public router.php`.
 - `backend/.dockerignore` — excludes `.env`, `node_modules/`, `dist/`, `prisma/`,
   `tests/` and `uploads/` so no local secret or data is baked into the image.
 - `backend/railway.json` — Dockerfile builder + `/health` health check.
@@ -170,6 +183,12 @@ flutter build web --release     --dart-define=API_BASE_URL=https://<api-service>
   (`User`, `RefreshToken`, `Report`, `ReportPhoto`, `Assignment`, `StatusHistory`,
   `AuditLog`, `ImageAnalysisResult`, `ReferenceCounter`); `migrate.php` applies it
   idempotently.
+- **Already-deployed database:** `schema.sql` is all `CREATE TABLE IF NOT EXISTS`,
+  so it can never evolve an existing table. `migrate.php` therefore also applies
+  guarded **patches** (`rw_apply_patches`): new enum values and new nullable
+  columns are added only when missing, and existing rows are left untouched.
+  Verified on a database holding live reports — the row count was unchanged and
+  the new values/columns appeared.
 - **MySQL 8 / MariaDB compatible:** tables use `InnoDB`, `ENUM`, `JSON`,
   `DATETIME(3)`, `DOUBLE`, `TEXT`, `TINYINT(1)` and standard indexes/FKs.
   No stored procedures or `FULLTEXT` are used.
@@ -200,12 +219,14 @@ They are kept in the tree for reference; deleting them is a product decision
 ## 7. Post-deploy verification
 
 ```
-curl https://<api>.up.railway.app/health           # database: "up"
+curl https://<api>.up.railway.app/health           # database: "up", geocoding not "unavailable"
 curl https://<api>.up.railway.app/api/map/reports  # public approved reports
 ```
 
 - Log in on the web app (register a citizen, or seed demo data once).
 - Submit a report with a photo; confirm the photo URL loads.
+- Submit a report with category **Other** and confirm the description field is
+  required and the text shows in the report details, admin list and mobile app.
 - **Redeploy the API; confirm uploaded photos still load** (proves the volume persists).
 
 Use dedicated test accounts/reports; do **not** run destructive tests against real data.
@@ -220,12 +241,16 @@ Use dedicated test accounts/reports; do **not** run destructive tests against re
 | Full API integration suite (**103 checks**) | **PASS** | `node backend/tests/api_integration.mjs` → `103 passed, 0 failed` |
 | Clean-install schema on an empty database | **PASS** | `php database/migrate.php` on a fresh DB → 9 tables |
 | Migration idempotency (run twice) | **PASS** | second run exits 0, 9 tables |
+| Additive patches on a live database | **PASS** | `ROAD_OBSTRUCTION` + `Report.categoryOther` added; all 8 existing reports preserved |
 | Seed + repeat-seed (no duplication) | **PASS** | 5 users / 6 reports both runs |
 | PDO against MySQL **8.0.45** (Prisma-created data) | **PASS** | `database: up`; `/api/map/reports` → 4 items |
 | CORS preflight (allowed vs disallowed origin) | **PASS** | 204 + ACAO for allowed, no ACAO for disallowed |
 | Missing/bad DB config fails safely | **PASS** | `/health` → `database: down`; API → generic `DB_ERROR`, no secret leak |
-| Web app end-to-end (real browser) | **PASS** | `web/tests/e2e.mjs` → 7/7 scenarios |
-| Flutter `analyze` + `test` | **PASS** | `flutter analyze` clean; `flutter test` 12/12 |
+| Full API integration suite (**137 checks**, PHP 8.2 + cURL + fileinfo, `MAX_UPLOAD_BYTES=1 MB`) | **PASS** | `137 passed, 0 failed` — includes 7 issue categories, `categoryOther` rules, photo authorisation/integrity and the `413` size limit |
+| Full API integration suite (**136 checks**, PHP 8.5 without cURL/fileinfo) | **PASS** | `136 passed, 0 failed` — geocoding degrades to `available: false` with a clear reason; MIME check falls back to the declared type |
+| Private photo authorisation | **PASS** | pending photo: `401` anonymous, `401` other citizen, `200` owner/officer/admin; approved photo byte-identical + publicly cacheable |
+| Web app end-to-end (real browser) | **PASS** | `web/tests/e2e.mjs` → **11/11 scenarios** (includes the category picker + "Other" free text) |
+| Flutter `analyze` + `test` | **PASS** | `flutter analyze` clean; `flutter test` **33/33** |
 | **Container image build** (`docker build`) | **NOT TESTED / BLOCKED** | Docker is not installed in this environment |
 | **Actual Railway deployment** | **NOT TESTED** | requires a Railway account + the GitHub push (manual) |
 

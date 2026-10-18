@@ -91,6 +91,11 @@ async function main() {
     check('GET / returns service name', root.status === 200 && root.body?.name === 'RoadWatch API', JSON.stringify(root.body));
     const h = await api('GET', '/health');
     check('GET /health ok + database up', h.status === 200 && h.body?.database === 'up', JSON.stringify(h.body));
+    check(
+      'health reports storage + geocoding capability',
+      typeof h.body?.storage === 'string' && typeof h.body?.geocoding === 'string',
+      JSON.stringify(h.body)
+    );
   }
 
   // ---------------------------------------------------------------------
@@ -236,6 +241,66 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
+  section('Reports: issue categories (shared web/mobile rules)');
+  {
+    // The API validates a superset of the values the pickers offer so reports
+    // created before a value was retired keep round-tripping.
+    const ALL_CATEGORIES = ['POTHOLE', 'DAMAGED_PAVEMENT', 'ROAD_CRACK', 'FLOODING', 'DAMAGED_DRAINAGE', 'ROAD_OBSTRUCTION', 'OTHER'];
+    for (const cat of ALL_CATEGORIES) {
+      const extra = cat === 'OTHER' ? { categoryOther: 'Something not covered by the list' } : {};
+      const r = await api('POST', '/api/reports', {
+        token: citizenToken,
+        form: pngForm({ ...goodReport, title: `IT category ${cat}`, category: cat, ...extra }),
+      });
+      check(`category ${cat} accepted`, r.status === 201, `status=${r.status} ${JSON.stringify(r.body)}`);
+      check(`category ${cat} echoed in response`, r.body?.report?.category === cat, `got=${r.body?.report?.category}`);
+      await api('DELETE', `/api/reports/${r.body?.report?.id}`, { token: citizenToken });
+    }
+
+    // "Other" is only meaningful with an explanation.
+    const otherNoText = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({ ...goodReport, title: 'IT other without text', category: 'OTHER' }),
+    });
+    check('OTHER without categoryOther returns 422', otherNoText.status === 422, `status=${otherNoText.status}`);
+
+    const otherShort = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({ ...goodReport, title: 'IT other too short', category: 'OTHER', categoryOther: 'ab' }),
+    });
+    check('OTHER with too-short categoryOther returns 422', otherShort.status === 422, `status=${otherShort.status}`);
+
+    const otherOk = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({
+        ...goodReport,
+        title: 'IT other with text',
+        category: 'OTHER',
+        categoryOther: 'Overgrown hedge blocking the sidewalk',
+      }),
+    });
+    check('OTHER with categoryOther returns 201', otherOk.status === 201, `status=${otherOk.status}`);
+    check(
+      'OTHER description is stored and echoed back',
+      otherOk.body?.report?.categoryOther === 'Overgrown hedge blocking the sidewalk',
+      `got=${JSON.stringify(otherOk.body?.report?.categoryOther)}`
+    );
+    await api('DELETE', `/api/reports/${otherOk.body?.report?.id}`, { token: citizenToken });
+
+    // ...and is discarded for every other category (kept consistent, not just ignored).
+    const strayText = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({ ...goodReport, title: 'IT stray other text', category: 'POTHOLE', categoryOther: 'should be ignored' }),
+    });
+    check(
+      'categoryOther is cleared for a non-OTHER category',
+      strayText.status === 201 && strayText.body?.report?.categoryOther === null,
+      `status=${strayText.status} got=${JSON.stringify(strayText.body?.report?.categoryOther)}`
+    );
+    await api('DELETE', `/api/reports/${strayText.body?.report?.id}`, { token: citizenToken });
+  }
+
+  // ---------------------------------------------------------------------
   section('Reports: visibility & cross-user access');
   {
     const mine = await api('GET', '/api/reports/mine', { token: citizenToken });
@@ -308,8 +373,12 @@ async function main() {
     check('public map only returns APPROVED', (list.body?.items || []).every((r) => r.moderationStatus === 'APPROVED'));
     check('public map includes newly approved report', (list.body?.items || []).some((r) => r.id === reportId));
 
+    check('public map items expose the category', (list.body?.items || []).every((r) => typeof r.category === 'string' && r.category !== ''));
+
     const detail = await api('GET', `/api/map/reports/${reportId}`);
     check('map detail for approved 200', detail.status === 200 && detail.body?.report?.id === reportId, `status=${detail.status}`);
+    check('map detail exposes the category', detail.body?.report?.category === 'POTHOLE', `got=${detail.body?.report?.category}`);
+    check('map detail exposes categoryOther (null when unused)', detail.body?.report?.categoryOther === null, `got=${JSON.stringify(detail.body?.report?.categoryOther)}`);
 
     // Regression: a signed-in citizen must still be able to open an approved
     // map pin that belongs to someone else (previously returned 403).
@@ -347,6 +416,15 @@ async function main() {
     const rel = url ? new URL(url).pathname : '';
     const pub = await fetch(BASE + rel);
     check('approved photo is publicly fetchable', pub.status === 200, `status=${pub.status}`);
+    const pubType = pub.headers.get('content-type') || '';
+    const pubCache = pub.headers.get('cache-control') || '';
+    const pubBytes = Buffer.from(await pub.arrayBuffer());
+    check(
+      'approved photo is served as an image with byte-identical content',
+      pubType.startsWith('image/') && pubBytes.equals(PNG),
+      `type=${pubType} bytes=${pubBytes.length} (uploaded ${PNG.length})`
+    );
+    check('approved photo is publicly cacheable', pubCache.includes('public'), `cache-control=${pubCache}`);
 
     // Pending file must require auth.
     const pending = await api('POST', '/api/reports', {
@@ -359,7 +437,37 @@ async function main() {
     check('pending photo requires auth (401)', pAnon.status === 401, `status=${pAnon.status}`);
     const pOwner = await fetch(BASE + pRel, { headers: { Authorization: `Bearer ${citizenToken}` } });
     check('pending photo visible to owner', pOwner.status === 200, `status=${pOwner.status}`);
+    check(
+      'private photo is not publicly cacheable',
+      (pOwner.headers.get('cache-control') || '').includes('private'),
+      `cache-control=${pOwner.headers.get('cache-control')}`
+    );
+    const pOther = await fetch(BASE + pRel, { headers: { Authorization: `Bearer ${citizen2Token}` } });
+    check('pending photo hidden from another citizen (401)', pOther.status === 401, `status=${pOther.status}`);
+    const pAdmin = await fetch(BASE + pRel, { headers: { Authorization: `Bearer ${adminToken}` } });
+    check('pending photo visible to an admin (200)', pAdmin.status === 200, `status=${pAdmin.status}`);
+    const pOfficer = await fetch(BASE + pRel, { headers: { Authorization: `Bearer ${officer1Token}` } });
+    check('pending photo visible to a maintenance officer (200)', pOfficer.status === 200, `status=${pOfficer.status}`);
     await api('DELETE', `/api/reports/${pending.body?.report?.id}`, { token: citizenToken });
+
+    // Upload size. MAX_UPLOAD_BYTES is enforced by the application, so the check
+    // is asserted when the runner configures a low limit (RW_MAX_UPLOAD_MB) —
+    // see the "Configured upload limit" note in docs/deployment-checklist.md.
+    const maxMB = Number(process.env.RW_MAX_UPLOAD_MB || 0);
+    if (maxMB > 0) {
+      const oversized = Buffer.alloc(Math.ceil(maxMB * 1024 * 1024) + 64 * 1024, 7);
+      const fd = new FormData();
+      for (const [k, v] of Object.entries({ ...goodReport, title: 'IT oversized upload' })) fd.append(k, String(v));
+      fd.append('photos', new Blob([oversized], { type: 'image/png' }), 'oversized.png');
+      const tooBig = await api('POST', '/api/reports', { token: citizenToken, form: fd });
+      check(
+        `photo larger than the configured ${maxMB} MB limit is rejected with 413`,
+        tooBig.status === 413 && /too large/i.test(tooBig.body?.error?.message || ''),
+        `status=${tooBig.status} ${JSON.stringify(tooBig.body)}`
+      );
+    } else {
+      console.log('  (upload-size check skipped: set RW_MAX_UPLOAD_MB + MAX_UPLOAD_BYTES to exercise it)');
+    }
   }
 
   // ---------------------------------------------------------------------

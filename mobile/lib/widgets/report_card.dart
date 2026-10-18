@@ -16,6 +16,7 @@ class ReportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final cover = report.coverPhoto;
     return Material(
       color: Colors.transparent,
@@ -55,7 +56,9 @@ class ReportCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      report.referenceNo,
+                      '${report.categoryLabel} · ${report.referenceNo}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.caption(size: 11.5, color: AppColors.textMuted),
                     ),
                     const SizedBox(height: 8),
@@ -70,7 +73,7 @@ class ReportCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.place_outlined, size: 13, color: AppColors.textMuted),
+                        Icon(Icons.place_outlined, size: 13, color: AppColors.textMuted),
                         const SizedBox(width: 3),
                         Expanded(
                           child: Text(

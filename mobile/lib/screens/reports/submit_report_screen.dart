@@ -34,6 +34,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _description = TextEditingController();
+  final _categoryOther = TextEditingController();
   final _address = TextEditingController();
   final _picker = ImagePicker();
 
@@ -52,6 +53,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
   void dispose() {
     _title.dispose();
     _description.dispose();
+    _categoryOther.dispose();
     _address.dispose();
     super.dispose();
   }
@@ -131,6 +133,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
             title: _title.text.trim(),
             description: _description.text.trim(),
             category: _category,
+            categoryOther: _category == IssueCategory.other ? _categoryOther.text.trim() : null,
             priority: _priority,
             latitude: _location!.latitude,
             longitude: _location!.longitude,
@@ -175,7 +178,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
               width: 72,
               height: 72,
               decoration: BoxDecoration(color: AppColors.tintGreen, borderRadius: BorderRadius.circular(24)),
-              child: const Icon(Icons.check_rounded, size: 38, color: AppColors.statusGreen),
+              child: Icon(Icons.check_rounded, size: 38, color: AppColors.statusGreenInk),
             ),
             const SizedBox(height: 18),
             Text('Report submitted', style: AppTypography.display(size: 22), textAlign: TextAlign.center),
@@ -213,6 +216,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Scaffold(
       backgroundColor: AppColors.sheetBackground,
       appBar: AppBar(title: const Text('Report an issue')),
@@ -266,21 +270,49 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
               const SizedBox(height: 14),
               SectionCard(
                 title: 'Category',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final category in IssueCategory.values)
-                      ChoiceChip(
-                        selected: _category == category,
-                        onSelected: (_) => setState(() => _category = category),
-                        avatar: Icon(
-                          category.icon,
-                          size: 16,
-                          color: _category == category ? AppColors.onPrimary : AppColors.darkBlue,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final category in IssueCategory.selectable)
+                          ChoiceChip(
+                            selected: _category == category,
+                            onSelected: (_) => setState(() => _category = category),
+                            avatar: Icon(
+                              category.icon,
+                              size: 16,
+                              color: _category == category ? AppColors.onPrimary : AppColors.darkBlue,
+                            ),
+                            label: Text(category.label),
+                          ),
+                      ],
+                    ),
+                    // "Other" is only meaningful with an explanation, so the
+                    // field appears (and is required) only for that category.
+                    if (_category == IssueCategory.other) ...[
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        key: const Key('category-other-field'),
+                        controller: _categoryOther,
+                        textCapitalization: TextCapitalization.sentences,
+                        maxLength: IssueCategory.otherDescriptionMax,
+                        decoration: const InputDecoration(
+                          labelText: 'Describe the issue',
+                          hintText: 'e.g. Fallen tree blocking the whole lane',
                         ),
-                        label: Text(category.label),
+                        validator: (v) {
+                          if (_category != IssueCategory.other) return null;
+                          final value = v?.trim() ?? '';
+                          if (value.length < IssueCategory.otherDescriptionMin) {
+                            return 'Please describe the issue (at least ${IssueCategory.otherDescriptionMin} characters).';
+                          }
+                          return null;
+                        },
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -344,7 +376,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                     if (_location != null) ...[
                       Row(
                         children: [
-                          const Icon(Icons.place_rounded, size: 18, color: AppColors.darkBlue),
+                          Icon(Icons.place_rounded, size: 18, color: AppColors.brandAccent),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -384,7 +416,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                     value: _progress,
                     minHeight: 8,
                     backgroundColor: AppColors.lightAzure,
-                    valueColor: const AlwaysStoppedAnimation(AppColors.darkBlue),
+                    valueColor: AlwaysStoppedAnimation(AppColors.darkBlue),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -422,6 +454,7 @@ class _PhotoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -436,8 +469,14 @@ class _PhotoTile extends StatelessWidget {
             onTap: onRemove,
             child: Container(
               padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(color: AppColors.statusRed, shape: BoxShape.circle),
-              child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
+              decoration: BoxDecoration(color: AppColors.statusRed, shape: BoxShape.circle),
+              // `statusRed` is a light red in dark mode, so the glyph must darken
+              // rather than stay white.
+              child: Icon(
+                Icons.close_rounded,
+                size: 14,
+                color: AppColors.isDark ? AppColors.darkBlue : AppColors.white,
+              ),
             ),
           ),
         ),
@@ -454,6 +493,7 @@ class _AddPhotoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return PopupMenuButton<String>(
       onSelected: (value) => value == 'camera' ? onCamera() : onGallery(),
       position: PopupMenuPosition.under,
@@ -472,9 +512,9 @@ class _AddPhotoTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.add_a_photo_rounded, color: AppColors.darkBlue, size: 22),
+            Icon(Icons.add_a_photo_rounded, color: AppColors.brandAccent, size: 22),
             const SizedBox(height: 4),
-            Text('Add', style: AppTypography.caption(size: 11.5, weight: FontWeight.w600, color: AppColors.darkBlue)),
+            Text('Add', style: AppTypography.caption(size: 11.5, weight: FontWeight.w600, color: AppColors.brandAccent)),
           ],
         ),
       ),

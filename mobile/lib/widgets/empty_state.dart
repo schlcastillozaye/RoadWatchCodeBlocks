@@ -19,6 +19,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),

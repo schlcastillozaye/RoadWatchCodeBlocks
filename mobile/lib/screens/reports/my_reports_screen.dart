@@ -54,6 +54,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final provider = context.watch<MyReportsProvider>();
 
     return Scaffold(
@@ -76,7 +77,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.cloud_off_rounded, size: 15, color: AppColors.darkBlue),
+                  Icon(Icons.cloud_off_rounded, size: 15, color: AppColors.darkBlue),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -102,7 +103,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
 
   Widget _buildBody(MyReportsProvider provider) {
     if (provider.isLoading && provider.reports.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.darkBlue));
+      return Center(child: CircularProgressIndicator(color: AppColors.brandAccent));
     }
     if (provider.error != null && provider.reports.isEmpty) {
       return ErrorView(message: provider.error!, onRetry: () => provider.load(refresh: true));
@@ -122,7 +123,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
 
     return RefreshIndicator(
       onRefresh: () => provider.load(refresh: true),
-      color: AppColors.darkBlue,
+      color: AppColors.brandAccent,
       child: ListView.separated(
         controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
@@ -130,9 +131,9 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           if (index >= provider.reports.length) {
-            return const Padding(
+            return Padding(
               padding: EdgeInsets.symmetric(vertical: 18),
-              child: Center(child: CircularProgressIndicator(color: AppColors.darkBlue)),
+              child: Center(child: CircularProgressIndicator(color: AppColors.brandAccent)),
             );
           }
           final report = provider.reports[index];
@@ -159,8 +160,9 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.darkBlue,
         borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
       ),
@@ -204,6 +206,7 @@ class _Filters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return SizedBox(
       height: 54,
       child: ListView(

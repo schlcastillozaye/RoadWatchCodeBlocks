@@ -9,5 +9,8 @@ class BrandSurface extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => ColoredBox(color: AppColors.sheetBackground, child: child);
+  Widget build(BuildContext context) {
+    AppColors.syncTo(context);
+    return ColoredBox(color: AppColors.sheetBackground, child: child);
+  }
 }

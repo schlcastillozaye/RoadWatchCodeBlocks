@@ -11,18 +11,23 @@ class StatusColors {
 }
 
 /// Maps moderation status to brand-complementary functional colours.
+///
+/// The foreground is the *ink* variant of each status hue, not the fill hue:
+/// the fill colours are tuned for markers and fills, and as text on the tint
+/// behind them they fall below WCAG AA. The web platform made the same split
+/// (`--amber` vs `--amber-ink`); see `web/css/styles.css`.
 StatusColors moderationColors(ModerationStatus status) => switch (status) {
-      ModerationStatus.pendingReview => const StatusColors(AppColors.statusAmber, AppColors.tintAmber),
-      ModerationStatus.approved => const StatusColors(AppColors.statusGreen, AppColors.tintGreen),
-      ModerationStatus.rejected => const StatusColors(AppColors.statusRed, AppColors.tintRed),
+      ModerationStatus.pendingReview => StatusColors(AppColors.statusAmberInk, AppColors.tintAmber),
+      ModerationStatus.approved => StatusColors(AppColors.statusGreenInk, AppColors.tintGreen),
+      ModerationStatus.rejected => StatusColors(AppColors.statusRedInk, AppColors.tintRed),
     };
 
 /// Maps repair status to brand-complementary functional colours.
 StatusColors repairColors(RepairStatus status) => switch (status) {
-      RepairStatus.notAssigned => const StatusColors(AppColors.statusSlate, AppColors.tintSlate),
-      RepairStatus.awaitingMaintenance => const StatusColors(AppColors.statusBlue, AppColors.tintBlue),
-      RepairStatus.inProgress => const StatusColors(AppColors.statusAmber, AppColors.tintAmber),
-      RepairStatus.completed => const StatusColors(AppColors.statusGreen, AppColors.tintGreen),
+      RepairStatus.notAssigned => StatusColors(AppColors.statusSlate, AppColors.tintSlate),
+      RepairStatus.awaitingMaintenance => StatusColors(AppColors.statusBlueInk, AppColors.tintBlue),
+      RepairStatus.inProgress => StatusColors(AppColors.statusAmberInk, AppColors.tintAmber),
+      RepairStatus.completed => StatusColors(AppColors.statusGreenInk, AppColors.tintGreen),
     };
 
 IconData moderationIcon(ModerationStatus status) => switch (status) {

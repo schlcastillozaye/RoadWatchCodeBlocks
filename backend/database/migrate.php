@@ -48,6 +48,57 @@ function rw_split_statements(string $sql): array
     return array_values(array_filter($parts, static fn ($s) => $s !== ''));
 }
 
+function rw_column_type(PDO $pdo, string $table, string $column): string
+{
+    $stmt = $pdo->prepare(
+        'SELECT `COLUMN_TYPE` FROM `information_schema`.`COLUMNS`
+         WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = ? AND `COLUMN_NAME` = ?'
+    );
+    $stmt->execute([$table, $column]);
+    $type = $stmt->fetchColumn();
+    return $type === false ? '' : (string) $type;
+}
+
+/**
+ * Backward-compatible migrations for databases created by an older schema.
+ *
+ * `schema.sql` is written entirely with `CREATE TABLE IF NOT EXISTS`, which
+ * means it can never *evolve* a table that already exists: a new column or a
+ * new enum value only reaches fresh installs. Every additive change therefore
+ * needs a patch here. Each patch is guarded by an information_schema check and
+ * is safe to run repeatedly, and none of them drop data or remove a value.
+ *
+ * Rules for future patches:
+ *   - ADD COLUMN only when the column is absent.
+ *   - To widen an ENUM, restate ALL existing values plus the new one (a MODIFY
+ *     with a partial list would silently rewrite rows to '').
+ */
+function rw_apply_patches(PDO $pdo): void
+{
+    // 1. Report.categoryOther — the free-text explanation for category OTHER.
+    if (rw_column_type($pdo, 'Report', 'categoryOther') === '') {
+        $pdo->exec('ALTER TABLE `Report` ADD COLUMN `categoryOther` VARCHAR(300) NULL AFTER `category`');
+        echo "  + added Report.categoryOther\n";
+    }
+
+    // 2. Report.category must accept every value Schema::CATEGORIES validates.
+    if (!str_contains(rw_column_type($pdo, 'Report', 'category'), "'ROAD_OBSTRUCTION'")) {
+        $pdo->exec(
+            "ALTER TABLE `Report` MODIFY `category`
+             ENUM('POTHOLE','DAMAGED_PAVEMENT','ROAD_CRACK','FLOODING','DAMAGED_DRAINAGE','ROAD_OBSTRUCTION','OTHER') NOT NULL"
+        );
+        echo "  + widened Report.category enum\n";
+    }
+
+    // 3. Defensive: a report with no category (only possible on a database
+    //    predating the NOT NULL column) is normalised to OTHER so it keeps
+    //    rendering instead of breaking a NOT NULL write later.
+    $normalised = $pdo->exec("UPDATE `Report` SET `category` = 'OTHER' WHERE `category` IS NULL");
+    if ($normalised) {
+        echo "  + normalised {$normalised} report(s) with no category\n";
+    }
+}
+
 try {
     $pdo = Db::pdo();
     $dbName = (string) Db::scalar('SELECT DATABASE()');
@@ -60,6 +111,10 @@ try {
         $applied++;
     }
     echo "Applied {$applied} statement(s). Schema is up to date.\n";
+
+    echo "Applying backward-compatible patches...\n";
+    rw_apply_patches($pdo);
+    echo "Patches applied.\n";
 
     $tables = Db::all('SHOW TABLES');
     echo 'Tables now present: ' . count($tables) . "\n";

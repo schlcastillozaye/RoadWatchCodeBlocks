@@ -279,6 +279,84 @@ async function main() {
     }
   }
 
+  // --- Scenario C2: category picker incl. "Other" free text ---------------
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, storageState: citizenState || undefined });
+    const page = await context.newPage();
+    const col = makeCollector(page, 'C2');
+    const title = `E2E other category ${Date.now()}`;
+    const OTHER_TEXT = 'Fallen tree blocking the whole lane';
+    let reportPosts = 0;
+    page.on('request', (request) => {
+      if (request.url().endsWith('/api/reports') && request.method() === 'POST') reportPosts += 1;
+    });
+    try {
+      await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
+      if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
+      else await login(page, 'citizen@example.com', 'Citizen@12345');
+      await nav(page, '/submit-report', '#report-form');
+
+      // Every requested category must be offered, and nothing unexpected is.
+      const KNOWN = ['POTHOLE', 'ROAD_CRACK', 'DAMAGED_PAVEMENT', 'FLOODING', 'ROAD_OBSTRUCTION', 'DAMAGED_DRAINAGE', 'OTHER'];
+      const offered = await page.$$eval('#report-form select[name="category"] option', (els) => els.map((el) => el.value));
+      const requested = ['POTHOLE', 'ROAD_CRACK', 'DAMAGED_PAVEMENT', 'FLOODING', 'ROAD_OBSTRUCTION', 'OTHER'];
+      const categoriesOffered = requested.every((value) => offered.includes(value))
+        && offered.length > 0 && offered.every((value) => KNOWN.includes(value));
+
+      // The free-text field stays hidden until "Other" is selected.
+      const otherHiddenByDefault = await page.locator('#report-category-other-wrap').isHidden();
+      await page.selectOption('select[name="category"]', 'OTHER');
+      const otherRevealed = await page.locator('#report-category-other-wrap').isVisible();
+      const otherRequired = (await page.locator('#report-category-other').getAttribute('required')) !== null;
+
+      // Give the form a location and a photo so only the category rule can block it.
+      const locationMap = page.locator('#report-location-map');
+      await locationMap.waitFor({ state: 'visible', timeout: 10000 });
+      await locationMap.click({ position: { x: 140, y: 110 } });
+      await page.waitForFunction(() => !!document.querySelector('#lat-input').value, { timeout: 10000 });
+      await page.fill('input[name="title"]', title);
+      await page.fill('textarea[name="description"]', 'E2E automated submission using the Other category with a custom description.');
+      await page.setInputFiles('input[name="photos"]', pngPath);
+
+      // "Other" without a description must be blocked before any API call.
+      // (A synthetic submit bypasses the browser's own required-field check, so
+      // this exercises the form's validation, not the native one.)
+      await page.locator('#report-form').evaluate((form) => {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      });
+      await page.waitForSelector('#rw-notifications', { timeout: 5000 }).catch(() => {});
+      const blockedMessage = await page.locator('#rw-notifications').innerText().catch(() => '');
+      const blockedClientSide = reportPosts === 0 && blockedMessage.toLowerCase().includes('describe the issue');
+
+      // Supplying the description lets it through, and the API stores the text.
+      await page.fill('#report-category-other', OTHER_TEXT);
+      const submitted = page.waitForResponse((response) =>
+        response.url().endsWith('/api/reports') && response.request().method() === 'POST', { timeout: 20000 });
+      await page.click('#report-form button[type="submit"]');
+      const response = await submitted;
+      const payload = await response.json();
+      const stored = response.status() === 201
+        && payload.report?.category === 'OTHER'
+        && payload.report?.categoryOther === OTHER_TEXT;
+
+      // The tracking list must show the category the citizen picked, with the text.
+      await page.waitForSelector('#reports-list', { timeout: 15000 });
+      await page.waitForFunction((t) => document.body.innerText.includes(t), title, { timeout: 15000 });
+      const cardText = await page.locator('#reports-list article', { hasText: title }).first().innerText().catch(() => '');
+      const categoryShown = cardText.includes('Other') && cardText.includes(OTHER_TEXT);
+      const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
+
+      record('c2', 'Issue category picker, "Other" free text, and category display',
+        categoriesOffered && otherHiddenByDefault && otherRevealed && otherRequired
+          && blockedClientSide && stored && categoryShown && clean,
+        `  categories offered: ${offered.join(', ')} (expected subset ok: ${categoriesOffered})\n  "Other" field hidden then revealed: ${otherHiddenByDefault && otherRevealed} (required: ${otherRequired}), empty "Other" blocked before any request: ${blockedClientSide}, stored categoryOther: ${stored}, shown on tracking card: ${categoryShown}\n${col.summary()}`);
+    } catch (err) {
+      record('c2', 'Issue category picker, "Other" free text, and category display', false, `  ${err.message}\n${col.summary()}`);
+    } finally {
+      await context.close();
+    }
+  }
+
   // --- Scenario D: admin dashboard, audit, reports -------------------------
   {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });

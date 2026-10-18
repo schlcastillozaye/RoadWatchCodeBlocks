@@ -166,7 +166,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.sheetBackground,
           borderRadius: BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
         ),
@@ -214,7 +214,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.place_rounded, size: 20, color: AppColors.darkBlue),
+                            Icon(Icons.place_rounded, size: 20, color: AppColors.brandAccent),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
@@ -247,6 +247,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final provider = context.watch<MapProvider>();
 
     return Scaffold(
@@ -263,7 +264,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 
   Widget _buildBody(MapProvider provider) {
     if (provider.isLoading && provider.reports.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.darkBlue));
+      return Center(child: CircularProgressIndicator(color: AppColors.brandAccent));
     }
 
     final reports = provider.visibleReports;
@@ -334,7 +335,7 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 
     return RefreshIndicator(
       onRefresh: () => provider.load(refresh: true),
-      color: AppColors.darkBlue,
+      color: AppColors.brandAccent,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         itemCount: reports.length,
@@ -432,6 +433,7 @@ class _SearchPanelState extends State<_SearchPanel> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final origin = widget.provider.origin;
     final hasInput = _localController.text.isNotEmpty;
     final showClear = hasInput || widget.provider.hasSearch;
@@ -455,14 +457,14 @@ class _SearchPanelState extends State<_SearchPanel> {
                     onChanged: _onTextChanged,
                     decoration: InputDecoration(
                       hintText: 'Search an address or landmark',
-                      prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
+                      prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
                       suffixIcon: widget.provider.isSearching
-                          ? const Padding(
+                          ? Padding(
                               padding: EdgeInsets.all(14),
                               child: SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.darkBlue),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandAccent),
                               ),
                             )
                           : (showClear
@@ -488,15 +490,15 @@ class _SearchPanelState extends State<_SearchPanel> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: AppColors.lightAzure),
+                        borderSide: BorderSide(color: AppColors.lightAzure),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: AppColors.lightAzure),
+                        borderSide: BorderSide(color: AppColors.lightAzure),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: AppColors.darkBlue, width: 1.4),
+                        borderSide: BorderSide(color: AppColors.brandAccent, width: 1.4),
                       ),
                     ),
                   ),
@@ -516,7 +518,7 @@ class _SearchPanelState extends State<_SearchPanel> {
               padding: const EdgeInsets.only(top: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.near_me_rounded, size: 14, color: AppColors.darkBlue),
+                  Icon(Icons.near_me_rounded, size: 14, color: AppColors.brandAccent),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -566,6 +568,7 @@ class _RecentSearchesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
       margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
@@ -581,7 +584,7 @@ class _RecentSearchesList extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
-                const Icon(Icons.history_rounded, size: 16, color: AppColors.textMuted),
+                Icon(Icons.history_rounded, size: 16, color: AppColors.textMuted),
                 const SizedBox(width: 8),
                 Text('Recent searches', style: AppTypography.caption(size: 12, color: AppColors.textSecondary)),
                 const Spacer(),
@@ -592,7 +595,7 @@ class _RecentSearchesList extends StatelessWidget {
                     minimumSize: const Size(0, 0),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: Text('Clear all', style: AppTypography.caption(size: 12, color: AppColors.darkBlue)),
+                  child: Text('Clear all', style: AppTypography.caption(size: 12, color: AppColors.brandAccent)),
                 ),
               ],
             ),
@@ -617,7 +620,7 @@ class _RecentSearchesList extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.access_time_rounded, size: 18, color: AppColors.textMuted),
+                    Icon(Icons.access_time_rounded, size: 18, color: AppColors.textMuted),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -628,7 +631,7 @@ class _RecentSearchesList extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+                      icon: Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
                       onPressed: () => onRemove(search),
                       tooltip: 'Remove from recent',
                       padding: EdgeInsets.zero,
@@ -654,8 +657,9 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.darkBlue,
         borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
       ),
@@ -718,6 +722,7 @@ class _ViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
@@ -789,6 +794,7 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -824,6 +830,7 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -853,6 +860,7 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -882,6 +890,7 @@ class _MapReportTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -911,13 +920,13 @@ class _MapReportTile extends StatelessWidget {
                   children: [
                     Text(report.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.headingStyle(size: 14.5)),
                     const SizedBox(height: 3),
-                    Text(report.locationLabel, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    Text('${report.categoryLabel} · ${report.locationLabel}', maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: AppTypography.caption(size: 11.5)),
                     if (distance != null) ...[
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(Icons.near_me_rounded, size: 12, color: AppColors.textMuted),
+                          Icon(Icons.near_me_rounded, size: 12, color: AppColors.textMuted),
                           const SizedBox(width: 4),
                           Text(formatDistance(distance!), style: AppTypography.caption(size: 11)),
                         ],
@@ -944,6 +953,7 @@ class _PublicReportSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final provider = context.watch<MapProvider>();
     final detail = provider.selectedDetail;
 
@@ -953,14 +963,14 @@ class _PublicReportSheet extends StatelessWidget {
       maxChildSize: 0.92,
       expand: false,
       builder: (context, scrollController) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.sheetBackground,
           borderRadius: BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
         ),
         child: provider.isLoadingDetail || detail == null
-            ? const Padding(
+            ? Padding(
                 padding: EdgeInsets.all(40),
-                child: Center(child: CircularProgressIndicator(color: AppColors.darkBlue)),
+                child: Center(child: CircularProgressIndicator(color: AppColors.brandAccent)),
               )
             : ListView(
                 controller: scrollController,
@@ -986,6 +996,8 @@ class _PublicReportSheet extends StatelessWidget {
                             Text(detail.title, style: AppTypography.display(size: 20)),
                             const SizedBox(height: 3),
                             Text(detail.referenceNo, style: AppTypography.caption(size: 12)),
+                            const SizedBox(height: 3),
+                            Text(detail.categoryLabel, style: AppTypography.caption(size: 12)),
                           ],
                         ),
                       ),
@@ -1022,7 +1034,7 @@ class _PublicReportSheet extends StatelessWidget {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Icon(Icons.place_rounded, size: 17, color: AppColors.darkBlue),
+                      Icon(Icons.place_rounded, size: 17, color: AppColors.brandAccent),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(detail.locationLabel,
@@ -1034,7 +1046,7 @@ class _PublicReportSheet extends StatelessWidget {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        const Icon(Icons.check_circle_rounded, size: 17, color: AppColors.statusGreen),
+                        Icon(Icons.check_circle_rounded, size: 17, color: AppColors.statusGreenInk),
                         const SizedBox(width: 8),
                         Text('Completed ${formatDate(detail.completedAt)}',
                             style: AppTypography.bodyStyle(size: 13, color: AppColors.textSecondary)),

@@ -9,6 +9,7 @@ class MapReport {
     required this.referenceNo,
     required this.title,
     required this.category,
+    this.categoryOther,
     required this.priority,
     required this.latitude,
     required this.longitude,
@@ -24,6 +25,9 @@ class MapReport {
   final String referenceNo;
   final String title;
   final IssueCategory category;
+
+  /// Free-text description of the issue, only for [IssueCategory.other].
+  final String? categoryOther;
   final Priority priority;
   final double latitude;
   final double longitude;
@@ -39,11 +43,21 @@ class MapReport {
     return parts.isNotEmpty ? parts.join(' · ') : '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
   }
 
+  /// Category as shown to users, including an "Other" description when present.
+  String get categoryLabel {
+    final other = categoryOther?.trim() ?? '';
+    if (category == IssueCategory.other && other.isNotEmpty) {
+      return '${category.label} — $other';
+    }
+    return category.label;
+  }
+
   factory MapReport.fromJson(Map<String, dynamic> json) => MapReport(
         id: asString(json['id']),
         referenceNo: asString(json['referenceNo']),
         title: asString(json['title']),
         category: IssueCategory.fromApi(asStringOrNull(json['category'])),
+        categoryOther: asStringOrNull(json['categoryOther']),
         priority: Priority.fromApi(asStringOrNull(json['priority'])),
         latitude: asDouble(json['latitude']),
         longitude: asDouble(json['longitude']),

@@ -95,7 +95,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Withdraw', style: TextStyle(color: AppColors.statusRed)),
+            child: Text('Withdraw', style: TextStyle(color: AppColors.statusRedInk)),
           ),
         ],
       ),
@@ -120,6 +120,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Scaffold(
       backgroundColor: AppColors.sheetBackground,
       appBar: AppBar(
@@ -138,7 +139,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.darkBlue));
+      return Center(child: CircularProgressIndicator(color: AppColors.brandAccent));
     }
     if (_error != null) {
       return ErrorView(message: _error!, onRetry: _load);
@@ -147,7 +148,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      color: AppColors.darkBlue,
+      color: AppColors.brandAccent,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
@@ -161,9 +162,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.cancel_rounded, size: 18, color: AppColors.statusRed),
+                      Icon(Icons.cancel_rounded, size: 18, color: AppColors.statusRedInk),
                       const SizedBox(width: 8),
-                      Text('Rejected', style: AppTypography.headingStyle(size: 15, color: AppColors.statusRed)),
+                      Text('Rejected', style: AppTypography.headingStyle(size: 15, color: AppColors.statusRedInk)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -187,7 +188,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 const SizedBox(height: 14),
                 const Divider(),
                 const SizedBox(height: 12),
-                _KeyValue(label: 'Category', value: report.category.label, icon: report.category.icon),
+                _KeyValue(label: 'Category', value: report.categoryLabel, icon: report.category.icon),
                 _KeyValue(label: 'Priority', value: report.priority.label, icon: Icons.flag_rounded),
                 _KeyValue(label: 'Submitted', value: formatDateTime(report.createdAt), icon: Icons.schedule_rounded),
                 if (report.officerName != null)
@@ -232,6 +233,7 @@ class _Summary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.darkBlue,
@@ -347,6 +349,7 @@ class _LocationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final target = LatLng(report.latitude, report.longitude);
 
     return SectionCard(
@@ -378,7 +381,7 @@ class _LocationSection extends StatelessWidget {
                         height: 26,
                         child: Tooltip(
                           message: '${report.title} · ${report.referenceNo}',
-                          child: const MapStatusDot(color: AppColors.darkBlue, strokeColor: AppColors.lightBlue),
+                          child: MapStatusDot(color: AppColors.darkBlue, strokeColor: AppColors.lightBlue),
                         ),
                       ),
                     ],
@@ -391,7 +394,7 @@ class _LocationSection extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Icon(Icons.place_rounded, size: 17, color: AppColors.darkBlue),
+              Icon(Icons.place_rounded, size: 17, color: AppColors.brandAccent),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -446,6 +449,7 @@ class _TimelineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final color = switch (entry.type) {
       'MODERATION' => AppColors.statusGreen,
       'ASSIGNMENT' => AppColors.statusBlue,
@@ -515,6 +519,7 @@ class _KeyValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(

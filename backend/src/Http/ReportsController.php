@@ -28,6 +28,26 @@ class ReportsController
         $title = Validate::string($body['title'] ?? null, 'title', true, 4, 160, 'Title must be at least 4 characters');
         $description = Validate::string($body['description'] ?? null, 'description', true, 10, 4000, 'Please describe the issue (min 10 characters)');
         $category = Validate::enum($body['category'] ?? null, 'category', Schema::CATEGORIES);
+        // "Other" is only meaningful with an explanation, so the free text is
+        // required for that category and discarded (forced to null) for every
+        // other one — the two clients apply the identical rule.
+        $categoryOther = Validate::string(
+            $body['categoryOther'] ?? null,
+            'categoryOther',
+            false,
+            0,
+            Schema::CATEGORY_OTHER_MAX
+        );
+        if ($category === Schema::CATEGORY_OTHER) {
+            if ($categoryOther === null || mb_strlen($categoryOther) < Schema::CATEGORY_OTHER_MIN) {
+                Validate::fail(
+                    'categoryOther',
+                    'Please describe the issue when the category is Other (min ' . Schema::CATEGORY_OTHER_MIN . ' characters).'
+                );
+            }
+        } else {
+            $categoryOther = null;
+        }
         $latitude = Validate::number($body['latitude'] ?? null, 'latitude', -90, 90);
         $longitude = Validate::number($body['longitude'] ?? null, 'longitude', -180, 180);
         $addressText = Validate::string($body['addressText'] ?? null, 'addressText', false, 0, 500);
@@ -38,6 +58,7 @@ class ReportsController
             'title' => $title,
             'description' => $description,
             'category' => $category,
+            'categoryOther' => $categoryOther,
             'latitude' => $latitude,
             'longitude' => $longitude,
             'addressText' => $addressText,

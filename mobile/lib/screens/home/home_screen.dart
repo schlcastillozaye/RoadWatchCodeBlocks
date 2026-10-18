@@ -11,6 +11,7 @@ import '../../widgets/brand_logo.dart';
 import '../../widgets/brand_surface.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/report_card.dart';
+import '../../widgets/theme_toggle.dart';
 import '../reports/report_detail_screen.dart';
 import '../reports/submit_report_screen.dart';
 
@@ -44,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final auth = context.watch<AuthProvider>();
     final reports = context.watch<MyReportsProvider>();
     final user = auth.user;
@@ -59,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return BrandSurface(
       child: RefreshIndicator(
         onRefresh: () => context.read<MyReportsProvider>().load(refresh: true),
-        color: AppColors.darkBlue,
+        color: AppColors.brandAccent,
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _Header(firstName: firstName, user: user)),
@@ -96,10 +98,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             if (reports.isLoading && reports.reports.isEmpty)
-              const SliverToBoxAdapter(
+              SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator(color: AppColors.darkBlue)),
+                  child: Center(child: CircularProgressIndicator(color: AppColors.brandAccent)),
                 ),
               )
             else if (reports.reports.isEmpty)
@@ -148,8 +150,9 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.darkBlue,
         borderRadius: BorderRadius.only(bottomLeft: Radius.circular(32), bottomRight: Radius.circular(32)),
       ),
@@ -159,7 +162,16 @@ class _Header extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(padding: EdgeInsets.only(top: 12), child: BrandLogo(onDark: true, size: LogoSize.small)),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                children: const [
+                  BrandLogo(onDark: true, size: LogoSize.small),
+                  Spacer(),
+                  ThemeToggleButton(onDark: true),
+                ],
+              ),
+            ),
             const SizedBox(height: 22),
             Text('Hello, $firstName 👋', style: AppTypography.display(size: 26, color: AppColors.onPrimary)),
             const SizedBox(height: 4),
@@ -181,6 +193,7 @@ class _PrimaryCta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -189,7 +202,7 @@ class _PrimaryCta extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               colors: [AppColors.lightBlue, Color(0xFFE3F1FF)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -203,7 +216,7 @@ class _PrimaryCta extends StatelessWidget {
                 width: 54,
                 height: 54,
                 decoration: BoxDecoration(color: AppColors.darkBlue, borderRadius: BorderRadius.circular(18)),
-                child: const Icon(Icons.add_a_photo_rounded, color: AppColors.lightBlue, size: 26),
+                child: Icon(Icons.add_a_photo_rounded, color: AppColors.lightBlue, size: 26),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -219,7 +232,7 @@ class _PrimaryCta extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_rounded, color: AppColors.darkBlue),
+              Icon(Icons.arrow_forward_rounded, color: AppColors.darkBlue),
             ],
           ),
         ),
@@ -238,15 +251,16 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Row(
       children: [
-        _StatTile(label: 'Total', value: total, color: AppColors.darkBlue),
+        _StatTile(label: 'Total', value: total, color: AppColors.textPrimary),
         const SizedBox(width: 10),
-        _StatTile(label: 'Pending', value: pending, color: AppColors.statusAmber),
+        _StatTile(label: 'Pending', value: pending, color: AppColors.statusAmberInk),
         const SizedBox(width: 10),
-        _StatTile(label: 'Repairing', value: inProgress, color: AppColors.statusBlue),
+        _StatTile(label: 'Repairing', value: inProgress, color: AppColors.statusBlueInk),
         const SizedBox(width: 10),
-        _StatTile(label: 'Done', value: completed, color: AppColors.statusGreen),
+        _StatTile(label: 'Done', value: completed, color: AppColors.statusGreenInk),
       ],
     );
   }
@@ -261,6 +275,7 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -311,6 +326,7 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Expanded(
       child: Material(
         color: Colors.transparent,
@@ -349,6 +365,7 @@ class _QuickAction extends StatelessWidget {
 class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
       child: Column(

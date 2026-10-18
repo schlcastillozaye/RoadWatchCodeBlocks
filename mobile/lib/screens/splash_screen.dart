@@ -9,6 +9,7 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Scaffold(
       backgroundColor: AppColors.darkBlue,
       body: Center(
@@ -17,7 +18,7 @@ class SplashScreen extends StatelessWidget {
           children: [
             const CodeBlocksMark(size: 34, onDark: true),
             const SizedBox(height: 28),
-            const SizedBox(
+            SizedBox(
               width: 26,
               height: 26,
               child: CircularProgressIndicator(strokeWidth: 2.4, color: AppColors.lightBlue),

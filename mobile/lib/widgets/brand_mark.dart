@@ -17,8 +17,14 @@ class CodeBlocksMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final blockColor = onDark ? AppColors.lightBlue : AppColors.darkBlue;
-    final accentColor = onDark ? AppColors.lightYellow : AppColors.lightAzure;
+    AppColors.syncTo(context);
+
+    // On a dark sheet the navy mark disappears, so the "light background"
+    // variant flips to the sky/cream pairing — the same fix the web app applied
+    // in `bcdfe60` (`.rw-brand-lockup--light` under `data-theme='dark'`).
+    final lightOnLightBackground = AppColors.isDark;
+    final blockColor = onDark || lightOnLightBackground ? AppColors.lightBlue : AppColors.darkBlue;
+    final accentColor = onDark || lightOnLightBackground ? AppColors.lightYellow : AppColors.lightAzure;
     final gap = size * 0.16;
     final radius = size * 0.32;
     final accent = size * 0.62;

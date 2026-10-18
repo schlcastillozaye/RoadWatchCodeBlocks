@@ -31,7 +31,7 @@ TileLayer roadwatchTileLayer() => TileLayer(
 /// Attribution box — required by the OpenStreetMap tile usage policy.
 Widget roadwatchAttribution() => SimpleAttributionWidget(
       backgroundColor: AppColors.cardSurface.withValues(alpha: 0.9),
-      source: const Text(
+      source: Text(
         kOsmAttributionText,
         style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
       ),
@@ -59,6 +59,7 @@ class MapStatusDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
       width: size,
       height: size,
@@ -85,9 +86,12 @@ class MapSearchPoint extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => MapStatusDot(
-        color: AppColors.darkBlue,
-        strokeColor: AppColors.lightBlue,
-        size: size,
-      );
+  Widget build(BuildContext context) {
+    AppColors.syncTo(context);
+    return MapStatusDot(
+      color: AppColors.darkBlue,
+      strokeColor: AppColors.lightBlue,
+      size: size,
+    );
+  }
 }

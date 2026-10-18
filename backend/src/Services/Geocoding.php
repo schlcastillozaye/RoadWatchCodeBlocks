@@ -21,13 +21,33 @@ class Geocoding
         'RoadWatch/1.0 (road issue reporting; +https://github.com/schlcastillozaye/RoadWatchCodeBlocks)';
     private const NOMINATIM_MIN_INTERVAL_MS = 1000;
 
+    /** Reason returned when the host has no HTTP client (PHP cURL missing). */
+    private const NO_HTTP_REASON =
+        'Address lookup is not available on this server: the PHP cURL extension is not installed.';
+
     public static function provider(): string
     {
         return Config::googleMapsServerKey() !== '' ? 'google' : 'nominatim';
     }
 
+    /** Both geocoding providers require PHP cURL — surface that rather than
+     *  failing on an undefined function for every request. */
+    public static function httpAvailable(): bool
+    {
+        return function_exists('curl_init');
+    }
+
+    /** Provider name for diagnostics, or "unavailable" when cURL is missing. */
+    public static function status(): string
+    {
+        return self::httpAvailable() ? self::provider() : 'unavailable';
+    }
+
     public static function reverse(float $lat, float $lng): array
     {
+        if (!self::httpAvailable()) {
+            return ['available' => false, 'address' => null, 'areaLabel' => null, 'reason' => self::NO_HTTP_REASON];
+        }
         try {
             if (self::provider() === 'google') {
                 return self::googleReverse($lat, $lng);
@@ -41,6 +61,9 @@ class Geocoding
 
     public static function search(string $query, int $limit = 5): array
     {
+        if (!self::httpAvailable()) {
+            return ['available' => false, 'results' => [], 'reason' => self::NO_HTTP_REASON];
+        }
         try {
             if (self::provider() === 'google') {
                 return self::googleSearch($query, $limit);

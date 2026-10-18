@@ -23,13 +23,17 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
+
     final (markSize, titleSize, gap) = switch (size) {
       LogoSize.small => (18.0, 18.0, 10.0),
       LogoSize.medium => (24.0, 26.0, 12.0),
       LogoSize.large => (34.0, 40.0, 16.0),
     };
 
-    final titleColor = onDark ? AppColors.onPrimary : AppColors.darkBlue;
+    // `textPrimary` is the navy ink in light mode and the near-white ink in
+    // dark mode, so the wordmark stays legible in both.
+    final titleColor = onDark ? AppColors.onPrimary : AppColors.textPrimary;
     final subtitleColor = onDark ? AppColors.lightBlue : AppColors.textSecondary;
 
     return Row(

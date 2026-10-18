@@ -23,11 +23,22 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
+
+    // The spinner has to contrast with the button fill. In dark mode the
+    // primary button is inverted to sky-on-navy (see AppTheme), and a secondary
+    // button is transparent, so the old `onPrimary` spinner was invisible in
+    // both cases.
+    final spinnerColor = switch (variant) {
+      AppButtonVariant.primary => AppColors.isDark ? AppColors.darkBlue : AppColors.onPrimary,
+      AppButtonVariant.secondary => AppColors.textPrimary,
+    };
+
     final child = loading
-        ? const SizedBox(
+        ? SizedBox(
             height: 20,
             width: 20,
-            child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.onPrimary),
+            child: CircularProgressIndicator(strokeWidth: 2.2, color: spinnerColor),
           )
         : Row(
             mainAxisSize: MainAxisSize.min,

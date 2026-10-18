@@ -16,7 +16,9 @@ class ImageProcessing
 {
     public static function enabled(): bool
     {
-        return Config::imageProcessingEnabled()
+        // cURL is required to reach the analysis API at all.
+        return function_exists('curl_init')
+            && Config::imageProcessingEnabled()
             && Config::imageProcessingProvider() !== 'none'
             && Config::imageProcessingApiUrl() !== '';
     }
@@ -68,6 +70,10 @@ class ImageProcessing
     /** @return array{provider:string,status:string,result?:mixed,confidence?:?float,error?:?string} */
     private static function call(string $path, array $body): array
     {
+        if (!function_exists('curl_init')) {
+            return ['provider' => self::name(), 'status' => 'FAILED', 'error' => 'PHP cURL is not installed; analysis was skipped.'];
+        }
+
         $url = rtrim(Config::imageProcessingApiUrl(), '/') . $path;
         $headers = ['Content-Type: application/json'];
         $key = Config::imageProcessingApiKey();

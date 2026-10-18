@@ -13,14 +13,26 @@ class CategoryBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
+
+    // A 55% sky tile is a mid-tone blue: navy icons on it read poorly against a
+    // dark sheet, so dark mode uses a faint wash with the sky colour itself.
+    final tileColor = AppColors.isDark
+        ? AppColors.lightBlue.withValues(alpha: 0.18)
+        : AppColors.lightBlue.withValues(alpha: 0.55);
+
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: AppColors.lightBlue.withValues(alpha: 0.55),
+        color: tileColor,
         borderRadius: BorderRadius.circular(size * 0.32),
       ),
-      child: Icon(category.icon, size: size * 0.5, color: AppColors.darkBlue),
+      child: Icon(
+        category.icon,
+        size: size * 0.5,
+        color: AppColors.isDark ? AppColors.lightBlue : AppColors.darkBlue,
+      ),
     );
   }
 }
@@ -32,10 +44,14 @@ class PriorityPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
+
+    // Ink variants: the fill colours are too dark to be legible as text on the
+    // tints behind them (the web platform made the same split).
     final color = switch (priority) {
-      Priority.urgent => AppColors.statusRed,
-      Priority.high => AppColors.statusAmber,
-      Priority.medium => AppColors.statusBlue,
+      Priority.urgent => AppColors.statusRedInk,
+      Priority.high => AppColors.statusAmberInk,
+      Priority.medium => AppColors.statusBlueInk,
       Priority.low => AppColors.statusSlate,
     };
     final bg = switch (priority) {

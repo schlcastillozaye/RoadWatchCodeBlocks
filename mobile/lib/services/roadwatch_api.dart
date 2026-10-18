@@ -123,6 +123,7 @@ class RoadWatchApi {
     required String title,
     required String description,
     required IssueCategory category,
+    String? categoryOther,
     required double latitude,
     required double longitude,
     String? addressText,
@@ -137,6 +138,10 @@ class RoadWatchApi {
         'title': title,
         'description': description,
         'category': category.api,
+        // Only "Other" carries a free-text description; the API rejects a stray
+        // value for any other category, so the client never sends one.
+        if (category == IssueCategory.other && categoryOther != null && categoryOther.isNotEmpty)
+          'categoryOther': categoryOther,
         'latitude': latitude.toString(),
         'longitude': longitude.toString(),
         if (addressText != null && addressText.isNotEmpty) 'addressText': addressText,

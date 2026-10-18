@@ -9,6 +9,7 @@ class RoadReport {
     required this.title,
     required this.description,
     required this.category,
+    this.categoryOther,
     required this.priority,
     required this.latitude,
     required this.longitude,
@@ -35,6 +36,9 @@ class RoadReport {
   final String title;
   final String description;
   final IssueCategory category;
+
+  /// Free-text description of the issue, only for [IssueCategory.other].
+  final String? categoryOther;
   final Priority priority;
   final double latitude;
   final double longitude;
@@ -65,6 +69,16 @@ class RoadReport {
     return '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
   }
 
+  /// Category as shown to users: `Other — <description>` when the reporter
+  /// described the issue, the plain category label otherwise.
+  String get categoryLabel {
+    final other = categoryOther?.trim() ?? '';
+    if (category == IssueCategory.other && other.isNotEmpty) {
+      return '${category.label} — $other';
+    }
+    return category.label;
+  }
+
   List<ReportPhoto> photosOf(PhotoKind kind) => photos.where((p) => p.kind == kind).toList();
 
   ReportPhoto? get coverPhoto {
@@ -79,6 +93,7 @@ class RoadReport {
         title: asString(json['title']),
         description: asString(json['description']),
         category: IssueCategory.fromApi(asStringOrNull(json['category'])),
+        categoryOther: asStringOrNull(json['categoryOther']),
         priority: Priority.fromApi(asStringOrNull(json['priority'])),
         latitude: asDouble(json['latitude']),
         longitude: asDouble(json['longitude']),
@@ -106,6 +121,7 @@ class RoadReport {
         'title': title,
         'description': description,
         'category': category.api,
+        'categoryOther': categoryOther,
         'priority': priority.api,
         'latitude': latitude,
         'longitude': longitude,

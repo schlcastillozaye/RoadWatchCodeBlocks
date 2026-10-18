@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/brand_logo.dart';
+import '../../widgets/theme_toggle.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -57,11 +58,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _showError(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.statusRed));
+      // See LoginScreen._showError: the red fill inverts in dark mode.
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: AppTypography.bodyStyle(
+              size: 14,
+              color: AppColors.isDark ? AppColors.darkBlue : AppColors.white,
+            ),
+          ),
+          backgroundColor: AppColors.statusRed,
+        ),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final busy = context.watch<AuthProvider>().isBusy;
 
     return Scaffold(
@@ -69,6 +83,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         title: const Text('Create account'),
         backgroundColor: AppColors.darkBlue,
+        actions: const [ThemeToggleButton(onDark: true), SizedBox(width: 6)],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

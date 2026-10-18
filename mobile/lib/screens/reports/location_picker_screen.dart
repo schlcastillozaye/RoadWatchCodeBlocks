@@ -175,6 +175,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Scaffold(
       backgroundColor: AppColors.sheetBackground,
       appBar: AppBar(title: const Text('Confirm location')),
@@ -228,7 +229,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     BoxShadow(color: AppColors.darkBlue.withValues(alpha: 0.25), blurRadius: 10, offset: const Offset(0, 4)),
                   ],
                 ),
-                child: const Icon(Icons.place_rounded, color: AppColors.lightBlue, size: 22),
+                child: Icon(Icons.place_rounded, color: AppColors.lightBlue, size: 22),
               ),
             ),
           ),
@@ -253,7 +254,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   Widget _buildFooter() {
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.cardSurface,
         borderRadius: BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
         border: Border(top: BorderSide(color: AppColors.lightAzure)),
@@ -267,7 +268,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.place_rounded, size: 18, color: AppColors.darkBlue),
+                  Icon(Icons.place_rounded, size: 18, color: AppColors.brandAccent),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -289,7 +290,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               else
                 Text(
                   _address ?? (_notice ?? 'Address lookup unavailable — coordinates will be used.'),
-                  style: AppTypography.caption(size: 12, color: _notice != null ? AppColors.statusAmber : AppColors.textMuted),
+                  style: AppTypography.caption(size: 12, color: _notice != null ? AppColors.statusAmberInk : AppColors.textMuted),
                 ),
               const SizedBox(height: 14),
               AppButton(

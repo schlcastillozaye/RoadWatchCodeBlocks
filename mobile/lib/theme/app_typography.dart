@@ -15,14 +15,14 @@ class AppTypography {
   static TextStyle display({
     double size = 40,
     double weight = 700,
-    Color color = AppColors.textPrimary,
+    Color? color,
     double height = 1.1,
     double letterSpacing = -0.5,
   }) {
     return TextStyle(
       fontFamily: heading,
       fontSize: size,
-      color: color,
+      color: color ?? AppColors.textPrimary,
       height: height,
       letterSpacing: letterSpacing,
       fontWeight: FontWeight.w700,
@@ -33,14 +33,14 @@ class AppTypography {
   static TextStyle headingStyle({
     double size = 20,
     double weight = 700,
-    Color color = AppColors.textPrimary,
+    Color? color,
     double height = 1.2,
   }) => display(size: size, weight: weight, color: color, height: height, letterSpacing: -0.2);
 
-  static TextStyle button({double size = 15, Color color = AppColors.onPrimary}) => display(
+  static TextStyle button({double size = 15, Color? color}) => display(
         size: size,
         weight: 700,
-        color: color,
+        color: color ?? AppColors.onPrimary,
         height: 1.0,
         letterSpacing: 0.2,
       );
@@ -48,19 +48,19 @@ class AppTypography {
   static TextStyle bodyStyle({
     double size = 16,
     FontWeight weight = FontWeight.w400,
-    Color color = AppColors.textPrimary,
+    Color? color,
     double height = 1.45,
   }) =>
       TextStyle(
         fontFamily: body,
         fontSize: size,
         fontWeight: weight,
-        color: color,
+        color: color ?? AppColors.textPrimary,
         height: height,
       );
 
-  static TextStyle caption({Color color = AppColors.textMuted, double size = 13, FontWeight weight = FontWeight.w500}) =>
-      TextStyle(fontFamily: body, fontSize: size, fontWeight: weight, color: color, height: 1.35);
+  static TextStyle caption({Color? color, double size = 13, FontWeight weight = FontWeight.w500}) =>
+      TextStyle(fontFamily: body, fontSize: size, fontWeight: weight, color: color ?? AppColors.textMuted, height: 1.35);
 
   /// Builds the Material [TextTheme] from the brand styles.
   static TextTheme textTheme() {

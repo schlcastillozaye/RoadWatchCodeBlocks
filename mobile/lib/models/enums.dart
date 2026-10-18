@@ -33,7 +33,29 @@ enum IssueCategory {
   roadCrack,
   flooding,
   damagedDrainage,
+  roadObstruction,
   other;
+
+  /// Values offered when submitting a report, in display order.
+  ///
+  /// Mirrors the web picker and the six categories in the specification.
+  /// [damagedDrainage] predates the current list and is kept selectable
+  /// (and always renderable) so reports filed before it was retired — and the
+  /// API's validation list, which is a superset — stay consistent.
+  static const List<IssueCategory> selectable = [
+    IssueCategory.pothole,
+    IssueCategory.roadCrack,
+    IssueCategory.damagedPavement,
+    IssueCategory.flooding,
+    IssueCategory.roadObstruction,
+    IssueCategory.damagedDrainage,
+    IssueCategory.other,
+  ];
+
+  /// Bounds for the free text required when [other] is selected. Mirrored by
+  /// the API (`Schema::CATEGORY_OTHER_MIN`/`MAX`) and the web form.
+  static const int otherDescriptionMin = 5;
+  static const int otherDescriptionMax = 300;
 
   static IssueCategory fromApi(String? value) => switch (value) {
         'POTHOLE' => IssueCategory.pothole,
@@ -41,6 +63,7 @@ enum IssueCategory {
         'ROAD_CRACK' => IssueCategory.roadCrack,
         'FLOODING' => IssueCategory.flooding,
         'DAMAGED_DRAINAGE' => IssueCategory.damagedDrainage,
+        'ROAD_OBSTRUCTION' => IssueCategory.roadObstruction,
         _ => IssueCategory.other,
       };
 
@@ -50,16 +73,18 @@ enum IssueCategory {
         IssueCategory.roadCrack => 'ROAD_CRACK',
         IssueCategory.flooding => 'FLOODING',
         IssueCategory.damagedDrainage => 'DAMAGED_DRAINAGE',
+        IssueCategory.roadObstruction => 'ROAD_OBSTRUCTION',
         IssueCategory.other => 'OTHER',
       };
 
   String get label => switch (this) {
         IssueCategory.pothole => 'Pothole',
         IssueCategory.damagedPavement => 'Damaged pavement',
-        IssueCategory.roadCrack => 'Road crack',
-        IssueCategory.flooding => 'Flooding',
+        IssueCategory.roadCrack => 'Road cracks',
+        IssueCategory.flooding => 'Flooding or water accumulation',
         IssueCategory.damagedDrainage => 'Damaged drainage',
-        IssueCategory.other => 'Other road issue',
+        IssueCategory.roadObstruction => 'Road obstruction',
+        IssueCategory.other => 'Other',
       };
 
   IconData get icon => switch (this) {
@@ -68,6 +93,7 @@ enum IssueCategory {
         IssueCategory.roadCrack => Icons.timeline,
         IssueCategory.flooding => Icons.water_rounded,
         IssueCategory.damagedDrainage => Icons.water_damage_rounded,
+        IssueCategory.roadObstruction => Icons.construction_rounded,
         IssueCategory.other => Icons.flag_rounded,
       };
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/enums.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import '../theme/status_theme.dart';
 
@@ -13,6 +14,7 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     final (label, icon, colors) = moderation != null
         ? (moderation!.label, moderationIcon(moderation!), moderationColors(moderation!))
         : (repair!.label, repairIcon(repair!), repairColors(repair!));

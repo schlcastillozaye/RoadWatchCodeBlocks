@@ -21,6 +21,7 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    AppColors.syncTo(context);
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(

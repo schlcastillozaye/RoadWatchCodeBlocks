@@ -20,20 +20,30 @@ FROM php:8.2-cli
 #  PHP extensions the PHP backend actually uses:
 #    - pdo_mysql : all database access (Support/Db.php)
 #    - mbstring  : mb_strlen / mb_substr (validation + search)
-#    - curl      : outbound HTTP for OSM Nominatim geocoding (Services/Geocoding.php)
+#    - curl      : outbound HTTP for OSM Nominatim / Google geocoding
+#                  (Services/Geocoding.php) and the optional image-analysis API
+#                  (Services/ImageProcessing.php). Without it both services
+#                  degrade to "unavailable", so it MUST be installed.
 #    - fileinfo  : MIME sniffing on upload (already in the base image)
 #  No GD/Imagick: image dimensions use core getimagesizefromstring().
 # ---------------------------------------------------------------------------
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libonig-dev \
- && docker-php-ext-install pdo_mysql mbstring \
- && docker-php-ext-enable pdo_mysql mbstring \
+ && apt-get install -y --no-install-recommends libonig-dev libcurl4-openssl-dev \
+ && docker-php-ext-install pdo_mysql mbstring curl \
+ && docker-php-ext-enable pdo_mysql mbstring curl \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Application source (context = ./backend).
 COPY . /app
+
+# Upload limits must sit ABOVE the application's MAX_UPLOAD_BYTES (default
+# 8 MB), which ReportService enforces so the client gets the documented 413
+# "File too large" error. If PHP's own limits were lower, an oversized upload
+# would be swallowed before the app ran and surface as a confusing
+# "at least one photo is required" error instead.
+COPY php.ini /usr/local/etc/php/conf.d/roadwatch-uploads.ini
 
 # Uploads directory. On Railway this must be a mounted volume so files survive
 # redeploys; see docs/deployment-checklist.md.
@@ -43,10 +53,18 @@ ENV PORT=4000 \
     NODE_ENV=production \
     STORAGE_DRIVER=local \
     STORAGE_LOCAL_DIR=/app/uploads \
+    RUN_MIGRATIONS=true \
     PHP_CLI_SERVER_WORKERS=4
 
 EXPOSE 4000
 
 # $PORT is injected by Railway. NODE_ENV=production requires real JWT secrets
 # and DATABASE_URL to be provided as service variables.
-CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-4000} -t public router.php"]
+#
+# The schema is applied on boot, mirroring what docker-entrypoint.sh does for the
+# legacy Node service: `database/migrate.php` is idempotent (CREATE TABLE IF NOT
+# EXISTS plus guarded ADD COLUMN / MODIFY patches), so it is safe to run on every
+# start and is what delivers additive migrations such as Report.categoryOther to
+# an already-deployed database. A failure is logged and the server starts anyway
+# so /health can report the problem. Set RUN_MIGRATIONS=false to skip.
+CMD ["sh", "-c", "if [ \"${RUN_MIGRATIONS:-true}\" = \"true\" ]; then echo '[entrypoint] Applying schema...'; php database/migrate.php || echo '[entrypoint] WARN: migration failed; starting anyway so /health can report it.'; fi; exec php -S 0.0.0.0:${PORT:-4000} -t public router.php"]
