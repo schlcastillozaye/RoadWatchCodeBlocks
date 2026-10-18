@@ -4,10 +4,33 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseStoreFile = providers.environmentVariable("ROADWATCH_UPLOAD_STORE_FILE").orNull
+val releaseStorePassword = providers.environmentVariable("ROADWATCH_UPLOAD_STORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("ROADWATCH_UPLOAD_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("ROADWATCH_UPLOAD_KEY_PASSWORD").orNull
+val releaseSigningValues = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).map { it?.takeIf(String::isNotBlank) }
+val releaseSigningConfigured = releaseSigningValues.all { it != null }
+
 android {
     namespace = "gov.roadwatch.roadwatch"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+
+    if (releaseSigningConfigured) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(requireNotNull(releaseStoreFile))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -31,9 +54,24 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+}
+
+if (!releaseSigningConfigured) {
+    gradle.taskGraph.whenReady {
+        if (allTasks.any {
+                (it.name.startsWith("assemble") || it.name.startsWith("bundle")) &&
+                    it.name.endsWith("Release")
+            }) {
+            throw GradleException(
+                "Release builds require ROADWATCH_UPLOAD_STORE_FILE, " +
+                    "ROADWATCH_UPLOAD_STORE_PASSWORD, ROADWATCH_UPLOAD_KEY_ALIAS, " +
+                    "and ROADWATCH_UPLOAD_KEY_PASSWORD."
+            )
         }
     }
 }

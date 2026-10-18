@@ -4,10 +4,10 @@
 > **target architecture** — a PHP 8.2 API + a MySQL/MariaDB database + a static
 > vanilla-JS web app — on **Railway**.
 >
-> Nothing here is claimed to be deployed: the image build and the live Railway run
-> have **not** been performed (Docker is not available in the verification
-> environment). The local verification that *was* performed is listed in §8 and in
-> [`independent-verification-report.md`](independent-verification-report.md).
+> The current Railway deployment was inspected on 2026-10-18. Its live state and
+> the limits of the verification are recorded in §9. Historical local test results
+> are listed in §8; they are not a substitute for the current authenticated
+> production workflow checks.
 >
 > TiDB Cloud is **no longer part of the architecture**; use a MySQL 8 / MariaDB
 > server (Railway's MySQL plugin is the simplest).
@@ -25,10 +25,11 @@
 | Maps | Leaflet + OpenStreetMap (web), flutter_map (mobile) | none (free, keyless) |
 | Storage | Local disk on a Railway volume | Railway volume mounted at `/app/uploads` |
 
-Two Railway services from this one repository:
+The current Railway project already has these services from this repository:
 
-1. **`roadwatch-api`** — root directory `backend/`
-2. **`roadwatch-web`** — root directory `web/`
+1. **`backend`** — root directory `backend/`
+2. **`frontend`** — root directory `web/`
+3. **`MySQL`** — Railway database service
 
 ---
 
@@ -44,9 +45,9 @@ Two Railway services from this one repository:
 
 ---
 
-## 2. Service 1 — API (`roadwatch-api`)
+## 2. API (`backend`)
 
-1. Railway → **New Service → Deploy from GitHub repo**.
+1. Use the existing Railway service; do not create a duplicate.
 2. Service → **Settings → Source → Root Directory** = `backend`.
 3. Railway reads `backend/railway.json` → Dockerfile builder (`backend/Dockerfile.php`)
    + `/health` health check.
@@ -61,8 +62,8 @@ Two Railway services from this one repository:
    | `JWT_REFRESH_SECRET` | 32+ random chars | must differ from the access secret |
    | `JWT_ACCESS_TTL` | `15m` | |
    | `JWT_REFRESH_TTL` | `30d` | |
-   | `CORS_ORIGINS` | `https://<web-service>.up.railway.app` | the web app origin, no trailing slash |
-   | `PUBLIC_BASE_URL` | `https://<api-service>.up.railway.app` | the public origin used to build absolute photo URLs (needed by mobile). **Never** leave it on `http://localhost:4000` |
+   | `CORS_ORIGINS` | `https://frontend-production-bb0d.up.railway.app` | the verified web app origin, no trailing slash |
+   | `PUBLIC_BASE_URL` | `https://roadwatchcodeblocks-production.up.railway.app` | the public origin used to build absolute photo URLs (needed by mobile). **Never** leave it on `http://localhost:4000` |
    | `STORAGE_DRIVER` | `local` | only `local` is implemented in PHP |
    | `STORAGE_LOCAL_DIR` | `/app/uploads` | must match the volume mount |
    | `MAX_UPLOAD_BYTES` | `8388608` | 8 MB — enforced by the app; the image's `php.ini` keeps PHP's own limits above it so this is the error the client sees |
@@ -81,8 +82,11 @@ Two Railway services from this one repository:
    (or the option your provider documents).
 
 5. **Volume (required so uploads survive redeploys):**
-   Service → **Settings → Volumes → New Volume**, mount path **`/app/uploads`**.
-   Without it, uploaded photos are lost on every redeploy.
+   The current backend has no persistent mount at `/app/uploads`; its local
+   directory is on the container's ephemeral filesystem. Add a Railway volume
+   mounted at **`/app/uploads`** only after confirming and safely migrating any
+   existing files. Without it, uploaded photos can be lost on redeploy or
+   container replacement. See §9 for the observed current state.
 
 6. **Schema.** Nothing to do — the image migrates on boot.
 
@@ -120,9 +124,9 @@ Two Railway services from this one repository:
 
 ---
 
-## 3. Service 2 — Web (`roadwatch-web`)
+## 3. Web (`frontend`)
 
-1. Railway → **New Service → Deploy from GitHub repo** (same repo).
+1. Use the existing Railway service; do not create a duplicate.
 2. Service → **Settings → Source → Root Directory** = `web`.
 3. Railway reads `web/railway.json` → builds `web/Dockerfile` (nginx static image).
 4. **Point the web app at the API.** The two services have different origins, so the
@@ -130,7 +134,7 @@ Two Railway services from this one repository:
 
    | Variable | Value |
    |---|---|
-   | `RW_API_BASE_URL` | `https://<api-service>.up.railway.app` |
+   | `RW_API_BASE_URL` | `https://roadwatchcodeblocks-production.up.railway.app` |
 
    At container start, `web/docker-entrypoint.d/40-roadwatch-config.sh` writes this
    value into `rw-runtime-config.js`, so **no rebuild is needed** when the API URL
@@ -228,8 +232,8 @@ They are kept in the tree for reference; deleting them is a product decision
 ## 7. Post-deploy verification
 
 ```
-curl https://<api>.up.railway.app/health           # database: "up", geocoding not "unavailable"
-curl https://<api>.up.railway.app/api/map/reports  # public approved reports
+curl https://roadwatchcodeblocks-production.up.railway.app/health
+curl https://roadwatchcodeblocks-production.up.railway.app/api/map/reports
 ```
 
 - Log in on the web app (register a citizen, or seed demo data once).
@@ -243,7 +247,11 @@ Use dedicated test accounts/reports; do **not** run destructive tests against re
 
 ---
 
-## 8. What was actually verified locally (evidence)
+## 8. Previous local verification (historical evidence)
+
+The results below were recorded during earlier implementation work. They were
+not all rerun during the current deployment-state audit; current live checks and
+their limitations are in §9.
 
 | Step | Result | Evidence |
 |---|---|---|
@@ -261,30 +269,62 @@ Use dedicated test accounts/reports; do **not** run destructive tests against re
 | Web app end-to-end (real browser) | **PASS** | `web/tests/e2e.mjs` → **11/11 scenarios** (includes the category picker + "Other" free text) |
 | Flutter `analyze` + `test` | **PASS** | `flutter analyze` clean; `flutter test` **33/33** |
 | Photo-URL origin (`php backend/tests/config_test.php`) | **PASS** | **10/10** — a real `PUBLIC_BASE_URL` wins (proxy headers can't override it); unset/loopback falls back to the request origin; malformed `Host` rejected |
-| **Live Railway deployment** (citizen → admin → public map) | **PASS** | 32 checks against `https://roadwatchcodeblocks-production.up.railway.app`: register → submit (with photo) → `ROAD_OBSTRUCTION` accepted (proves the boot migration ran) → `OTHER` without a description `422` → admin approves → public map + byte-identical photo → admin delete removes the file. Test data removed afterwards. |
+| **Earlier live Railway workflow** (citizen → admin → public map) | **HISTORICAL; NOT REPEATED** | A previous record reports 32 checks, including submission, approval, public map/photo checks, and cleanup. Current credentials and the full workflow were not verified in this audit. |
 | **Container image build** (`docker build`) | **NOT RUN LOCALLY** | Docker is not installed here, but Railway built the same `Dockerfile.php` and booted it successfully (health + migration above) |
 
-Everything that could be expressed as a command running *without* Docker was
-executed and passed, and the live Railway deployment was then exercised end to
-end with real requests.
-
-### ⚠️ Deployment settings still to correct in the Railway dashboard
-
-| Variable | Should be | Why |
-|---|---|---|
-| `PUBLIC_BASE_URL` | `https://roadwatchcodeblocks-production.up.railway.app` | It was left at `http://localhost:4000`, so photo URLs pointed at the visitor's own machine. The API now falls back to the request origin, which fixed the live site, but set it properly. |
-| `CORS_ORIGINS` | the deployed web origin (e.g. `https://<web-service>.up.railway.app`) | It is still the default `http://localhost:8080,…`. A preflight from any other origin is refused, so a **deployed** web platform cannot call the API until its origin is listed. |
+These historical results do not establish the current production workflow.
 
 ---
 
-## 9. Push the repository first
+## 9. Current production verification (2026-10-18)
 
-Railway builds from GitHub, so the verified commits must be on the tracked branch:
+| Check | Status | Evidence |
+|---|---|---|
+| Existing services and URLs | **PASS** | Railway project `roadwatch`, environment `production`: `frontend` at `https://frontend-production-bb0d.up.railway.app/`, `backend` at `https://roadwatchcodeblocks-production.up.railway.app/`, plus `MySQL`. No duplicate service was created. |
+| Intended source commit | **PASS** | Local `main`, `origin/main`, and the backend container's `RAILWAY_GIT_COMMIT_SHA` all report `91fd2f5035d06590ff2468fa822c8b416f008510`. |
+| Frontend deployment | **PASS** | HTML, JS, CSS, runtime config, and SPA fallback paths returned HTTP 200. Deployed `web/js/app.js` SHA-256 matched local (`e6a3210bbcfc07a514dc49dd742b28f99ff87d070857f3fe72e1c010fcd5c4f5`); runtime config points at the production API. |
+| Backend health | **PASS** | `/health` reported `status: ok`, `database: up`, and `storage: local`. |
+| CORS and public API connectivity | **PASS** | Frontend-origin preflight returned 204 with the exact allowed origin; a disallowed origin received no `Access-Control-Allow-Origin`; browser fetch from the frontend to the public map API returned 200. |
+| Protected API authentication | **PARTIAL** | Protected routes returned 401 without a valid staff token and included the frontend CORS header. This verifies CORS on those responses, not authenticated workflow behavior. |
+| Production accounts | **PARTIAL** | Read-only DB check confirmed two active citizen accounts, one active admin, and two active maintenance officers. No usable credentials were available in the environment; passwords/hashes were not queried. |
+| Notification schema | **PASS** | Read-only `SHOW CREATE TABLE Notification` confirmed the table, unique `assignmentId`, indexes, and foreign keys to Assignment, Report, and User. The migrator has no separate migration-history ledger, so no versioned migration record was available to inspect. |
+| Notification read path | **PARTIAL** | Deployed `NotificationService` returned an empty list and unread count 0 for an active officer; the DB currently has 0 notifications and 0 assignments. Creation/read-state mutation and authenticated HTTP access were not tested. |
+| Production data and uploads | **RISK / ACTION REQUIRED** | Read-only aggregate counts: 1 Report, 1 ReportPhoto row, 0 Assignment rows, 0 Notification rows. `/app/uploads` contained 0 files and is on the container's `overlay` filesystem with no dedicated mount. The existing photo record may refer to a missing local file; do not assume it is recoverable. Do not restart/redeploy the backend before planning persistent storage and assessing that record. |
+| Full approval → assignment → notification → repair flow | **BLOCKED** | No valid citizen/admin/officer credentials or designated test-data procedure were available. No production records were created or modified. |
+| Flutter static analysis and tests | **PASS** | `flutter analyze` reported no issues; `flutter test` passed 48 tests with 1 credential-gated live API test skipped. |
+| Web/PHP local checks | **PARTIAL** | `node --check web/js/app.js` passed. The PHP config test could not run because PHP is not installed locally. The authenticated browser/API E2E suite was not run: it requires citizen/admin passwords and creates test users/reports, with no authorized production test procedure available. |
+| API integration and disposable migration tests | **BLOCKED** | The integration suite requires a disposable test database and PHP runtime; neither was available. Production schema inspection was read-only and did not reapply migrations. |
+| APK release signing | **NOT RELEASE-READY** | The existing `mobile/build/app/outputs/flutter-apk/app-release.apk` verifies with signer `CN=Android Debug` (certificate SHA-256 `10c72c0a750bec19c7693cd702e946f21ab961264107af0ec1c0828b59eb9918`; APK SHA-256 `6bb5d7ef7426ed7fe8f6cae72e0d620705641bd38d48260259f36d3145b6b776`). The updated Gradle configuration requires secure external signing values and refuses unsigned release builds before build tasks run. The debug build passed; no local keystore was found under `mobile/android` and no local signing environment-variable names were present. CI signing-secret availability was not inspected. |
 
 ```powershell
-git status            # working tree should be clean
-git log --oneline -5  # the migration + fix commits
-git push origin main
+# Before adding a volume, inspect the existing report photo record and plan
+# recovery/remediation; do not expose its private metadata in logs.
+# Then add a persistent Railway volume at /app/uploads and verify upload,
+# retrieval, and survival across a controlled redeploy using dedicated test data.
 ```
 
-Do not force-push and do not rewrite shared history.
+### Remaining manual tasks
+
+1. **Photo persistence:** Determine whether the existing `ReportPhoto` object can
+   be recovered. The current project showed 29 days / $4.71 remaining; a new
+   volume may incur charges and restart the backend. After the owner confirms the
+   storage budget and assesses that photo record, add a persistent Railway volume
+   mounted at `/app/uploads`. Verify a dedicated test upload remains available
+   after redeploy.
+2. **Authenticated workflow:** Securely supply or provision dedicated test
+   accounts through an authorized admin process, then run the full citizen →
+   admin approval → officer assignment/notification → repair completion smoke
+   test. Do not use real citizen reports or production seeding.
+3. **APK release:** Create a private upload keystore (for example with
+   `keytool -genkeypair -v -keystore "$env:USERPROFILE\roadwatch-upload-key.jks" -alias roadwatch-upload -keyalg RSA -keysize 2048 -validity 10000`).
+   Supply its absolute path and passwords as `ROADWATCH_UPLOAD_STORE_FILE`,
+   `ROADWATCH_UPLOAD_STORE_PASSWORD`, `ROADWATCH_UPLOAD_KEY_ALIAS`, and
+   `ROADWATCH_UPLOAD_KEY_PASSWORD` through a secure local/CI secret store, then
+   build with `flutter build apk --release --dart-define=API_BASE_URL=https://roadwatchcodeblocks-production.up.railway.app`.
+   Verify the resulting APK with `apksigner verify --print-certs` and record its
+   SHA-256 checksum before distribution. Never commit the keystore or secrets.
+
+No Railway variables, volumes, or services were changed during this audit. No
+production records were mutated. Do not push these branch changes while the
+backend has an unmounted upload directory; an automatic redeploy could restart
+the backend before persistent storage is addressed.
