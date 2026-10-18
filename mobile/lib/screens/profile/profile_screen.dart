@@ -146,7 +146,7 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       _Row(label: 'Product', value: AppConfig.productName, icon: Icons.apps_rounded),
-                      _Row(label: 'Version', value: '1.0.0', icon: Icons.info_outline_rounded),
+                      _Row(label: 'Version', value: AppConfig.appVersion, icon: Icons.info_outline_rounded),
                       _Row(
                         label: 'Server',
                         value: AppConfig.apiBaseUrl,

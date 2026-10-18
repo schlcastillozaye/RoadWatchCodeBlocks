@@ -35,9 +35,9 @@ These cover most of the checklist below without manual clicking:
 
 ## 1. Authentication
 
-- [ ] `POST /api/auth/login` with `admin@roadwatch.gov` / `Admin@12345` returns a user, access token and refresh token.
+- [ ] `POST /api/auth/login` with the administrator account and a securely configured test password returns a user, access token and refresh token.
 - [ ] The web platform signs in and lands on the admin dashboard.
-- [ ] The Flutter app signs in as `citizen@example.com` / `Citizen@12345`.
+- [ ] The Flutter app signs in with a securely configured test citizen account.
 - [ ] Signing in with a wrong password shows a clear message (and does not crash).
 - [ ] Registering a new citizen from the mobile app works.
 - [ ] An unauthenticated request to `GET /api/reports` returns **401**.
@@ -177,7 +177,7 @@ $api = "http://localhost:4000"
 # 1. Sign in as admin
 $login = Invoke-RestMethod -Method Post "$api/api/auth/login" `
   -ContentType "application/json" `
-  -Body '{"email":"admin@roadwatch.gov","password":"Admin@12345"}'
+  -Body ('{"email":"admin@roadwatch.gov","password":"' + $env:RW_TEST_ADMIN_PASSWORD + '"}')
 $admin = @{ Authorization = "Bearer $($login.accessToken)" }
 
 # 2. Health

@@ -45,7 +45,7 @@ class PhotoThumbnail extends StatelessWidget {
         child: SizedBox(
           width: 18,
           height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.lightAzure),
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandAccent),
         ),
       ),
       errorWidget: (context, url, error) => Container(
@@ -53,7 +53,25 @@ class PhotoThumbnail extends StatelessWidget {
         height: height,
         color: AppColors.sheetBackground,
         alignment: Alignment.center,
-        child: Icon(Icons.broken_image_outlined, color: AppColors.textMuted),
+        padding: const EdgeInsets.all(6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.broken_image_outlined, color: AppColors.textMuted),
+            // Only label the tile when there is room for a readable line; small
+            // table/list thumbs would otherwise be all caption.
+            if ((height ?? 0) >= 60) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Unavailable',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: AppTypography.caption(size: 10, color: AppColors.textMuted),
+              ),
+            ],
+          ],
+        ),
       ),
     );
 
@@ -125,6 +143,11 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         foregroundColor: AppColors.onPrimary,
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: Text(
           '${photo.kind.label} photo',
           style: AppTypography.headingStyle(size: 17, color: AppColors.onPrimary),
@@ -134,7 +157,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
             padding: const EdgeInsets.only(right: 16),
             child: Center(
               child: Text(
-                '${_index + 1}/${widget.photos.length}',
+                widget.photos.length > 1 ? '${_index + 1}/${widget.photos.length}' : '',
                 style: AppTypography.bodyStyle(size: 14, color: AppColors.lightBlue),
               ),
             ),
@@ -146,7 +169,7 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
         itemCount: widget.photos.length,
         onPageChanged: (i) => setState(() => _index = i),
         itemBuilder: (context, i) => InteractiveViewer(
-          maxScale: 4,
+          maxScale: 5,
           child: Center(
             child: CachedNetworkImage(
               imageUrl: widget.photos[i].url,
@@ -159,13 +182,45 @@ class _PhotoGalleryScreenState extends State<PhotoGalleryScreen> {
                   child: CircularProgressIndicator(color: AppColors.lightBlue),
                 ),
               ),
-              errorWidget: (_, _, _) => Center(
-                child: Icon(Icons.broken_image_outlined, color: AppColors.lightBlue, size: 40),
+              // A removed photo or an expired/unauthorised URL lands here rather
+              // than in a broken frame.
+              errorWidget: (_, _, _) => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: _GalleryError(),
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GalleryError extends StatelessWidget {
+  const _GalleryError();
+
+  @override
+  Widget build(BuildContext context) {
+    AppColors.syncTo(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.broken_image_outlined, color: AppColors.lightBlue, size: 40),
+        const SizedBox(height: 10),
+        Text(
+          'This photo could not be loaded.',
+          textAlign: TextAlign.center,
+          style: AppTypography.bodyStyle(size: 14, color: AppColors.lightBlue),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'It may have been removed, or your session may have expired.',
+          textAlign: TextAlign.center,
+          style: AppTypography.caption(size: 12, color: AppColors.lightBlue),
+        ),
+      ],
     );
   }
 }

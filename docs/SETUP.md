@@ -74,6 +74,12 @@ npm run seed        # demo accounts and sample reports
 npm run dev         # starts http://localhost:4000
 ```
 
+Before running `npm run seed`, set `RW_SEED_ADMIN_PASSWORD`,
+`RW_SEED_OFFICER_PASSWORD`, `RW_SEED_CITIZEN_PASSWORD`, and
+`RW_SEED_CITIZEN2_PASSWORD` in the local process environment. The seed hashes
+these values and does not print them; it is for disposable development data,
+not production account provisioning.
+
 Confirm it is alive:
 
 ```powershell
@@ -139,7 +145,7 @@ npm run dev         # http://localhost:5173
 That is the only variable. The web platform draws its map with **Leaflet on
 OpenStreetMap tiles — no API key, no account, no billing.**
 
-Sign in with `admin@roadwatch.gov` / `Admin@12345`.
+Sign in with the administrator account using the password supplied through secure local configuration.
 
 Other scripts: `npm run build` (type-check + production bundle into `dist/`),
 `npm run preview` (serve the build), `npm run typecheck`.

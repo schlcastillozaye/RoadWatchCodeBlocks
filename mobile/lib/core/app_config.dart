@@ -12,6 +12,16 @@ class AppConfig {
   static const String brandName = 'Code Blocks Inc.';
   static const String tagline = 'Report road issues. Track the repair.';
 
+  /// Application version, kept in step with `version:` in `pubspec.yaml` (and
+  /// therefore with the Android `versionName`/`versionCode` of a release build).
+  /// `test/version_test.dart` asserts the two agree, so the Profile screen can
+  /// never advertise a version the APK was not built with.
+  static const String appVersion = '1.0.1';
+  static const String buildNumber = '3';
+
+  /// e.g. `1.0.1+2`.
+  static String get versionLabel => '$appVersion+$buildNumber';
+
   static const String _apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://localhost:4000',
@@ -23,10 +33,10 @@ class AppConfig {
   /// `--dart-define=API_BASE_URL=…`; otherwise this throws instead of silently
   /// shipping an app that can only reach a developer's localhost.
   static String get apiBaseUrl => resolveApiBaseUrl(
-        _apiBaseUrl,
-        release: kReleaseMode,
-        android: !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
-      );
+    _apiBaseUrl,
+    release: kReleaseMode,
+    android: !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+  );
 
   /// Pure resolver so the behaviour is unit-testable without a real build.
   ///
@@ -55,7 +65,9 @@ class AppConfig {
   /// Normalises a possibly-relative URL returned by the API into an absolute one.
   static String absoluteUrl(String url) {
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    final base = apiBaseUrl.endsWith('/') ? apiBaseUrl.substring(0, apiBaseUrl.length - 1) : apiBaseUrl;
+    final base = apiBaseUrl.endsWith('/')
+        ? apiBaseUrl.substring(0, apiBaseUrl.length - 1)
+        : apiBaseUrl;
     return url.startsWith('/') ? '$base$url' : '$base/$url';
   }
 }

@@ -5,7 +5,16 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'brand_mark.dart';
 
-enum LogoSize { small, medium, large }
+enum LogoSize {
+  small,
+  medium,
+  large,
+
+  /// Sign-in lockup. Sized from the web platform's `.rw-auth-brand`, whose mark
+  /// cells are 0.9rem (≈47px tall overall) beside a 1.45rem (23px) wordmark —
+  /// deliberately smaller than [large], which is drawn for a full-screen splash.
+  auth,
+}
 
 /// Brand lockup: Code Blocks symbol + "RoadWatch" wordmark (+ optional
 /// "by Code Blocks Inc." tagline).
@@ -25,10 +34,13 @@ class BrandLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     AppColors.syncTo(context);
 
-    final (markSize, titleSize, gap) = switch (size) {
-      LogoSize.small => (18.0, 18.0, 10.0),
-      LogoSize.medium => (24.0, 26.0, 12.0),
-      LogoSize.large => (34.0, 40.0, 16.0),
+    final (markSize, titleSize, gap, taglineSize) = switch (size) {
+      LogoSize.small => (18.0, 18.0, 10.0, 7.5),
+      LogoSize.medium => (24.0, 26.0, 12.0, 11.0),
+      LogoSize.large => (34.0, 40.0, 16.0, 16.8),
+      // The web auth lockup scaled to a phone: a ~47px mark with a 23px wordmark
+      // and an 11.5px "by Code Blocks Inc." line (`.rw-auth-brand`).
+      LogoSize.auth => (14.0, 23.0, 11.0, 11.5),
     };
 
     // `textPrimary` is the navy ink in light mode and the near-white ink in
@@ -55,7 +67,7 @@ class BrandLogo extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   'by ${AppConfig.brandName}',
-                  style: AppTypography.caption(size: titleSize * 0.42, color: subtitleColor),
+                  style: AppTypography.caption(size: taglineSize, color: subtitleColor),
                 ),
               ),
           ],

@@ -71,17 +71,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 18),
+                    const SizedBox(height: AppSpacing.xl),
                     _PrimaryCta(onTap: _openSubmit),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSpacing.xl),
                     _StatsRow(total: total, pending: pending, inProgress: inProgress, completed: completed),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: AppSpacing.xxl),
                     _QuickActions(
                       onReport: _openSubmit,
                       onMap: () => widget.onNavigate(1),
                       onReports: () => widget.onNavigate(2),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.xxl),
                     Row(
                       children: [
                         Expanded(child: Text('Recent activity', style: AppTypography.headingStyle(size: 18))),
@@ -122,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 sliver: SliverList.separated(
                   itemCount: reports.reports.take(4).length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
                   itemBuilder: (context, i) {
                     final report = reports.reports[i];
                     return ReportCard(
@@ -194,21 +194,31 @@ class _PrimaryCta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     AppColors.syncTo(context);
+    // The card is a soft brand-blue wash in light mode. In dark mode the same
+    // idea is drawn from the dark palette: the old fixed light gradient left
+    // the (now near-white) heading and caption invisible on a near-white card.
+    final isDark = AppColors.isDark;
+    final gradient = isDark
+        ? [AppColors.tintBlue, AppColors.cardSurface]
+        : <Color>[AppColors.lightBlue, const Color(0xFFE3F1FF)];
+    final titleColor = isDark ? AppColors.textPrimary : AppColors.darkBlue;
+    final arrowColor = isDark ? AppColors.lightBlue : AppColors.darkBlue;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(24),
         child: Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [AppColors.lightBlue, Color(0xFFE3F1FF)],
+              colors: gradient,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.lightAzure),
+            border: Border.all(color: isDark ? AppColors.border : AppColors.lightAzure),
           ),
           child: Row(
             children: [
@@ -218,13 +228,13 @@ class _PrimaryCta extends StatelessWidget {
                 decoration: BoxDecoration(color: AppColors.darkBlue, borderRadius: BorderRadius.circular(18)),
                 child: Icon(Icons.add_a_photo_rounded, color: AppColors.lightBlue, size: 26),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Report a road issue', style: AppTypography.headingStyle(size: 17)),
-                    const SizedBox(height: 3),
+                    Text('Report a road issue', style: AppTypography.headingStyle(size: 17, color: titleColor)),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       'Photo • description • GPS location',
                       style: AppTypography.caption(size: 12.5, color: AppColors.textSecondary),
@@ -232,7 +242,8 @@ class _PrimaryCta extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_rounded, color: AppColors.darkBlue),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(Icons.arrow_forward_rounded, color: arrowColor),
             ],
           ),
         ),
@@ -255,11 +266,11 @@ class _StatsRow extends StatelessWidget {
     return Row(
       children: [
         _StatTile(label: 'Total', value: total, color: AppColors.textPrimary),
-        const SizedBox(width: 10),
+        const SizedBox(width: AppSpacing.sm),
         _StatTile(label: 'Pending', value: pending, color: AppColors.statusAmberInk),
-        const SizedBox(width: 10),
+        const SizedBox(width: AppSpacing.sm),
         _StatTile(label: 'Repairing', value: inProgress, color: AppColors.statusBlueInk),
-        const SizedBox(width: 10),
+        const SizedBox(width: AppSpacing.sm),
         _StatTile(label: 'Done', value: completed, color: AppColors.statusGreenInk),
       ],
     );
@@ -278,17 +289,30 @@ class _StatTile extends StatelessWidget {
     AppColors.syncTo(context);
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.sm),
         decoration: BoxDecoration(
           color: AppColors.cardSurface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.lightAzure),
+          border: Border.all(color: AppColors.border),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text('$value', style: AppTypography.display(size: 20, color: color)),
-            const SizedBox(height: 2),
-            Text(label, style: AppTypography.caption(size: 11, color: AppColors.textMuted)),
+            Text(
+              '$value',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.display(size: 20, color: color),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTypography.caption(size: 11, color: AppColors.textMuted),
+            ),
           ],
         ),
       ),
@@ -334,13 +358,14 @@ class _QuickAction extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: AppSpacing.sm),
             decoration: BoxDecoration(
               color: AppColors.cardSurface,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.lightAzure),
+              border: Border.all(color: AppColors.border),
             ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 40,
@@ -351,8 +376,15 @@ class _QuickAction extends StatelessWidget {
                   ),
                   child: Icon(icon, color: AppColors.darkBlue, size: 21),
                 ),
-                const SizedBox(height: 8),
-                Text(label, style: AppTypography.caption(size: 12, weight: FontWeight.w600, color: AppColors.textSecondary)),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption(size: 12, weight: FontWeight.w600, color: AppColors.textSecondary),
+                ),
               ],
             ),
           ),
@@ -372,7 +404,7 @@ class _Footer extends StatelessWidget {
         children: [
           Container(
             height: 4,
-            decoration: BoxDecoration(color: AppColors.lightAzure, borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(4)),
           ),
           const SizedBox(height: 10),
           Text(

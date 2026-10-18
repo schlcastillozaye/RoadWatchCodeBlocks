@@ -384,6 +384,8 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   vertical-align: middle;
 }
 .admin-report-main { min-width: 12rem; }
+.admin-report-cell { display: flex; align-items: center; gap: 0.65rem; }
+.admin-report-text { min-width: 0; }
 .admin-report-title {
   display: block;
   max-width: 22rem;
@@ -1221,6 +1223,100 @@ body,
 .rw-confirm-content > #rw-confirm-description { color: var(--ink-2); font-size: 0.86rem; }
 .rw-confirm-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 0.65rem; margin-top: 1.5rem; }
 .rw-confirm-actions .btn { min-height: 44px; }
+
+/* ---- Full-size photo viewer ---- */
+/* Thumbnails are <button>s so they are keyboard-reachable; the global click
+   delegation in app.js opens the dialog below. */
+.rw-photo-trigger {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 0;
+  cursor: zoom-in;
+  border-radius: 0.5rem;
+}
+.rw-photo-trigger img { display: block; }
+.rw-photo-trigger:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+:root[data-theme='dark'] .rw-photo-trigger:focus-visible { outline-color: var(--sky); }
+.admin-report-thumb { width: 2.75rem; height: 2.75rem; border-radius: 0.5rem; object-fit: cover; }
+
+/* Locks the page behind the modal, since <dialog> only makes it inert. */
+html.rw-modal-open { overflow: hidden; }
+
+.rw-lightbox {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgb(4 11 26 / 0.94);
+  color: #f7fbff;
+}
+.rw-lightbox::backdrop { background: rgb(3 9 22 / 0.86); }
+.rw-lightbox-panel { position: relative; display: flex; flex-direction: column; height: 100%; }
+.rw-lightbox-bar { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.85rem; }
+.rw-lightbox-count { flex: 0 0 auto; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sky); }
+.rw-lightbox-caption { min-width: 0; overflow: hidden; font-size: 0.85rem; text-overflow: ellipsis; white-space: nowrap; }
+.rw-lightbox-spacer { flex: 1 1 auto; }
+.rw-lightbox-btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid rgb(195 230 255 / 0.32);
+  border-radius: 0.7rem;
+  background: rgb(255 255 255 / 0.08);
+  color: #f7fbff;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.rw-lightbox-btn:hover { background: rgb(255 255 255 / 0.2); }
+.rw-lightbox-close { font-size: 1.5rem; }
+.rw-lightbox-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.75rem 1rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.rw-lightbox-image { max-width: 100%; max-height: 100%; border-radius: 0.5rem; object-fit: contain; }
+.rw-lightbox-stage.is-zoomed { align-items: flex-start; justify-content: flex-start; }
+.rw-lightbox-stage.is-zoomed .rw-lightbox-image { max-width: none; max-height: none; cursor: zoom-out; }
+.rw-lightbox-status { max-width: 32rem; color: var(--sky); font-size: 0.9rem; text-align: center; }
+.rw-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  width: 2.9rem;
+  height: 2.9rem;
+  transform: translateY(-50%);
+  border: 1px solid rgb(195 230 255 / 0.32);
+  border-radius: 999px;
+  background: rgb(3 9 22 / 0.62);
+  color: #f7fbff;
+  font-size: 1.55rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.rw-lightbox-nav:hover { background: rgb(3 9 22 / 0.9); }
+.rw-lightbox-prev { left: 0.7rem; }
+.rw-lightbox-next { right: 0.7rem; }
+
+@media (max-width: 640px) {
+  .rw-lightbox-caption { display: none; }
+  .rw-lightbox-nav { width: 2.5rem; height: 2.5rem; font-size: 1.3rem; }
+}
 
 @media (max-width: 1100px) {
   .rw-header-inner { gap: 1rem; width: min(100% - 2rem, 80rem); }

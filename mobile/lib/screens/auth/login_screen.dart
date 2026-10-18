@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -66,10 +65,6 @@ class _LoginScreenState extends State<LoginScreen> {
       );
   }
 
-  void _fillDemo() {
-    _email.text = 'citizen@example.com';
-    _password.text = 'Citizen@12345';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,27 +82,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // --- Brand hero -------------------------------------------------
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 30),
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const BrandLogo(onDark: true, size: LogoSize.large, showTagline: true),
+                            const BrandLogo(onDark: true, size: LogoSize.auth, showTagline: true),
                             const Spacer(),
                             const ThemeToggleButton(onDark: true),
                           ],
                         ),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 20),
                         Text(
                           'Welcome back',
-                          style: AppTypography.display(size: 30, color: AppColors.onPrimary),
+                          style: AppTypography.display(size: 26, color: AppColors.onPrimary),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
                           AppConfig.tagline,
-                          style: AppTypography.bodyStyle(size: 15, color: AppColors.lightBlue),
+                          style: AppTypography.bodyStyle(size: 14, color: AppColors.lightBlue),
                         ),
                       ],
                     ),
@@ -119,18 +113,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.sheetBackground,
                       borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(32),
-                        topRight: Radius.circular(32),
+                        topLeft: Radius.circular(28),
+                        topRight: Radius.circular(28),
                       ),
                     ),
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
                     child: Form(
                       key: _formKey,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text('Sign in to continue', style: AppTypography.headingStyle(size: 19)),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 16),
                           TextFormField(
                             controller: _email,
                             keyboardType: TextInputType.emailAddress,
@@ -172,8 +166,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: busy ? null : _submit,
                           ),
                           const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          // `Wrap` rather than `Row`: on a narrow phone, or with
+                          // a large system text scale, the prompt and the button
+                          // reflow onto two centred lines instead of clipping.
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text('New to RoadWatch?',
                                   style: AppTypography.bodyStyle(size: 14, color: AppColors.textSecondary)),
@@ -187,10 +185,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
-                          if (kDebugMode) ...[
-                            const SizedBox(height: 4),
-                            _DemoHint(onTap: _fillDemo),
-                          ],
                         ],
                       ),
                     ),
@@ -199,40 +193,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DemoHint extends StatelessWidget {
-  const _DemoHint({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    AppColors.syncTo(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.lightYellow,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline_rounded, size: 18, color: AppColors.darkBlue),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Demo: tap to fill citizen@example.com / Citizen@12345',
-                style: AppTypography.caption(size: 12, color: AppColors.textSecondary),
-              ),
-            ),
-          ],
         ),
       ),
     );

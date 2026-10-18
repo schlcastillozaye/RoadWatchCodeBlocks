@@ -27,7 +27,7 @@ class SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.cardSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.lightAzure),
+        border: Border.all(color: AppColors.border),
       ),
       padding: padding,
       child: Column(
@@ -42,7 +42,7 @@ class SectionCard extends StatelessWidget {
                 ?trailing,
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
           ],
           child,
         ],

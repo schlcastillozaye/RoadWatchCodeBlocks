@@ -53,21 +53,31 @@ function seed_upsert_user(string $fullName, string $email, ?string $phone, strin
     return $row;
 }
 
+function seed_required_password(string $name): string
+{
+    $password = getenv($name);
+    if (!is_string($password) || $password === '') {
+        throw new RuntimeException('Missing required seed environment variable: ' . $name);
+    }
+    return $password;
+}
+
 /**
  * @return array{admin:array,officer1:array,officer2:array,citizen1:array,citizen2:array}
  */
 function seed_users(): array
 {
-    $adminHash = AccountService::hashPassword('Admin@12345');
-    $officerHash = AccountService::hashPassword('Officer@12345');
-    $citizenHash = AccountService::hashPassword('Citizen@12345');
+    $adminHash = AccountService::hashPassword(seed_required_password('RW_SEED_ADMIN_PASSWORD'));
+    $officerHash = AccountService::hashPassword(seed_required_password('RW_SEED_OFFICER_PASSWORD'));
+    $citizen1Hash = AccountService::hashPassword(seed_required_password('RW_SEED_CITIZEN_PASSWORD'));
+    $citizen2Hash = AccountService::hashPassword(seed_required_password('RW_SEED_CITIZEN2_PASSWORD'));
 
     return [
         'admin' => seed_upsert_user('Maria Santos', 'admin@roadwatch.gov', '+63 917 000 0001', $adminHash, 'ADMIN'),
         'officer1' => seed_upsert_user('Miguel Reyes', 'officer1@roadwatch.gov', '+63 917 000 0002', $officerHash, 'MAINTENANCE_OFFICER'),
         'officer2' => seed_upsert_user('Ana Dela Cruz', 'officer2@roadwatch.gov', '+63 917 000 0003', $officerHash, 'MAINTENANCE_OFFICER'),
-        'citizen1' => seed_upsert_user('Juan Dela Cruz', 'citizen@example.com', '+63 917 000 0004', $citizenHash, 'CITIZEN'),
-        'citizen2' => seed_upsert_user('Liza Ramos', 'citizen2@example.com', '+63 917 000 0005', $citizenHash, 'CITIZEN'),
+        'citizen1' => seed_upsert_user('Juan Dela Cruz', 'citizen@example.com', '+63 917 000 0004', $citizen1Hash, 'CITIZEN'),
+        'citizen2' => seed_upsert_user('Liza Ramos', 'citizen2@example.com', '+63 917 000 0005', $citizen2Hash, 'CITIZEN'),
     ];
 }
 
@@ -383,11 +393,11 @@ function seed_main(): void
     seed_reports($users);
 
     echo PHP_EOL . 'Demo accounts (change these in production):' . PHP_EOL;
-    echo '  ADMIN                admin@roadwatch.gov       / Admin@12345' . PHP_EOL;
-    echo '  MAINTENANCE OFFICER  officer1@roadwatch.gov    / Officer@12345' . PHP_EOL;
-    echo '  MAINTENANCE OFFICER  officer2@roadwatch.gov    / Officer@12345' . PHP_EOL;
-    echo '  CITIZEN              citizen@example.com       / Citizen@12345' . PHP_EOL;
-    echo '  CITIZEN              citizen2@example.com      / Citizen@12345' . PHP_EOL;
+    echo '  ADMIN                admin@roadwatch.gov       ' . PHP_EOL;
+    echo '  MAINTENANCE OFFICER  officer1@roadwatch.gov    ' . PHP_EOL;
+    echo '  MAINTENANCE OFFICER  officer2@roadwatch.gov    ' . PHP_EOL;
+    echo '  CITIZEN              citizen@example.com       ' . PHP_EOL;
+    echo '  CITIZEN              citizen2@example.com      ' . PHP_EOL;
 }
 
 try {

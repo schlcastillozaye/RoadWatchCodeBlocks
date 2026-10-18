@@ -195,9 +195,11 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
               decoration: BoxDecoration(color: AppColors.lightYellow, borderRadius: BorderRadius.circular(14)),
               child: Column(
                 children: [
-                  Text('Reference number', style: AppTypography.caption(size: 11.5)),
+                  // The reference chip is cream in both themes, so its text stays
+                  // navy rather than following the (dark-mode) page ink.
+                  Text('Reference number', style: AppTypography.caption(size: 11.5, color: AppColors.darkBlue)),
                   const SizedBox(height: 2),
-                  Text(report.referenceNo, style: AppTypography.headingStyle(size: 18)),
+                  Text(report.referenceNo, style: AppTypography.headingStyle(size: 18, color: AppColors.darkBlue)),
                 ],
               ),
             ),
@@ -415,8 +417,8 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                   child: LinearProgressIndicator(
                     value: _progress,
                     minHeight: 8,
-                    backgroundColor: AppColors.lightAzure,
-                    valueColor: AlwaysStoppedAnimation(AppColors.darkBlue),
+                    backgroundColor: AppColors.border,
+                    valueColor: AlwaysStoppedAnimation(AppColors.brandAccent),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -507,7 +509,7 @@ class _AddPhotoTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.sheetBackground,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.lightAzure),
+          border: Border.all(color: AppColors.border),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

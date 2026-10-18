@@ -210,6 +210,180 @@
     qa('img[data-authed-src]', scope || document).forEach((img) => { loadAuthedImage(img); });
   };
 
+  // --- Full-size photo viewer -------------------------------------------------
+  // Every thumbnail declares the photos it can show as JSON in
+  // `data-photo-viewer` (plus which one it represents in `data-photo-index`), so
+  // a single delegated handler lights the viewer up from any screen — report
+  // lists, the admin table, maintenance assignments and report details — with no
+  // per-page wiring. Private photos are still fetched through the same
+  // `loadAuthedImage` path the thumbnails use, so the viewer never widens
+  // access: a photo the caller may not read fails here exactly as it would in
+  // the thumbnail.
+  const viewerItems = (report) => {
+    const list = Array.isArray(report && report.photos) ? report.photos : [];
+    if (list.length) {
+      return list.map((p) => ({
+        url: absoluteUrl(p.url),
+        isPublic: p.isPublic !== false,
+        caption: p.caption || '',
+      }));
+    }
+    if (report && report.thumbnailUrl) {
+      return [{ url: absoluteUrl(report.thumbnailUrl), isPublic: true, caption: report.title || '' }];
+    }
+    return [];
+  };
+
+  // Attributes that turn an element into a viewer trigger. Empty when the report
+  // has no photo, so callers can fall back to the plain icon tile.
+  const photoViewerAttrs = (report, index = 0) => {
+    const items = viewerItems(report);
+    if (!items.length) return '';
+    return `data-photo-viewer="${escapeHtml(JSON.stringify(items))}" data-photo-index="${index}"`;
+  };
+
+  const viewerItemsFromTrigger = (el) => {
+    try {
+      const parsed = JSON.parse(el.getAttribute('data-photo-viewer') || '[]');
+      return Array.isArray(parsed) ? parsed.filter((p) => p && p.url) : [];
+    } catch (error) {
+      return [];
+    }
+  };
+
+  const openPhotoViewer = (items, startIndex = 0) => {
+    if (!items || !items.length) return;
+    let index = Math.min(Math.max(0, Number(startIndex) || 0), items.length - 1);
+    let zoom = 1;
+    const multi = items.length > 1;
+
+    const dialog = document.createElement('dialog');
+    dialog.className = 'rw-lightbox';
+    dialog.setAttribute('aria-label', 'Report photo');
+    dialog.innerHTML = `
+      <div class="rw-lightbox-panel">
+        <div class="rw-lightbox-bar">
+          <span class="rw-lightbox-count" data-lightbox-count></span>
+          <span class="rw-lightbox-caption" data-lightbox-caption></span>
+          <span class="rw-lightbox-spacer"></span>
+          <button type="button" class="rw-lightbox-btn" data-lightbox-zoom-out aria-label="Zoom out">&#8722;</button>
+          <button type="button" class="rw-lightbox-btn" data-lightbox-zoom-in aria-label="Zoom in">+</button>
+          <button type="button" class="rw-lightbox-btn rw-lightbox-close" data-lightbox-close aria-label="Close photo viewer">&times;</button>
+        </div>
+        <div class="rw-lightbox-stage" data-lightbox-stage>
+          <p class="rw-lightbox-status" data-lightbox-status>Loading photo…</p>
+          <img class="rw-lightbox-image" data-lightbox-image alt="" hidden />
+        </div>
+        <button type="button" class="rw-lightbox-nav rw-lightbox-prev" data-lightbox-prev aria-label="Previous photo">&#8249;</button>
+        <button type="button" class="rw-lightbox-nav rw-lightbox-next" data-lightbox-next aria-label="Next photo">&#8250;</button>
+      </div>`;
+    document.body.appendChild(dialog);
+
+    const image = dialog.querySelector('[data-lightbox-image]');
+    const stage = dialog.querySelector('[data-lightbox-stage]');
+    const status = dialog.querySelector('[data-lightbox-status]');
+    const count = dialog.querySelector('[data-lightbox-count]');
+    const caption = dialog.querySelector('[data-lightbox-caption]');
+    const unavailable = 'This photo could not be loaded. It may have been removed, or you may not have access to it.';
+
+    const setZoom = (value) => {
+      zoom = Math.min(4, Math.max(1, value));
+      if (zoom === 1) {
+        image.style.width = '';
+        stage.classList.remove('is-zoomed');
+      } else {
+        // Zooming to the natural pixel size (scaled) lets the stage scroll, so
+        // large photos can be inspected and panned on touch and mouse alike.
+        const natural = image.naturalWidth || 0;
+        if (natural > 0) image.style.width = `${Math.round(natural * zoom)}px`;
+        stage.classList.add('is-zoomed');
+      }
+    };
+
+    const render = () => {
+      const photo = items[index];
+      count.textContent = multi ? `${index + 1} / ${items.length}` : 'Photo';
+      caption.textContent = photo.caption || '';
+      image.hidden = true;
+      image.removeAttribute('src');
+      image.removeAttribute('data-authed-src');
+      image.alt = photo.caption || 'Report photo';
+      status.hidden = false;
+      status.textContent = 'Loading photo…';
+      setZoom(1);
+      stage.scrollTop = 0;
+      stage.scrollLeft = 0;
+      if (photo.isPublic === false) {
+        image.setAttribute('data-authed-src', photo.url);
+        // `loadAuthedImage` resolves whether or not the fetch succeeded, so an
+        // unset `src` afterwards is the failure signal.
+        loadAuthedImage(image).then(() => {
+          if (!image.getAttribute('src')) {
+            status.hidden = false;
+            status.textContent = unavailable;
+          }
+        });
+      } else {
+        image.src = photo.url;
+      }
+    };
+
+    image.addEventListener('load', () => {
+      image.hidden = false;
+      status.hidden = true;
+    });
+    image.addEventListener('error', () => {
+      if (!image.getAttribute('src')) return;
+      image.hidden = true;
+      status.hidden = false;
+      status.textContent = unavailable;
+    });
+    image.addEventListener('click', () => setZoom(zoom === 1 ? 2 : 1));
+
+    const step = (delta) => {
+      index = (index + delta + items.length) % items.length;
+      render();
+    };
+
+    const onKeydown = (event) => {
+      if (event.key === 'ArrowRight') { event.preventDefault(); step(1); }
+      else if (event.key === 'ArrowLeft') { event.preventDefault(); step(-1); }
+      else if (event.key === '+' || event.key === '=') { event.preventDefault(); setZoom(zoom + 0.5); }
+      else if (event.key === '-') { event.preventDefault(); setZoom(zoom - 0.5); }
+    };
+
+    const lastFocus = document.activeElement;
+    const close = () => {
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      document.documentElement.classList.remove('rw-modal-open');
+      document.removeEventListener('keydown', onKeydown);
+      if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+    };
+
+    dialog.querySelector('[data-lightbox-close]').addEventListener('click', close);
+    dialog.querySelector('[data-lightbox-zoom-in]').addEventListener('click', () => setZoom(zoom + 0.5));
+    dialog.querySelector('[data-lightbox-zoom-out]').addEventListener('click', () => setZoom(zoom - 0.5));
+    if (multi) {
+      dialog.querySelector('[data-lightbox-prev]').addEventListener('click', () => step(-1));
+      dialog.querySelector('[data-lightbox-next]').addEventListener('click', () => step(1));
+    } else {
+      dialog.querySelector('[data-lightbox-prev]').hidden = true;
+      dialog.querySelector('[data-lightbox-next]').hidden = true;
+    }
+    // On a full-screen dialog, the empty stage is the usable backdrop area.
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); close(); });
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog || event.target === stage) close();
+    });
+    document.addEventListener('keydown', onKeydown);
+
+    document.documentElement.classList.add('rw-modal-open');
+    render();
+    dialog.showModal();
+    dialog.querySelector('[data-lightbox-close]').focus();
+  };
+
   // --- Formatting helpers ----------------------------------------------------
   const escapeHtml = (s) => {
     if (s === null || s === undefined) return '';
@@ -297,7 +471,7 @@
     <article class="brand-card p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer" data-nav="/report/${encodeURIComponent(r.id)}">
       <div class="flex items-start gap-4">
         ${thumb
-          ? `<img ${imgAttr} alt="${escapeHtml(r.title)}" class="w-16 h-16 rounded flex-shrink-0 object-cover" />`
+          ? `<button type="button" class="rw-photo-trigger flex-shrink-0" ${photoViewerAttrs(r)} aria-label="View photo for ${escapeHtml(r.title)}"><img ${imgAttr} alt="${escapeHtml(r.title)}" class="w-16 h-16 rounded object-cover" /></button>`
           : `<div class="w-16 h-16 rounded flex-shrink-0 bg-sheet flex items-center justify-center"><span class="text-sm font-medium text-ink-3">${categoryIcon(r.category)}</span></div>`}
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-navy line-clamp-1">${escapeHtml(r.title)}</h3>
@@ -1012,11 +1186,12 @@
         ${photos.length > 0 ? `
           <div class="mt-6">
             <h2 class="font-medium text-ink-2 mb-2">Photos (${photos.length})</h2>
+            <p class="text-xs text-slate-tint mb-2">Select a photo to view it full size.</p>
             <div class="grid grid-cols-2 gap-2">
-              ${photos.map((p) => `
-                <div class="rounded border border-slate-300 overflow-hidden group">
+              ${photos.map((p, i) => `
+                <button type="button" class="rw-photo-trigger rounded border border-slate-300 overflow-hidden group text-left" ${photoViewerAttrs(report, i)} aria-label="View ${escapeHtml(p.caption || 'report photo')} full size">
                   <img ${p.isPublic ? `src="${escapeHtml(absoluteUrl(p.url))}"` : `data-authed-src="${escapeHtml(absoluteUrl(p.url))}"`} alt="${escapeHtml(p.caption || 'Report photo')}" class="w-full h-32 object-cover group-hover:opacity-90 transition-opacity" />
-                </div>`).join('')}
+                </button>`).join('')}
             </div>
           </div>` : ''}
 
@@ -1293,13 +1468,23 @@
       </div>`;
     }
 
-    const rows = items.map((report) => `
+    const rows = items.map((report) => {
+      const firstPhoto = Array.isArray(report.photos) ? report.photos[0] : null;
+      const thumbImg = firstPhoto
+        ? `<img ${firstPhoto.isPublic === false ? `data-authed-src="${escapeHtml(absoluteUrl(firstPhoto.url))}"` : `src="${escapeHtml(absoluteUrl(firstPhoto.url))}"`} alt="" class="admin-report-thumb" />`
+        : '';
+      return `
       <tr>
         <td class="admin-report-main">
-          <a href="/report/${encodeURIComponent(report.id)}" data-nav="/report/${encodeURIComponent(report.id)}" class="admin-report-title">
-            ${escapeHtml(report.title || 'Untitled report')}
-          </a>
-          <span class="admin-report-reference">${escapeHtml(report.referenceNo || '')} · ${escapeHtml(categoryText(report))}</span>
+          <div class="admin-report-cell">
+            ${thumbImg ? `<button type="button" class="rw-photo-trigger" ${photoViewerAttrs(report, 0)} aria-label="View photo for ${escapeHtml(report.title || 'report')}">${thumbImg}</button>` : ''}
+            <div class="admin-report-text">
+              <a href="/report/${encodeURIComponent(report.id)}" data-nav="/report/${encodeURIComponent(report.id)}" class="admin-report-title">
+                ${escapeHtml(report.title || 'Untitled report')}
+              </a>
+              <span class="admin-report-reference">${escapeHtml(report.referenceNo || '')} · ${escapeHtml(categoryText(report))}</span>
+            </div>
+          </div>
         </td>
         <td>
           <div class="admin-status-stack">
@@ -1315,7 +1500,8 @@
             ${allowDelete ? `<button type="button" class="btn btn-danger btn-sm" data-delete-report="${escapeHtml(report.id)}" data-report-title="${escapeHtml(report.title || 'Untitled report')}" data-report-reference="${escapeHtml(report.referenceNo || '')}">Delete</button>` : ''}
           </div>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 
     const paging = pagination ? `
       <div class="admin-pagination">
@@ -1405,6 +1591,7 @@
         page: Number(data.page) || page,
         totalPages: Number(data.totalPages) || 1,
       }, true));
+      hydrateAuthedImages(host);
       bindAdminReportActions(host, hostId, feedbackId, params);
       return data;
     } catch (err) {
@@ -1555,12 +1742,24 @@
         html(host, '<p class="text-slate-tint text-sm">No assignments yet.</p>');
         return;
       }
-      html(host, items.map((r) => `
+      html(host, items.map((r) => {
+        const firstPhoto = Array.isArray(r.photos) ? r.photos[0] : null;
+        const thumb = firstPhoto
+          ? `<button type="button" class="rw-photo-trigger flex-shrink-0" ${photoViewerAttrs(r, 0)} aria-label="View photo for ${escapeHtml(r.title || 'report')}"><img ${firstPhoto.isPublic === false ? `data-authed-src="${escapeHtml(absoluteUrl(firstPhoto.url))}"` : `src="${escapeHtml(absoluteUrl(firstPhoto.url))}"`} alt="" class="w-14 h-14 rounded object-cover" /></button>`
+          : '';
+        return `
         <div class="p-3 rounded border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors" data-nav="/report/${encodeURIComponent(r.id)}">
-          <h3 class="font-medium text-navy line-clamp-1">${escapeHtml(r.title)}</h3>
-          <p class="text-slate-tint text-xs">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
-          <span class="text-amber text-sm">${escapeHtml(r.repairStatus)}</span>
-        </div>`).join(''));
+          <div class="flex items-start gap-3">
+            ${thumb}
+            <div class="min-w-0">
+              <h3 class="font-medium text-navy line-clamp-1">${escapeHtml(r.title)}</h3>
+              <p class="text-slate-tint text-xs">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
+              <span class="text-amber text-sm">${escapeHtml(r.repairStatus)}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join(''));
+      hydrateAuthedImages(host);
     } catch (err) {
       html(host, `<p class="text-red-400">Error: ${escapeHtml(err.message)}</p>`);
     }
@@ -1608,6 +1807,17 @@
 
     // One delegated handler for every [data-nav] element (links, cards, buttons).
     document.addEventListener('click', (e) => {
+      // Report thumbnails open the full-size viewer instead of following the
+      // card's [data-nav] link they sit inside.
+      const photoTrigger = e.target && e.target.closest ? e.target.closest('[data-photo-viewer]') : null;
+      if (photoTrigger) {
+        e.preventDefault();
+        e.stopPropagation();
+        const items = viewerItemsFromTrigger(photoTrigger);
+        openPhotoViewer(items, Number(photoTrigger.getAttribute('data-photo-index')) || 0);
+        return;
+      }
+
       const themeButton = e.target && e.target.closest ? e.target.closest('[data-theme-toggle]') : null;
       if (themeButton) {
         e.preventDefault();

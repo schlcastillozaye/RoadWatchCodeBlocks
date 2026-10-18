@@ -97,7 +97,7 @@ Public. Creates a **citizen** account only; staff accounts are created by an adm
 {
   "fullName": "Juan Dela Cruz",
   "email": "juan@example.com",
-  "password": "Secret@12345",
+  "password": "<password supplied securely>",
   "phone": "09171234567"
 }
 ```
@@ -115,7 +115,7 @@ Public. Creates a **citizen** account only; staff accounts are created by an adm
 ### `POST /api/auth/login`
 
 ```json
-{ "email": "admin@roadwatch.gov", "password": "Admin@12345" }
+{ "email": "admin@roadwatch.gov", "password": "<password supplied securely>" }
 ```
 
 **200** — same shape as register.

@@ -72,7 +72,9 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
           height: 26,
           child: GestureDetector(
             onTap: () => _openSheet(report),
-            child: MapStatusDot(color: repairColors(report.repairStatus).foreground),
+            child: MapStatusDot(
+              color: repairColors(report.repairStatus).foreground,
+            ),
           ),
         ),
       if (origin != null)
@@ -93,14 +95,18 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
     _centred = true;
 
     if (reports.length == 1) {
-      _controller.move(LatLng(reports.first.latitude, reports.first.longitude), 15);
+      _controller.move(
+        LatLng(reports.first.latitude, reports.first.longitude),
+        15,
+      );
       return;
     }
 
     _controller.fitCamera(
       CameraFit.bounds(
         bounds: LatLngBounds.fromPoints([
-          for (final report in reports) LatLng(report.latitude, report.longitude),
+          for (final report in reports)
+            LatLng(report.latitude, report.longitude),
         ]),
         padding: const EdgeInsets.all(60),
         maxZoom: 15,
@@ -136,7 +142,10 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ChangeNotifierProvider.value(value: provider, child: const _PublicReportSheet()),
+      builder: (_) => ChangeNotifierProvider.value(
+        value: provider,
+        child: const _PublicReportSheet(),
+      ),
     );
     provider.clearSelection();
   }
@@ -168,7 +177,10 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       builder: (sheetContext) => Container(
         decoration: BoxDecoration(
           color: AppColors.sheetBackground,
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(28),
+            topRight: Radius.circular(28),
+          ),
         ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
         child: SafeArea(
@@ -182,13 +194,16 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.lightAzure,
+                    color: AppColors.border,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
               ),
               const SizedBox(height: 14),
-              Text('Choose a location', style: AppTypography.headingStyle(size: 17)),
+              Text(
+                'Choose a location',
+                style: AppTypography.headingStyle(size: 17),
+              ),
               const SizedBox(height: 10),
               Flexible(
                 child: ListView.separated(
@@ -210,20 +225,33 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.cardSurface,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.lightAzure),
+                          border: Border.all(color: AppColors.border),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.place_rounded, size: 20, color: AppColors.brandAccent),
+                            Icon(
+                              Icons.place_rounded,
+                              size: 20,
+                              color: AppColors.brandAccent,
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(place.address,
-                                      style: AppTypography.bodyStyle(size: 13.5, weight: FontWeight.w600)),
-                                  if (place.areaLabel != null && place.areaLabel!.isNotEmpty)
-                                    Text(place.areaLabel!, style: AppTypography.caption(size: 11.5)),
+                                  Text(
+                                    place.address,
+                                    style: AppTypography.bodyStyle(
+                                      size: 13.5,
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (place.areaLabel != null &&
+                                      place.areaLabel!.isNotEmpty)
+                                    Text(
+                                      place.areaLabel!,
+                                      style: AppTypography.caption(size: 11.5),
+                                    ),
                                 ],
                               ),
                             ),
@@ -242,7 +270,8 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -254,8 +283,16 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
       backgroundColor: AppColors.sheetBackground,
       body: Column(
         children: [
-          _Header(provider: provider, showList: _showList, onToggleView: _setShowList),
-          _SearchPanel(controller: _searchController, provider: provider, onSubmit: _runSearch),
+          _Header(
+            provider: provider,
+            showList: _showList,
+            onToggleView: _setShowList,
+          ),
+          _SearchPanel(
+            controller: _searchController,
+            provider: provider,
+            onSubmit: _runSearch,
+          ),
           Expanded(child: _buildBody(provider)),
         ],
       ),
@@ -264,7 +301,9 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 
   Widget _buildBody(MapProvider provider) {
     if (provider.isLoading && provider.reports.isEmpty) {
-      return Center(child: CircularProgressIndicator(color: AppColors.brandAccent));
+      return Center(
+        child: CircularProgressIndicator(color: AppColors.brandAccent),
+      );
     }
 
     final reports = provider.visibleReports;
@@ -321,7 +360,9 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
         icon: Icons.location_off_rounded,
         title: provider.origin != null
             ? 'No approved reports near this location'
-            : (provider.textQuery.isNotEmpty ? 'No reports match your search' : 'No approved reports nearby'),
+            : (provider.textQuery.isNotEmpty
+                  ? 'No reports match your search'
+                  : 'No approved reports nearby'),
         message: provider.isShowingCache
             ? 'You are offline. Showing the last saved reports.'
             : 'Approved reports from your community will appear here.',
@@ -351,7 +392,11 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
 }
 
 class _SearchPanel extends StatefulWidget {
-  const _SearchPanel({required this.controller, required this.provider, required this.onSubmit});
+  const _SearchPanel({
+    required this.controller,
+    required this.provider,
+    required this.onSubmit,
+  });
 
   final TextEditingController controller;
   final MapProvider provider;
@@ -457,14 +502,20 @@ class _SearchPanelState extends State<_SearchPanel> {
                     onChanged: _onTextChanged,
                     decoration: InputDecoration(
                       hintText: 'Search an address or landmark',
-                      prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        color: AppColors.textMuted,
+                      ),
                       suffixIcon: widget.provider.isSearching
                           ? Padding(
                               padding: EdgeInsets.all(14),
                               child: SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandAccent),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.brandAccent,
+                                ),
                               ),
                             )
                           : (showClear
@@ -477,28 +528,40 @@ class _SearchPanelState extends State<_SearchPanel> {
                                     widget.provider.clearSearch();
                                   },
                                 )
-                              : (_recentSearches.isNotEmpty && _showRecent && !hasInput
+                                : (_recentSearches.isNotEmpty &&
+                                          _showRecent &&
+                                          !hasInput
                                   ? IconButton(
-                                      icon: const Icon(Icons.history_rounded),
+                                          icon: const Icon(
+                                            Icons.history_rounded,
+                                          ),
                                       color: AppColors.textMuted,
                                       tooltip: 'Recent searches',
-                                      onPressed: () => setState(() => _showRecent = true),
+                                          onPressed: () => setState(
+                                            () => _showRecent = true,
+                                          ),
                                     )
                                   : null)),
                       filled: true,
                       fillColor: AppColors.cardSurface,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: AppColors.lightAzure),
+                        borderSide: BorderSide(color: AppColors.border),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: AppColors.lightAzure),
+                        borderSide: BorderSide(color: AppColors.border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: AppColors.brandAccent, width: 1.4),
+                        borderSide: BorderSide(
+                          color: AppColors.brandAccent,
+                          width: 1.4,
+                        ),
                       ),
                     ),
                   ),
@@ -518,14 +581,21 @@ class _SearchPanelState extends State<_SearchPanel> {
               padding: const EdgeInsets.only(top: 8),
               child: Row(
                 children: [
-                  Icon(Icons.near_me_rounded, size: 14, color: AppColors.brandAccent),
+                  Icon(
+                    Icons.near_me_rounded,
+                    size: 14,
+                    color: AppColors.brandAccent,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Nearest to ${origin.address}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.caption(size: 11.5, color: AppColors.textSecondary),
+                      style: AppTypography.caption(
+                        size: 11.5,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -536,15 +606,20 @@ class _SearchPanelState extends State<_SearchPanel> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'Matching reports for "${widget.provider.textQuery}" (local fallback).',
-                style: AppTypography.caption(size: 11.5, color: AppColors.textSecondary),
+                style: AppTypography.caption(
+                  size: 11.5,
+                  color: AppColors.textSecondary,
               ),
             ),
-          if (widget.provider.searchReason != null && !widget.provider.isSearching)
+            ),
+          if (widget.provider.searchReason != null &&
+              !widget.provider.isSearching)
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: _InfoBanner(
                 icon: Icons.info_outline_rounded,
-                message: '${widget.provider.searchReason!} Showing matching reports instead.',
+                message:
+                    '${widget.provider.searchReason!} Showing matching reports instead.',
               ),
             ),
         ],
@@ -574,7 +649,7 @@ class _RecentSearchesList extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.lightAzure),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -584,9 +659,19 @@ class _RecentSearchesList extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
-                Icon(Icons.history_rounded, size: 16, color: AppColors.textMuted),
+                Icon(
+                  Icons.history_rounded,
+                  size: 16,
+                  color: AppColors.textMuted,
+                ),
                 const SizedBox(width: 8),
-                Text('Recent searches', style: AppTypography.caption(size: 12, color: AppColors.textSecondary)),
+                Text(
+                  'Recent searches',
+                  style: AppTypography.caption(
+                    size: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: onClearAll,
@@ -595,7 +680,13 @@ class _RecentSearchesList extends StatelessWidget {
                     minimumSize: const Size(0, 0),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: Text('Clear all', style: AppTypography.caption(size: 12, color: AppColors.brandAccent)),
+                  child: Text(
+                    'Clear all',
+                    style: AppTypography.caption(
+                      size: 12,
+                      color: AppColors.brandAccent,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -608,30 +699,50 @@ class _RecentSearchesList extends StatelessWidget {
               borderRadius: BorderRadius.only(
                 topLeft: index == 0 ? const Radius.circular(16) : Radius.zero,
                 topRight: index == 0 ? const Radius.circular(16) : Radius.zero,
-                bottomLeft: index == searches.length - 1 ? const Radius.circular(16) : Radius.zero,
-                bottomRight: index == searches.length - 1 ? const Radius.circular(16) : Radius.zero,
+                bottomLeft: index == searches.length - 1
+                    ? const Radius.circular(16)
+                    : Radius.zero,
+                bottomRight: index == searches.length - 1
+                    ? const Radius.circular(16)
+                    : Radius.zero,
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   border: Border(
-                    top: index == 0 ? BorderSide.none : BorderSide(color: AppColors.lightAzure.withValues(alpha: 0.3)),
+                    top: index == 0
+                        ? BorderSide.none
+                        : BorderSide(color: AppColors.border),
                   ),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.access_time_rounded, size: 18, color: AppColors.textMuted),
+                    Icon(
+                      Icons.access_time_rounded,
+                      size: 18,
+                      color: AppColors.textMuted,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         search,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodyStyle(size: 13.5, color: AppColors.textPrimary),
+                        style: AppTypography.bodyStyle(
+                          size: 13.5,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.close_rounded, size: 18, color: AppColors.textMuted),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: AppColors.textMuted,
+                      ),
                       onPressed: () => onRemove(search),
                       tooltip: 'Remove from recent',
                       padding: EdgeInsets.zero,
@@ -649,7 +760,11 @@ class _RecentSearchesList extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.provider, required this.showList, required this.onToggleView});
+  const _Header({
+    required this.provider,
+    required this.showList,
+    required this.onToggleView,
+  });
 
   final MapProvider provider;
   final bool showList;
@@ -661,7 +776,10 @@ class _Header extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.darkBlue,
-        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: SafeArea(
@@ -674,7 +792,13 @@ class _Header extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text('Public map', style: AppTypography.display(size: 24, color: AppColors.onPrimary)),
+                    child: Text(
+                      'Public map',
+                      style: AppTypography.display(
+                        size: 24,
+                        color: AppColors.onPrimary,
+                      ),
+                    ),
                   ),
                   _ViewToggle(showList: showList, onChanged: onToggleView),
                 ],
@@ -682,7 +806,10 @@ class _Header extends StatelessWidget {
             ),
             Text(
               '${provider.reports.length} approved · only approved reports are published here.',
-              style: AppTypography.caption(size: 12, color: AppColors.lightBlue),
+              style: AppTypography.caption(
+                size: 12,
+                color: AppColors.lightBlue,
+              ),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -786,7 +913,11 @@ class _ViewToggle extends StatelessWidget {
 }
 
 class _FilterChip extends StatelessWidget {
-  const _FilterChip({required this.label, required this.selected, required this.onTap});
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
@@ -802,7 +933,9 @@ class _FilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? AppColors.lightBlue : AppColors.darkBlue,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.lightBlue.withValues(alpha: selected ? 1 : 0.4)),
+          border: Border.all(
+            color: AppColors.lightBlue.withValues(alpha: selected ? 1 : 0.4),
+          ),
         ),
         child: Text(
           label,
@@ -822,9 +955,19 @@ class _Legend extends StatelessWidget {
   Widget dot(Color color, String label) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
           const SizedBox(width: 5),
-          Text(label, style: AppTypography.caption(size: 10.5, color: AppColors.textSecondary)),
+      Text(
+        label,
+        style: AppTypography.caption(
+          size: 10.5,
+          color: AppColors.textSecondary,
+        ),
+      ),
         ],
       );
 
@@ -836,7 +979,7 @@ class _Legend extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.cardSurface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.lightAzure),
+        border: Border.all(color: AppColors.border),
       ),
       child: Wrap(
         spacing: 12,
@@ -866,13 +1009,20 @@ class _InfoBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.lightYellow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.lightAzure),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
           Icon(icon, size: 18, color: AppColors.darkBlue),
           const SizedBox(width: 10),
-          Expanded(child: Text(message, style: AppTypography.caption(size: 12, color: AppColors.textSecondary))),
+          // Cream tile in both themes → keep the label navy so it stays legible
+          // in dark mode instead of turning near-white.
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.caption(size: 12, color: AppColors.darkBlue),
+            ),
+          ),
         ],
       ),
     );
@@ -880,7 +1030,11 @@ class _InfoBanner extends StatelessWidget {
 }
 
 class _MapReportTile extends StatelessWidget {
-  const _MapReportTile({required this.report, required this.onTap, this.distance});
+  const _MapReportTile({
+    required this.report,
+    required this.onTap,
+    this.distance,
+  });
 
   final MapReport report;
   final VoidCallback onTap;
@@ -891,6 +1045,16 @@ class _MapReportTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     AppColors.syncTo(context);
+    final photo = report.thumbnailUrl == null
+        ? null
+        : ReportPhoto(
+            id: report.id,
+            kind: PhotoKind.before,
+            url: report.thumbnailUrl!,
+            mimeType: 'image/jpeg',
+            isPublic: true,
+            caption: report.title,
+          );
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -901,15 +1065,17 @@ class _MapReportTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.cardSurface,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.lightAzure),
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [
-              if (report.thumbnailUrl != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(report.thumbnailUrl!, width: 58, height: 58, fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => CategoryBadge(category: report.category, size: 58)),
+              if (photo != null)
+                PhotoThumbnail(
+                  photo: photo,
+                  width: 58,
+                  height: 58,
+                  radius: 12,
+                  onTap: () => PhotoGalleryScreen.open(context, [photo]),
                 )
               else
                 CategoryBadge(category: report.category, size: 58),
@@ -918,25 +1084,44 @@ class _MapReportTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(report.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.headingStyle(size: 14.5)),
+                    Text(
+                      report.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.headingStyle(size: 14.5),
+                    ),
                     const SizedBox(height: 3),
-                    Text('${report.categoryLabel} · ${report.locationLabel}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: AppTypography.caption(size: 11.5)),
+                    Text(
+                      '${report.categoryLabel} · ${report.locationLabel}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption(size: 11.5),
+                    ),
                     if (distance != null) ...[
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Icon(Icons.near_me_rounded, size: 12, color: AppColors.textMuted),
+                          Icon(
+                            Icons.near_me_rounded,
+                            size: 12,
+                            color: AppColors.textMuted,
+                          ),
                           const SizedBox(width: 4),
-                          Text(formatDistance(distance!), style: AppTypography.caption(size: 11)),
+                          Text(
+                            formatDistance(distance!),
+                            style: AppTypography.caption(size: 11),
+                          ),
                         ],
                       ),
                     ],
                     const SizedBox(height: 7),
-                    Wrap(spacing: 6, children: [
+                    Wrap(
+                      spacing: 6,
+                      children: [
                       StatusChip(repair: report.repairStatus, compact: true),
                       PriorityPill(priority: report.priority),
-                    ]),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -965,12 +1150,19 @@ class _PublicReportSheet extends StatelessWidget {
       builder: (context, scrollController) => Container(
         decoration: BoxDecoration(
           color: AppColors.sheetBackground,
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(28),
+            topRight: Radius.circular(28),
+          ),
         ),
         child: provider.isLoadingDetail || detail == null
             ? Padding(
                 padding: EdgeInsets.all(40),
-                child: Center(child: CircularProgressIndicator(color: AppColors.brandAccent)),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.brandAccent,
+                  ),
+                ),
               )
             : ListView(
                 controller: scrollController,
@@ -980,7 +1172,10 @@ class _PublicReportSheet extends StatelessWidget {
                     child: Container(
                       width: 44,
                       height: 4,
-                      decoration: BoxDecoration(color: AppColors.lightAzure, borderRadius: BorderRadius.circular(4)),
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -993,22 +1188,35 @@ class _PublicReportSheet extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(detail.title, style: AppTypography.display(size: 20)),
+                            Text(
+                              detail.title,
+                              style: AppTypography.display(size: 20),
+                            ),
                             const SizedBox(height: 3),
-                            Text(detail.referenceNo, style: AppTypography.caption(size: 12)),
+                            Text(
+                              detail.referenceNo,
+                              style: AppTypography.caption(size: 12),
+                            ),
                             const SizedBox(height: 3),
-                            Text(detail.categoryLabel, style: AppTypography.caption(size: 12)),
+                            Text(
+                              detail.categoryLabel,
+                              style: AppTypography.caption(size: 12),
+                            ),
                           ],
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
                     StatusChip(moderation: detail.moderationStatus),
                     StatusChip(repair: detail.repairStatus),
                     PriorityPill(priority: detail.priority),
-                  ]),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   if (detail.photos.isNotEmpty)
                     SizedBox(
@@ -1023,22 +1231,44 @@ class _PublicReportSheet extends StatelessWidget {
                           height: 108,
                           radius: 14,
                           showKindBadge: true,
-                          onTap: () => PhotoGalleryScreen.open(context, detail.photos, initialIndex: i),
+                          onTap: () => PhotoGalleryScreen.open(
+                            context,
+                            detail.photos,
+                            initialIndex: i,
+                          ),
                         ),
                       ),
                     ),
                   const SizedBox(height: 16),
-                  Text('Description', style: AppTypography.headingStyle(size: 15)),
+                  Text(
+                    'Description',
+                    style: AppTypography.headingStyle(size: 15),
+                  ),
                   const SizedBox(height: 6),
-                  Text(detail.description, style: AppTypography.bodyStyle(size: 13.5, color: AppColors.textSecondary)),
+                  Text(
+                    detail.description,
+                    style: AppTypography.bodyStyle(
+                      size: 13.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Icon(Icons.place_rounded, size: 17, color: AppColors.brandAccent),
+                      Icon(
+                        Icons.place_rounded,
+                        size: 17,
+                        color: AppColors.brandAccent,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(detail.locationLabel,
-                            style: AppTypography.bodyStyle(size: 13, color: AppColors.textSecondary)),
+                        child: Text(
+                          detail.locationLabel,
+                          style: AppTypography.bodyStyle(
+                            size: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1046,25 +1276,46 @@ class _PublicReportSheet extends StatelessWidget {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 17, color: AppColors.statusGreenInk),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 17,
+                          color: AppColors.statusGreenInk,
+                        ),
                         const SizedBox(width: 8),
-                        Text('Completed ${formatDate(detail.completedAt)}',
-                            style: AppTypography.bodyStyle(size: 13, color: AppColors.textSecondary)),
+                        Text(
+                          'Completed ${formatDate(detail.completedAt)}',
+                          style: AppTypography.bodyStyle(
+                            size: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       ],
                     ),
                   ],
-                  if (detail.completionNotes != null && detail.completionNotes!.isNotEmpty) ...[
+                  if (detail.completionNotes != null &&
+                      detail.completionNotes!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: AppColors.tintGreen, borderRadius: BorderRadius.circular(16)),
-                      child: Text(detail.completionNotes!,
-                          style: AppTypography.bodyStyle(size: 13, color: AppColors.textSecondary)),
+                      decoration: BoxDecoration(
+                        color: AppColors.tintGreen,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        detail.completionNotes!,
+                        style: AppTypography.bodyStyle(
+                          size: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ),
                   ],
                   const SizedBox(height: 20),
-                  Text('Reported ${relativeTime(detail.createdAt)}', style: AppTypography.caption(size: 11.5)),
+                  Text(
+                    'Reported ${relativeTime(detail.createdAt)}',
+                    style: AppTypography.caption(size: 11.5),
+                  ),
                 ],
               ),
       ),

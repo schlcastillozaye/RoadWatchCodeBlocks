@@ -82,7 +82,9 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
                   Expanded(
                     child: Text(
                       'Showing saved reports — you appear to be offline.',
-                      style: AppTypography.caption(size: 11.5, color: AppColors.textSecondary),
+                      // The banner is cream in both themes, so its text stays
+                      // navy rather than following the (dark-mode) page ink.
+                      style: AppTypography.caption(size: 11.5, color: AppColors.darkBlue),
                     ),
                   ),
                 ],
@@ -93,8 +95,8 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openSubmit,
-        backgroundColor: AppColors.darkBlue,
-        foregroundColor: AppColors.onPrimary,
+        backgroundColor: AppColors.brandAccent,
+        foregroundColor: AppColors.isDark ? AppColors.darkBlue : AppColors.onPrimary,
         icon: const Icon(Icons.add_rounded),
         label: const Text('New report'),
       ),
@@ -238,7 +240,7 @@ class _Filters extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? AppColors.darkBlue : AppColors.cardSurface,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? AppColors.darkBlue : AppColors.lightAzure),
+          border: Border.all(color: selected ? AppColors.darkBlue : AppColors.border),
         ),
         child: Text(
           label,

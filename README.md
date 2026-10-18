@@ -148,15 +148,18 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:4000
 
 ## Seeded demo accounts
 
-| Role | Email | Password |
+| Role | Email | Password handling |
 | --- | --- | --- |
-| Administrator | `admin@roadwatch.gov` | `Admin@12345` |
-| Maintenance officer | `officer1@roadwatch.gov` | `Officer@12345` |
-| Maintenance officer | `officer2@roadwatch.gov` | `Officer@12345` |
-| Citizen | `citizen@example.com` | `Citizen@12345` |
-| Citizen | `citizen2@example.com` | `Citizen@12345` |
+| Administrator | `admin@roadwatch.gov` | Set securely outside source control |
+| Maintenance officer | `officer1@roadwatch.gov` | Set securely outside source control |
+| Maintenance officer | `officer2@roadwatch.gov` | Set securely outside source control |
+| Citizen | `citizen@example.com` | Set securely outside source control |
+| Citizen | `citizen2@example.com` | Set securely outside source control |
 
-> These are development fixtures. Change or remove them before any real deployment.
+> Seed passwords are supplied through `RW_SEED_ADMIN_PASSWORD`,
+> `RW_SEED_OFFICER_PASSWORD`, `RW_SEED_CITIZEN_PASSWORD`, and
+> `RW_SEED_CITIZEN2_PASSWORD` environment variables; never commit or print them.
+> Rotate initial account passwords before public distribution.
 
 ---
 

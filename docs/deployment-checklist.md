@@ -200,9 +200,9 @@ flutter build web --release     --dart-define=API_BASE_URL=https://<api-service>
 - **Existing data:** table/column names keep their Prisma PascalCase form, so a
   database created by the old Prisma migrations stays usable — no data migration.
   Verified read-only against MySQL 8.0.45 (§8).
-- **Never seed or reset a production database.** `db/setup.sql` and `seed.php`
-  create *demo* accounts (`Admin@12345`, `Officer@12345`, `Citizen@12345`); do not
-  use them for anything real.
+- **Never seed or reset a production database.** Seed scripts require passwords from
+  secure `RW_SEED_*_PASSWORD` environment variables and are for disposable development
+  databases only; do not use them to provision production accounts.
 
 ---
 

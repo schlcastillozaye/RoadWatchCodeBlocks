@@ -240,7 +240,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           child: FloatingActionButton.small(
             heroTag: 'locate',
             backgroundColor: AppColors.cardSurface,
-            foregroundColor: AppColors.darkBlue,
+            // `darkBlue` is near-black in dark mode and would disappear into the
+            // dark card surface; the brand accent contrasts on both.
+            foregroundColor: AppColors.brandAccent,
             onPressed: _locating ? null : () => _useCurrentLocation(),
             child: _locating
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -257,7 +259,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
         borderRadius: BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
-        border: Border(top: BorderSide(color: AppColors.lightAzure)),
+        border: Border(top: BorderSide(color: AppColors.border)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       child: SafeArea(

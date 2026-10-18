@@ -17,9 +17,18 @@
  * pre-existing rows.
  */
 
+import { randomBytes } from 'node:crypto';
+
 const BASE = (process.env.RW_API_BASE || 'http://127.0.0.1:4000').replace(/\/$/, '');
 const stamp = Date.now();
-const PW = 'Passw0rd!23';
+const SEEDED_PASSWORDS = {
+  admin: process.env.RW_SEED_ADMIN_PASSWORD || '',
+  officer: process.env.RW_SEED_OFFICER_PASSWORD || '',
+};
+if (!SEEDED_PASSWORDS.admin || !SEEDED_PASSWORDS.officer) {
+  throw new Error('Set RW_SEED_ADMIN_PASSWORD and RW_SEED_OFFICER_PASSWORD for the disposable test database.');
+}
+const PW = randomBytes(24).toString('hex');
 
 // 1x1 transparent PNG.
 const PNG = Buffer.from(
@@ -143,16 +152,16 @@ async function main() {
   section('Auth: login / me / refresh / logout');
   let adminToken, officer1Token, officer1Id, officer2Token, officer2Id;
   {
-    const admin = await login('admin@roadwatch.gov', 'Admin@12345');
+    const admin = await login('admin@roadwatch.gov', SEEDED_PASSWORDS.admin);
     check('seed admin login 200', admin.status === 200 && admin.body?.user?.role === 'ADMIN', `status=${admin.status}`);
     adminToken = admin.body?.accessToken;
 
-    const off1 = await login('officer1@roadwatch.gov', 'Officer@12345');
+    const off1 = await login('officer1@roadwatch.gov', SEEDED_PASSWORDS.officer);
     check('seed officer1 login 200', off1.status === 200 && off1.body?.user?.role === 'MAINTENANCE_OFFICER');
     officer1Token = off1.body?.accessToken;
     officer1Id = off1.body?.user?.id;
 
-    const off2 = await login('officer2@roadwatch.gov', 'Officer@12345');
+    const off2 = await login('officer2@roadwatch.gov', SEEDED_PASSWORDS.officer);
     officer2Token = off2.body?.accessToken;
     officer2Id = off2.body?.user?.id;
 

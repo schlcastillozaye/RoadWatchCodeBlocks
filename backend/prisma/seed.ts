@@ -30,11 +30,18 @@ const IMAGES = {
   crack: Buffer.from(IMG_CRACK, 'base64'),
 };
 
+function requiredSeedPassword(name: string): string {
+  const password = process.env[name];
+  if (!password) throw new Error(`Missing required seed environment variable: ${name}`);
+  return password;
+}
+
 async function seedUsers() {
-  const [adminHash, officerHash, citizenHash] = await Promise.all([
-    bcrypt.hash('Admin@12345', 10),
-    bcrypt.hash('Officer@12345', 10),
-    bcrypt.hash('Citizen@12345', 10),
+  const [adminHash, officerHash, citizen1Hash, citizen2Hash] = await Promise.all([
+    bcrypt.hash(requiredSeedPassword('RW_SEED_ADMIN_PASSWORD'), 10),
+    bcrypt.hash(requiredSeedPassword('RW_SEED_OFFICER_PASSWORD'), 10),
+    bcrypt.hash(requiredSeedPassword('RW_SEED_CITIZEN_PASSWORD'), 10),
+    bcrypt.hash(requiredSeedPassword('RW_SEED_CITIZEN2_PASSWORD'), 10),
   ]);
 
   const admin = await prisma.user.upsert({
@@ -80,7 +87,7 @@ async function seedUsers() {
       fullName: 'Juan Dela Cruz',
       email: 'citizen@example.com',
       phone: '+63 917 000 0004',
-      passwordHash: citizenHash,
+      passwordHash: citizen1Hash,
       role: 'CITIZEN',
     },
   });
@@ -92,7 +99,7 @@ async function seedUsers() {
       fullName: 'Liza Ramos',
       email: 'citizen2@example.com',
       phone: '+63 917 000 0005',
-      passwordHash: citizenHash,
+      passwordHash: citizen2Hash,
       role: 'CITIZEN',
     },
   });
@@ -363,11 +370,11 @@ async function main() {
   await seedReports(users);
 
   console.log('\nDemo accounts (change these in production):');
-  console.log('  ADMIN                admin@roadwatch.gov       / Admin@12345');
-  console.log('  MAINTENANCE OFFICER  officer1@roadwatch.gov    / Officer@12345');
-  console.log('  MAINTENANCE OFFICER  officer2@roadwatch.gov    / Officer@12345');
-  console.log('  CITIZEN              citizen@example.com       / Citizen@12345');
-  console.log('  CITIZEN              citizen2@example.com      / Citizen@12345');
+  console.log('  ADMIN                admin@roadwatch.gov       ');
+  console.log('  MAINTENANCE OFFICER  officer1@roadwatch.gov    ');
+  console.log('  MAINTENANCE OFFICER  officer2@roadwatch.gov    ');
+  console.log('  CITIZEN              citizen@example.com       ');
+  console.log('  CITIZEN              citizen2@example.com      ');
 }
 
 main()

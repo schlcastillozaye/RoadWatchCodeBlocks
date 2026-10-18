@@ -13,14 +13,15 @@ import 'package:roadwatch/models/report.dart';
 /// API is supplied:
 ///
 /// ```powershell
-/// flutter test test/live_contract_test.dart --dart-define=RW_LIVE_API=http://127.0.0.1:4000
+/// flutter test test/live_contract_test.dart --dart-define=RW_LIVE_API=http://127.0.0.1:4000 --dart-define=RW_LIVE_PASSWORD=<secure-test-password>
 /// ```
 ///
-/// The demo citizen credentials come from `backend/seed.php`; they only exist on
-/// a seeded development database, never on production.
+/// Supply a non-production test password with `--dart-define=RW_LIVE_PASSWORD=...`;
+/// never put account passwords in this source file or run this contract against
+/// production accounts.
 const _base = String.fromEnvironment('RW_LIVE_API');
 const _citizenEmail = 'citizen@example.com';
-const _citizenPassword = 'Citizen@12345';
+const _citizenPassword = String.fromEnvironment('RW_LIVE_PASSWORD');
 
 /// Every value the API documents. The apps offer a subset, but all of these must
 /// round-trip through the model so older reports keep rendering.
@@ -121,7 +122,9 @@ void main() {
       expect(photo.headers['content-type'], startsWith('image/'));
       expect(photo.bodyBytes, isNotEmpty);
     },
-    skip: _base.isEmpty ? 'set --dart-define=RW_LIVE_API=<url> to run this live test' : false,
+    skip: _base.isEmpty || _citizenPassword.isEmpty
+        ? 'set RW_LIVE_API and RW_LIVE_PASSWORD test defines to run this live test'
+        : false,
     timeout: const Timeout(Duration(seconds: 90)),
   );
 }

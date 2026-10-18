@@ -454,7 +454,9 @@ class _TimelineRow extends StatelessWidget {
       'MODERATION' => AppColors.statusGreen,
       'ASSIGNMENT' => AppColors.statusBlue,
       'REPAIR' => AppColors.statusAmber,
-      _ => AppColors.darkBlue,
+      // Anything unrecognised still draws a dot that is visible on the card in
+      // both themes (navy in light mode, sky in dark mode).
+      _ => AppColors.brandAccent,
     };
 
     return IntrinsicHeight(
@@ -475,7 +477,7 @@ class _TimelineRow extends StatelessWidget {
               ),
               if (!isLast)
                 Expanded(
-                  child: Container(width: 2, color: AppColors.lightAzure, margin: const EdgeInsets.symmetric(vertical: 2)),
+                  child: Container(width: 2, color: AppColors.border, margin: const EdgeInsets.symmetric(vertical: 2)),
                 ),
             ],
           ),

@@ -202,9 +202,8 @@ Invoke-RestMethod https://roadwatch-api.onrender.com/health
 Then:
 
 1. Open the web URL — you should get the RoadWatch login page.
-2. If you set `SEED_ON_START=true`, log in with `admin@roadwatch.gov` / `Admin@12345`
-   (see `backend/prisma/seed.ts` for all seeded accounts) and **change those passwords
-   immediately**, or seed manually instead (below).
+2. If you set `SEED_ON_START=true`, sign in with the administrator account using a
+   password configured securely outside source control. Rotate it before public use.
 
 ### Seeding manually (alternative to `SEED_ON_START`)
 

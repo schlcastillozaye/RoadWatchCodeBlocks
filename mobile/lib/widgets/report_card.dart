@@ -18,6 +18,9 @@ class ReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     AppColors.syncTo(context);
     final cover = report.coverPhoto;
+    // Tapping the cover opens the full-size gallery at that photo; the rest of
+    // the card still opens the report.
+    final coverIndex = cover == null ? 0 : report.photos.indexOf(cover);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -27,17 +30,29 @@ class ReportCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.cardSurface,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.lightAzure),
+            border: Border.all(color: AppColors.border),
           ),
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpacing.md),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (cover != null)
-                PhotoThumbnail(photo: cover, width: 76, height: 76, radius: 14)
+                PhotoThumbnail(
+                  photo: cover,
+                  width: 76,
+                  height: 76,
+                  radius: 14,
+                  onTap: report.photos.isEmpty
+                      ? null
+                      : () => PhotoGalleryScreen.open(
+                            context,
+                            report.photos,
+                            initialIndex: coverIndex < 0 ? 0 : coverIndex,
+                          ),
+                )
               else
                 CategoryBadge(category: report.category, size: 76),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

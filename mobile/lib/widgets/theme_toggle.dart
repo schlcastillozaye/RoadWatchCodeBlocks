@@ -76,7 +76,7 @@ class ThemeModeSelector extends StatelessWidget {
       style: ButtonStyle(
         textStyle: WidgetStatePropertyAll(AppTypography.caption(size: 12, weight: FontWeight.w600)),
         foregroundColor: WidgetStatePropertyAll(AppColors.textSecondary),
-        side: WidgetStatePropertyAll(BorderSide(color: AppColors.lightAzure)),
+        side: WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
       ),
     );
   }

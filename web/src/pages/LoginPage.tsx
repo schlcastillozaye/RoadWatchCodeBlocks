@@ -8,8 +8,8 @@ import { useAuth } from '../lib/auth';
 import { BRAND } from '../lib/config';
 
 const DEMO_ACCOUNTS = [
-  { label: 'Administrator', email: 'admin@roadwatch.gov', password: 'Admin@12345' },
-  { label: 'Maintenance officer', email: 'officer1@roadwatch.gov', password: 'Officer@12345' },
+  { label: 'Administrator', email: 'admin@roadwatch.gov' },
+  { label: 'Maintenance officer', email: 'officer1@roadwatch.gov' },
 ];
 
 /** Seeded fixtures are a development convenience only — never shown in production builds. */
@@ -47,7 +47,7 @@ export function LoginPage() {
 
   const fillDemo = (account: (typeof DEMO_ACCOUNTS)[number]) => {
     setEmail(account.email);
-    setPassword(account.password);
+    setPassword('');
     setError(null);
   };
 

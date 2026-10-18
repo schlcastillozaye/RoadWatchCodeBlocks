@@ -13,7 +13,7 @@
    through the SPA router (`window.navigateTo`) rather than direct deep-link
    GETs (a production host uses web/public/_redirects for that).
 
-   Usage:  node tests/e2e.mjs
+   Usage:  set RW_E2E_CITIZEN_PASSWORD and RW_E2E_ADMIN_PASSWORD securely, then run node tests/e2e.mjs
    --------------------------------------------------------------------------- */
 
 import { spawn } from 'node:child_process';
@@ -28,6 +28,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.resolve(__dirname, '..');
 const PORT = Number(process.env.RW_WEB_PORT || 5173);
 const ORIGIN = `http://localhost:${PORT}`;
+const E2E_PASSWORDS = {
+  citizen: process.env.RW_E2E_CITIZEN_PASSWORD || '',
+  admin: process.env.RW_E2E_ADMIN_PASSWORD || '',
+};
+if (!E2E_PASSWORDS.citizen || !E2E_PASSWORDS.admin) {
+  throw new Error('Set RW_E2E_CITIZEN_PASSWORD and RW_E2E_ADMIN_PASSWORD in the test environment.');
+}
 
 const results = [];
 const record = (id, name, pass, detail) => {
@@ -166,7 +173,7 @@ async function main() {
     const col = makeCollector(page, 'B');
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      await login(page, 'citizen@example.com', 'Citizen@12345');
+      await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
       await page.waitForFunction(() => document.body.innerText.includes('Juan Dela Cruz'), { timeout: 15000 });
       const nameShown = await page.locator('text=Juan Dela Cruz').first().isVisible();
       const token = await page.evaluate(() => localStorage.getItem('roadwatch_auth_token'));
@@ -196,7 +203,7 @@ async function main() {
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
-      else await login(page, 'citizen@example.com', 'Citizen@12345');
+      else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
 
       await nav(page, '/submit-report', '#report-form');
       const locationMap = page.locator('#report-location-map');
@@ -267,11 +274,42 @@ async function main() {
       // and swapped to blob: URLs, not requested directly (which would 401/ORB).
       await page.waitForFunction(() => document.querySelectorAll('#reports-list img[src^="blob:"]').length > 0, { timeout: 15000 }).catch(() => {});
       const authedImages = await page.locator('#reports-list img[src^="blob:"]').count();
+      const photoTrigger = page.locator('#reports-list article', { hasText: title }).locator('[data-photo-viewer]').first();
+      let imageViewerWorks = false;
+      let viewerChecks = {};
+      if (authedImages > 0 && await photoTrigger.count()) {
+        await photoTrigger.evaluate((trigger) => {
+          const photos = JSON.parse(trigger.getAttribute('data-photo-viewer') || '[]');
+          if (photos.length) trigger.setAttribute('data-photo-viewer', JSON.stringify([photos[0], photos[0]]));
+        });
+        await photoTrigger.click();
+        const viewer = page.locator('dialog.rw-lightbox');
+        await viewer.waitFor({ state: 'visible', timeout: 5000 });
+        await page.waitForFunction(() => {
+          const image = document.querySelector('.rw-lightbox-image');
+          return image && !image.hidden;
+        }, null, { timeout: 10000 });
+        const firstCount = await viewer.locator('[data-lightbox-count]').innerText();
+        await viewer.locator('[data-lightbox-next]').click();
+        const secondCount = await viewer.locator('[data-lightbox-count]').innerText();
+        await viewer.locator('[data-lightbox-zoom-in]').click();
+        const zoomed = await viewer.locator('[data-lightbox-stage]').evaluate((stage) => stage.classList.contains('is-zoomed'));
+        await page.keyboard.press('Escape');
+        const escapeClosed = await viewer.count() === 0;
+
+        await photoTrigger.click();
+        await viewer.waitFor({ state: 'visible', timeout: 5000 });
+        await viewer.locator('[data-lightbox-stage]').click({ position: { x: 2, y: 2 } });
+        const backdropClosed = await viewer.count() === 0;
+        viewerChecks = { firstCount, secondCount, zoomed, escapeClosed, backdropClosed };
+        imageViewerWorks = firstCount === '1 / 2' && secondCount === '2 / 2'
+          && zoomed && escapeClosed && backdropClosed;
+      }
       const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
       record('c', 'Choose and adjust report location, submit photo, and verify saved coordinates',
         missingLocationBlocked && noReportSentWithoutLocation && gpsLocationSelected && gpsPermissionError
-          && found && authedImages > 0 && coordinatesSaved && clean,
-        `  missing location blocked: ${missingLocationBlocked && noReportSentWithoutLocation}, GPS selected/error handling: ${gpsLocationSelected && gpsPermissionError}, map click + draggable pin: ${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}, saved location matches: ${coordinatesSaved}, report card visible: ${found}, private photos hydrated: ${authedImages}\n${col.summary()}`);
+          && found && authedImages > 0 && imageViewerWorks && coordinatesSaved && clean,
+        `  missing location blocked: ${missingLocationBlocked && noReportSentWithoutLocation}, GPS selected/error handling: ${gpsLocationSelected && gpsPermissionError}, map click + draggable pin: ${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}, saved location matches: ${coordinatesSaved}, report card visible: ${found}, private photos hydrated: ${authedImages}, full-size viewer (multi-photo/zoom/Escape/backdrop): ${imageViewerWorks} (${JSON.stringify(viewerChecks)})\n${col.summary()}`);
     } catch (err) {
       record('c', 'Choose and adjust report location, submit photo, and verify saved coordinates', false, `  ${err.message}\n${col.summary()}`);
     } finally {
@@ -293,7 +331,7 @@ async function main() {
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
-      else await login(page, 'citizen@example.com', 'Citizen@12345');
+      else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
       await nav(page, '/submit-report', '#report-form');
 
       // Every requested category must be offered, and nothing unexpected is.
@@ -364,7 +402,7 @@ async function main() {
     const col = makeCollector(page, 'D');
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      await login(page, 'admin@roadwatch.gov', 'Admin@12345');
+      await login(page, 'admin@roadwatch.gov', E2E_PASSWORDS.admin);
 
       const adminLandedDirectly = new URL(page.url()).pathname === '/admin'
         && await page.locator('#admin-dashboard-title').isVisible()
@@ -517,7 +555,7 @@ async function main() {
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
-      else await login(page, 'citizen@example.com', 'Citizen@12345');
+      else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
       await nav(page, '/map', '.leaflet-container');
       await page.waitForSelector('.leaflet-marker-icon', { timeout: 15000 });
       const containers = await page.locator('.leaflet-container').count();
@@ -572,7 +610,7 @@ async function main() {
       await page.setViewportSize(viewports[0]);
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
-      else await login(page, 'citizen@example.com', 'Citizen@12345');
+      else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
 
       for (const route of ['/', '/reports', '/submit-report', '/map']) {
         await nav(page, route, '#root header, #reports-list, #report-form, .leaflet-container');
@@ -622,11 +660,11 @@ async function main() {
 
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
-      else await login(page, 'citizen@example.com', 'Citizen@12345');
+      else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
       await page.getByRole('button', { name: 'Logout' }).click();
       await page.waitForSelector('#login-form', { timeout: 15000 });
       const resolved = await page.evaluate(() => window.RW_API_BASE);
-      await login(page, 'citizen@example.com', 'Citizen@12345');
+      await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
 
       const expected = `${override}/api/auth/login`;
       const hit = loginUrls.includes(expected);
@@ -656,7 +694,7 @@ async function main() {
         { timeout: 15000 }
       );
       await page.fill('#login-form input[name="email"]', 'citizen@example.com');
-      await page.fill('#login-form input[name="password"]', 'Citizen@12345');
+      await page.fill('#login-form input[name="password"]', E2E_PASSWORDS.citizen);
       await page.click('#login-form button[type="submit"]');
       const validStatus = (await validResponse).status();
       await page.waitForURL(`${origin}/`, { timeout: 15000 });
@@ -733,7 +771,7 @@ async function main() {
       });
       await userPage.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       if (citizenState) await waitAuthenticated(userPage, 'Juan Dela Cruz');
-      else await login(userPage, 'citizen@example.com', 'Citizen@12345');
+      else await login(userPage, 'citizen@example.com', E2E_PASSWORDS.citizen);
       const userSystemTheme = await userPage.locator('html').getAttribute('data-theme');
       await userPage.click('[data-mobile-menu-toggle]');
       await userPage.click('[data-theme-toggle]');
