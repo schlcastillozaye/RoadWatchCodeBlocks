@@ -287,49 +287,39 @@ These historical results do not establish the current production workflow.
 | Check | Status | Evidence |
 |---|---|---|
 | Existing services and URLs | **PASS** | Railway project `roadwatch`, environment `production`: `frontend` at `https://frontend-production-bb0d.up.railway.app/`, `backend` at `https://roadwatchcodeblocks-production.up.railway.app/`, plus `MySQL`. No duplicate service was created. |
-| Intended source commit | **PENDING DEPLOYMENT** | Production was previously running `91fd2f5035d06590ff2468fa822c8b416f008510`; local `main` contains that commit, the two previous pending commits, and the new DB-backed storage change. |
-| Frontend deployment | **PASS** | HTML, JS, CSS, runtime config, and SPA fallback paths returned HTTP 200. Deployed `web/js/app.js` SHA-256 matched local (`e6a3210bbcfc07a514dc49dd742b28f99ff87d070857f3fe72e1c010fcd5c4f5`); runtime config points at the production API. |
-| Backend health | **PASS (current deployment)** | Before the DB-backed storage commit, `/health` reported `status: ok`, `database: up`, and `storage: local`. Post-deploy verification is recorded after this section is updated. |
-| CORS and public API connectivity | **PASS** | Frontend-origin preflight returned 204 with the exact allowed origin; a disallowed origin received no `Access-Control-Allow-Origin`; browser fetch from the frontend to the public map API returned 200. |
+| Intended source commit | **PASS** | `3de6f8126ab87048c77fb644469b9be6578b0d12` is on local `main`, `origin/main`, and is active on the Railway backend. |
+| Frontend deployment | **PASS** | The existing frontend returned HTTP 200; its runtime config contains `https://roadwatchcodeblocks-production.up.railway.app`. |
+| Backend health | **PASS** | The deployed `/health` returned `status: ok`, `database: up`, and `storage: database`. |
+| CORS and public API connectivity | **PASS** | Frontend-origin `OPTIONS` preflight returned HTTP 204 with `Access-Control-Allow-Origin: https://frontend-production-bb0d.up.railway.app`; public map API returned HTTP 200. |
 | Protected API authentication | **PARTIAL** | Protected routes returned 401 without a valid staff token and included the frontend CORS header. This verifies CORS on those responses, not authenticated workflow behavior. |
 | Production accounts | **PARTIAL** | Read-only DB check confirmed two active citizen accounts, one active admin, and two active maintenance officers. No usable credentials were available in the environment; passwords/hashes were not queried. |
 | Notification schema | **PASS** | Read-only `SHOW CREATE TABLE Notification` confirmed the table, unique `assignmentId`, indexes, and foreign keys to Assignment, Report, and User. The migrator has no separate migration-history ledger, so no versioned migration record was available to inspect. |
 | Notification read path | **PARTIAL** | Deployed `NotificationService` returned an empty list and unread count 0 for an active officer; the DB currently has 0 notifications and 0 assignments. Creation/read-state mutation and authenticated HTTP access were not tested. |
 | Production data and uploads | **RISK / ACTION REQUIRED** | Read-only aggregate counts: 1 Report, 1 ReportPhoto row, 0 Assignment rows, 0 Notification rows. The photo record is a 159,705-byte `image/jpeg`, kind `BEFORE`, attached to a `PENDING_REVIEW` / `NOT_ASSIGNED` report. Its stored key was absent from `/app/uploads`; an exact-key search across the active container and project-owned files/backups found no matching image. The metadata row was not changed. Historical deployment backups were not accessible for inspection. |
 | Storage pricing | **VERIFIED; USAGE-METERED** | Railway’s current pricing lists object storage at $0.015/GB-month and volumes at $0.15/GB-month; both add usage charges. No bucket or volume was created. The selected DB storage reuses the existing MySQL service and avoids creating a new paid service, but adds its bytes to the existing database's metered storage. |
-| Storage implementation | **LOCAL; NOT DEPLOYED** | Images will be stored in the new nullable `ReportPhoto.imageData MEDIUMBLOB` column. New upload bytes and their report/photo metadata are written inside the same database transaction; report detail queries explicitly omit BLOB bytes. Deployment is pending. |
+| Storage migration and deployed schema | **PASS** | Active container reports commit `3de6f8126ab87048c77fb644469b9be6578b0d12`; read-only DB inspection confirms `ReportPhoto.imageData` exists. The existing photo row remains (`photoCount=1`) and has no stored BLOB (`storedBlobs=0`), consistent with the previously missing file. |
+| Storage implementation | **DEPLOYED; UPLOAD NOT LIVE-TESTED** | New image bytes and report/photo metadata are written in one DB transaction; read requests retrieve the BLOB by its unchanged storage key; report detail queries omit BLOB bytes. A production upload/retrieval test was not run because no authorized test account/report was available. |
+| Restart persistence | **NOT TESTED** | Production now uses the existing MySQL database rather than container-local files. No designated production test image was uploaded, so survival of actual uploaded bytes after restart was not exercised. |
 | Full approval → assignment → notification → repair flow | **BLOCKED** | No valid citizen/admin/officer credentials or designated test-data procedure were available. No production records were created or modified. |
 | Storage regression and PHP checks | **PASS** | `php backend/tests/storage_test.php`: 13 passed (including invalid/empty/oversized uploads, missing files, traversal, batch cleanup and write failures). `php backend/tests/config_test.php`: 10 passed. PHP syntax check: 49 files. |
 | Database BLOB integration and migration checks | **PASS (local)** | `php backend/tests/database_storage_test.php` used a loopback MySQL `TEMPORARY TABLE` only: 9 passed, including additive `MEDIUMBLOB` DDL, exact-byte BLOB round-trip above 1 MiB and transaction rollback. No persistent test rows or database were created. |
 | MySQL size compatibility | **PASS (read-only production inspection)** | Production `@@max_allowed_packet` is 67,108,864 bytes; `MEDIUMBLOB` supports 16 MiB, above the enforced 8 MiB per-file maximum. Existing database tables were about 0.73 MiB. |
-| Production-mode storage selection | **PASS (local test)** | Health returned `status=ok,database=up,storage=database`; a production configuration using `STORAGE_DRIVER=local` was rejected. |
+| Production-mode storage selection | **PASS** | Railway `STORAGE_DRIVER` is set to `database`; deployed health reports `storage: database`. Local production guard test rejects `STORAGE_DRIVER=local`. |
 | Flutter static analysis and tests | **PASS** | `flutter analyze` reported no issues; `flutter test` passed 49 tests with 1 credential-gated live API test skipped. |
 | Android production-API configuration | **PASS; DEBUG SIGNED ONLY** | `flutter build apk --debug --dart-define=API_BASE_URL=https://roadwatchcodeblocks-production.up.railway.app` succeeded. The configured HTTPS API origin is present in the APK's Flutter kernel payload. This debug APK is not a release artifact. |
 | Web syntax | **PASS** | `node --check web/js/app.js` passed. The authenticated browser/API E2E suite was not run because the local API integration database is unavailable. |
 | Full API workflow integration | **BLOCKED** | The configured loopback database user lacks `CREATE DATABASE`; production workflow credentials are unavailable. No real production report is used for tests. |
 | APK release signing | **NOT RELEASE-READY** | The existing `mobile/build/app/outputs/flutter-apk/app-release.apk` verifies with signer `CN=Android Debug` (certificate SHA-256 `10c72c0a750bec19c7693cd702e946f21ab961264107af0ec1c0828b59eb9918`; APK SHA-256 `6bb5d7ef7426ed7fe8f6cae72e0d620705641bd38d48260259f36d3145b6b776`). The updated Gradle configuration requires secure external signing values and refuses unsigned release builds before build tasks run. The debug build passed; no local keystore was found under `mobile/android` and no local signing environment-variable names were present. CI signing-secret availability was not inspected. |
 
-```powershell
-# Before adding a volume, inspect the existing report photo record and plan
-# recovery/remediation; do not expose its private metadata in logs.
-# Then add a persistent Railway volume at /app/uploads and verify upload,
-# retrieval, and survival across a controlled redeploy using dedicated test data.
-```
-
 ### Remaining manual tasks
 
-1. **Photo persistence:** The image is not present in the active backend or the
-   local project search; deployment backups could not be inspected. The Railway
-   project showed 29 days / $4.71 remaining, so creating a volume may incur
-   charges and restart the backend. Once storage spending is authorized, attach
-   a persistent volume at `/app/uploads` to the existing `backend` service and
-   keep `STORAGE_PERSISTENT_MOUNT_PATH=/app/uploads`. Verify the mount is active
-   and writable before promoting the backend deployment.
-2. **Authenticated workflow:** Securely supply or provision dedicated test
+1. **Authenticated workflow and upload verification:** Securely supply or provision dedicated test
    accounts through an authorized admin process, then run the full citizen →
    admin approval → officer assignment/notification → repair completion smoke
-   test. Do not use real citizen reports or production seeding.
-3. **APK release:** Create a private upload keystore (for example with
+   test with a designated test report. Verify photo upload/retrieval and
+   persistence across a controlled backend restart. Do not use real citizen
+   reports or production seeding.
+2. **APK release:** Create a private upload keystore (for example with
    `keytool -genkeypair -v -keystore "$env:USERPROFILE\roadwatch-upload-key.jks" -alias roadwatch-upload -keyalg RSA -keysize 2048 -validity 10000`).
    Supply its absolute path and passwords as `ROADWATCH_UPLOAD_STORE_FILE`,
    `ROADWATCH_UPLOAD_STORE_PASSWORD`, `ROADWATCH_UPLOAD_KEY_ALIAS`, and
@@ -340,8 +330,8 @@ These historical results do not establish the current production workflow.
 
 The current production photo migration adds a nullable field and preserves
 existing metadata; it cannot recover the missing historical image. No Railway
-volume or bucket was created. The `STORAGE_DRIVER` variable was updated to
-`database` in the existing service configuration before promoting the new code.
-After deployment, verify health, DB connectivity, API/web connectivity and the
-BLOB-backed retrieval route. Full citizen → admin → officer workflow remains
-unverified without designated test credentials.
+volume, object-storage bucket, or duplicate service was created. The existing
+MySQL-backed storage deployment is healthy, but actual production photo upload,
+retrieval and restart-persistence checks remain blocked by the lack of an
+authorized designated test account/report. Full citizen → admin → officer
+workflow remains unverified for the same reason.
