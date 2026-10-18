@@ -914,24 +914,31 @@ class ReportService
             throw AppError::badRequest('At most 8 photos may be uploaded at once.');
         }
         $out = [];
-        foreach ($files as $file) {
-            self::assertUploadOk($file);
-            // Enforce the configured limit here too: PHP's own ini limits can be
-            // larger (or, on some hosts, swallowed before this code runs), and
-            // MAX_UPLOAD_BYTES is the documented contract for clients.
-            $limit = Config::maxUploadBytes();
-            if ($limit > 0 && (int) ($file['size'] ?? 0) > $limit) {
-                $mb = (int) round($limit / (1024 * 1024));
-                throw new AppError('File too large. Maximum size is ' . $mb . ' MB.', 413, 'UPLOAD_LIMIT_FILE_SIZE');
+        try {
+            foreach ($files as $file) {
+                self::assertUploadOk($file);
+                // Enforce the configured limit here too: PHP's own ini limits can be
+                // larger (or, on some hosts, swallowed before this code runs), and
+                // MAX_UPLOAD_BYTES is the documented contract for clients.
+                $limit = Config::maxUploadBytes();
+                if ($limit > 0 && (int) ($file['size'] ?? 0) > $limit) {
+                    $mb = (int) round($limit / (1024 * 1024));
+                    throw new AppError('File too large. Maximum size is ' . $mb . ' MB.', 413, 'UPLOAD_LIMIT_FILE_SIZE');
+                }
+                $buffer = @file_get_contents($file['tmp_name']);
+                if ($buffer === false || $buffer === '') {
+                    throw AppError::badRequest('One of the uploaded files is empty or unreadable.');
+                }
+                $mime = self::resolveMime($file, $buffer);
+                $dims = ImageMeta::dimensions($buffer);
+                $stored = Storage::save($buffer, (string) $file['name'], $mime, $folder);
+                $out[] = ['stored' => $stored, 'width' => $dims['width'], 'height' => $dims['height']];
             }
-            $buffer = @file_get_contents($file['tmp_name']);
-            if ($buffer === false || $buffer === '') {
-                continue;
+        } catch (\Throwable $e) {
+            foreach ($out as $saved) {
+                Storage::remove($saved['stored']['key']);
             }
-            $mime = self::resolveMime($file, $buffer);
-            $dims = ImageMeta::dimensions($buffer);
-            $stored = Storage::save($buffer, (string) $file['name'], $mime, $folder);
-            $out[] = ['stored' => $stored, 'width' => $dims['width'], 'height' => $dims['height']];
+            throw $e;
         }
         return $out;
     }
@@ -944,27 +951,36 @@ class ReportService
         $metas = self::storeBuffers($files, $folder);
         $created = [];
         $now = Dates::toDb(Dates::now());
-        foreach ($metas as $m) {
-            $id = Ids::cuid();
-            Db::execute(
-                'INSERT INTO `ReportPhoto` (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`blurData`,`caption`,`uploadedById`,`createdAt`)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-                [
-                    $id,
-                    $reportId,
-                    $kind,
-                    $m['stored']['key'],
-                    $m['stored']['mimeType'],
-                    $m['stored']['sizeBytes'],
-                    $m['width'],
-                    $m['height'],
-                    null,
-                    null,
-                    $uploadedById,
-                    $now,
-                ]
-            );
-            $created[] = $id;
+        try {
+            Db::transaction(static function () use ($metas, $reportId, $kind, $uploadedById, $now, &$created): void {
+                foreach ($metas as $m) {
+                    $id = Ids::cuid();
+                    Db::execute(
+                        'INSERT INTO `ReportPhoto` (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`blurData`,`caption`,`uploadedById`,`createdAt`)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                        [
+                            $id,
+                            $reportId,
+                            $kind,
+                            $m['stored']['key'],
+                            $m['stored']['mimeType'],
+                            $m['stored']['sizeBytes'],
+                            $m['width'],
+                            $m['height'],
+                            null,
+                            null,
+                            $uploadedById,
+                            $now,
+                        ]
+                    );
+                    $created[] = $id;
+                }
+            });
+        } catch (\Throwable $e) {
+            foreach ($metas as $m) {
+                Storage::remove($m['stored']['key']);
+            }
+            throw $e;
         }
         return $created;
     }
@@ -985,9 +1001,6 @@ class ReportService
     private static function resolveMime(array $file, string $buffer): string
     {
         $client = strtolower(trim(explode(';', (string) ($file['type'] ?? ''))[0]));
-        if (in_array($client, Schema::ACCEPTED_IMAGE_MIME, true)) {
-            return $client;
-        }
         $detected = null;
         if (function_exists('finfo_open')) {
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -999,7 +1012,31 @@ class ReportService
         if ($detected !== null && in_array($detected, Schema::ACCEPTED_IMAGE_MIME, true)) {
             return $detected;
         }
-        $shown = $client !== '' ? $client : ($detected ?? 'unknown');
+        $signatureMime = self::signatureMime($buffer);
+        if ($signatureMime !== null) {
+            return $signatureMime;
+        }
+        $shown = $detected ?? ($client !== '' ? $client : 'unknown');
         throw AppError::unsupportedMedia('Unsupported image type: ' . $shown . '. Allowed: JPEG, PNG, WebP, HEIC.');
+    }
+
+    private static function signatureMime(string $buffer): ?string
+    {
+        if (str_starts_with($buffer, "\xFF\xD8\xFF")) {
+            return 'image/jpeg';
+        }
+        if (str_starts_with($buffer, "\x89PNG\r\n\x1A\n")) {
+            return 'image/png';
+        }
+        if (strlen($buffer) >= 12 && substr($buffer, 0, 4) === 'RIFF' && substr($buffer, 8, 4) === 'WEBP') {
+            return 'image/webp';
+        }
+        if (strlen($buffer) >= 12 && substr($buffer, 4, 4) === 'ftyp') {
+            $brand = substr($buffer, 8, 4);
+            if (in_array($brand, ['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1'], true)) {
+                return in_array($brand, ['heic', 'heix', 'hevc', 'hevx'], true) ? 'image/heic' : 'image/heif';
+            }
+        }
+        return null;
     }
 }

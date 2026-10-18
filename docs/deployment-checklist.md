@@ -66,6 +66,7 @@ The current Railway project already has these services from this repository:
    | `PUBLIC_BASE_URL` | `https://roadwatchcodeblocks-production.up.railway.app` | the public origin used to build absolute photo URLs (needed by mobile). **Never** leave it on `http://localhost:4000` |
    | `STORAGE_DRIVER` | `local` | only `local` is implemented in PHP |
    | `STORAGE_LOCAL_DIR` | `/app/uploads` | must match the volume mount |
+   | `STORAGE_PERSISTENT_MOUNT_PATH` | `/app/uploads` | the PHP API refuses production file reads, uploads, and healthy readiness unless this exact path is a mounted, writable volume |
    | `MAX_UPLOAD_BYTES` | `8388608` | 8 MB — enforced by the app; the image's `php.ini` keeps PHP's own limits above it so this is the error the client sees |
    | `SEED_ON_START` | `false` | set `true` once only if you want demo data |
 
@@ -86,7 +87,10 @@ The current Railway project already has these services from this repository:
    directory is on the container's ephemeral filesystem. Add a Railway volume
    mounted at **`/app/uploads`** only after confirming and safely migrating any
    existing files. Without it, uploaded photos can be lost on redeploy or
-   container replacement. See §9 for the observed current state.
+   container replacement. Set `STORAGE_PERSISTENT_MOUNT_PATH=/app/uploads`.
+   The PHP API checks `/proc/self/mountinfo` and refuses readiness and file
+   operations when the configured directory is not itself a writable mount.
+   See §9 for the observed current state.
 
 6. **Schema.** Nothing to do — the image migrates on boot.
 
@@ -281,7 +285,7 @@ These historical results do not establish the current production workflow.
 | Check | Status | Evidence |
 |---|---|---|
 | Existing services and URLs | **PASS** | Railway project `roadwatch`, environment `production`: `frontend` at `https://frontend-production-bb0d.up.railway.app/`, `backend` at `https://roadwatchcodeblocks-production.up.railway.app/`, plus `MySQL`. No duplicate service was created. |
-| Intended source commit | **PASS** | Local `main`, `origin/main`, and the backend container's `RAILWAY_GIT_COMMIT_SHA` all report `91fd2f5035d06590ff2468fa822c8b416f008510`. |
+| Intended source commit | **PASS (prior deployment)** | The active backend container reports `RAILWAY_GIT_COMMIT_SHA=91fd2f5035d06590ff2468fa822c8b416f008510`. The local branch additionally contains `4a60a6ec505e728b75c55962301f780b7a4158fa`; storage work is local and must not be pushed before the volume is provisioned. |
 | Frontend deployment | **PASS** | HTML, JS, CSS, runtime config, and SPA fallback paths returned HTTP 200. Deployed `web/js/app.js` SHA-256 matched local (`e6a3210bbcfc07a514dc49dd742b28f99ff87d070857f3fe72e1c010fcd5c4f5`); runtime config points at the production API. |
 | Backend health | **PASS** | `/health` reported `status: ok`, `database: up`, and `storage: local`. |
 | CORS and public API connectivity | **PASS** | Frontend-origin preflight returned 204 with the exact allowed origin; a disallowed origin received no `Access-Control-Allow-Origin`; browser fetch from the frontend to the public map API returned 200. |
@@ -289,11 +293,15 @@ These historical results do not establish the current production workflow.
 | Production accounts | **PARTIAL** | Read-only DB check confirmed two active citizen accounts, one active admin, and two active maintenance officers. No usable credentials were available in the environment; passwords/hashes were not queried. |
 | Notification schema | **PASS** | Read-only `SHOW CREATE TABLE Notification` confirmed the table, unique `assignmentId`, indexes, and foreign keys to Assignment, Report, and User. The migrator has no separate migration-history ledger, so no versioned migration record was available to inspect. |
 | Notification read path | **PARTIAL** | Deployed `NotificationService` returned an empty list and unread count 0 for an active officer; the DB currently has 0 notifications and 0 assignments. Creation/read-state mutation and authenticated HTTP access were not tested. |
-| Production data and uploads | **RISK / ACTION REQUIRED** | Read-only aggregate counts: 1 Report, 1 ReportPhoto row, 0 Assignment rows, 0 Notification rows. `/app/uploads` contained 0 files and is on the container's `overlay` filesystem with no dedicated mount. The existing photo record may refer to a missing local file; do not assume it is recoverable. Do not restart/redeploy the backend before planning persistent storage and assessing that record. |
+| Production data and uploads | **RISK / ACTION REQUIRED** | Read-only aggregate counts: 1 Report, 1 ReportPhoto row, 0 Assignment rows, 0 Notification rows. The photo record is a 159,705-byte `image/jpeg`, kind `BEFORE`, attached to a `PENDING_REVIEW` / `NOT_ASSIGNED` report. Its stored key does not exist in `/app/uploads`; an exact-key search across the active container and project-owned files/backups found no matching image. The API container has no persistent mount; the report/photo database rows remain untouched. Historical deployment backups were not accessible for inspection. |
+| S3 alternative | **NOT CONFIGURED** | The deployed driver is `local`; `S3_BUCKET`, `S3_REGION`, and `S3_ENDPOINT` are unset. No S3-compatible PHP adapter is implemented. No bucket was created. |
+| Storage safety implementation | **LOCAL; NOT DEPLOYED** | Production local file access/readiness now requires `/app/uploads` to be the exact writable mount at `STORAGE_PERSISTENT_MOUNT_PATH`. Uploads are content-sniffed, staged and atomically renamed; partial batches and failed DB inserts clean up files. The live backend still runs the earlier commit and remains on ephemeral storage. |
 | Full approval → assignment → notification → repair flow | **BLOCKED** | No valid citizen/admin/officer credentials or designated test-data procedure were available. No production records were created or modified. |
+| Storage regression and PHP checks | **PASS** | `php backend/tests/storage_test.php`: 12 passed (valid image write/read, missing files, path traversal, spoofed MIME, oversize, partial batch cleanup, failed writes). `php backend/tests/config_test.php`: 10 passed. `php -l` across 48 PHP files: passed. |
+| Production storage readiness guard | **PARTIAL** | In the current Windows environment, a production-mode `/health` request with no verifiable Linux mount returned HTTP 500 as intended. Actual Railway-mounted-volume readiness cannot be exercised until a volume is attached. |
 | Flutter static analysis and tests | **PASS** | `flutter analyze` reported no issues; `flutter test` passed 48 tests with 1 credential-gated live API test skipped. |
-| Web/PHP local checks | **PARTIAL** | `node --check web/js/app.js` passed. The PHP config test could not run because PHP is not installed locally. The authenticated browser/API E2E suite was not run: it requires citizen/admin passwords and creates test users/reports, with no authorized production test procedure available. |
-| API integration and disposable migration tests | **BLOCKED** | The integration suite requires a disposable test database and PHP runtime; neither was available. Production schema inspection was read-only and did not reapply migrations. |
+| Web syntax | **PASS** | `node --check web/js/app.js` passed. The authenticated browser/API E2E suite was not run because the local API integration database is unavailable. |
+| API integration and disposable migration tests | **BLOCKED** | PHP and local MySQL are available, but the configured loopback database user lacks `CREATE DATABASE`. The safe disposable-database attempt stopped before creating a DB; the existing local `roadwatch` database was not modified. |
 | APK release signing | **NOT RELEASE-READY** | The existing `mobile/build/app/outputs/flutter-apk/app-release.apk` verifies with signer `CN=Android Debug` (certificate SHA-256 `10c72c0a750bec19c7693cd702e946f21ab961264107af0ec1c0828b59eb9918`; APK SHA-256 `6bb5d7ef7426ed7fe8f6cae72e0d620705641bd38d48260259f36d3145b6b776`). The updated Gradle configuration requires secure external signing values and refuses unsigned release builds before build tasks run. The debug build passed; no local keystore was found under `mobile/android` and no local signing environment-variable names were present. CI signing-secret availability was not inspected. |
 
 ```powershell
@@ -305,12 +313,13 @@ These historical results do not establish the current production workflow.
 
 ### Remaining manual tasks
 
-1. **Photo persistence:** Determine whether the existing `ReportPhoto` object can
-   be recovered. The current project showed 29 days / $4.71 remaining; a new
-   volume may incur charges and restart the backend. After the owner confirms the
-   storage budget and assesses that photo record, add a persistent Railway volume
-   mounted at `/app/uploads`. Verify a dedicated test upload remains available
-   after redeploy.
+1. **Photo persistence:** The image is not present in the active backend or the
+   local project search; deployment backups could not be inspected. The Railway
+   project showed 29 days / $4.71 remaining, so creating a volume may incur
+   charges and restart the backend. Once storage spending is authorized, attach
+   a persistent volume at `/app/uploads` to the existing `backend` service and
+   keep `STORAGE_PERSISTENT_MOUNT_PATH=/app/uploads`. Verify the mount is active
+   and writable before promoting the backend deployment.
 2. **Authenticated workflow:** Securely supply or provision dedicated test
    accounts through an authorized admin process, then run the full citizen →
    admin approval → officer assignment/notification → repair completion smoke
@@ -325,6 +334,6 @@ These historical results do not establish the current production workflow.
    SHA-256 checksum before distribution. Never commit the keystore or secrets.
 
 No Railway variables, volumes, or services were changed during this audit. No
-production records were mutated. Do not push these branch changes while the
-backend has an unmounted upload directory; an automatic redeploy could restart
-the backend before persistent storage is addressed.
+production records were mutated. Do not push the local storage changes while the
+backend has an unmounted upload directory; an automatic redeploy would fail the
+new storage readiness check and may interrupt the active service.

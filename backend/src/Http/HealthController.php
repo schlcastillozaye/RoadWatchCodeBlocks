@@ -12,6 +12,8 @@ class HealthController
 {
     public static function health(): array
     {
+        Storage::assertPersistentStorage();
+
         $database = 'unknown';
         try {
             Db::scalar('SELECT 1');

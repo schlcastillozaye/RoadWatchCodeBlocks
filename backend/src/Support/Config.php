@@ -77,6 +77,12 @@ class Config
         return Env::str('STORAGE_DRIVER', 'local');
     }
 
+    /** Expected mount point for persistent local production file storage. */
+    public static function storagePersistentMountPath(): string
+    {
+        return Env::str('STORAGE_PERSISTENT_MOUNT_PATH', '');
+    }
+
     /** Absolute path to the local storage directory. */
     public static function storageDir(): string
     {

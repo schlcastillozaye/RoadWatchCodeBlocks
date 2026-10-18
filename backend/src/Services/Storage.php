@@ -28,6 +28,54 @@ class Storage
         return 'local';
     }
 
+    /**
+     * Production local storage must be the exact path of a mounted persistent
+     * volume. An explicit path alone is not enough: verify it in Linux mountinfo.
+     */
+    public static function assertPersistentStorage(): void
+    {
+        if (!Config::isProd()) {
+            return;
+        }
+
+        $configuredMount = Config::storagePersistentMountPath();
+        $storagePath = realpath(Config::storageDir());
+        $mountPath = $configuredMount !== '' ? realpath($configuredMount) : false;
+        if ($storagePath === false || $mountPath === false || $storagePath !== $mountPath) {
+            throw new \RuntimeException(
+                'Production local storage must match STORAGE_PERSISTENT_MOUNT_PATH.'
+            );
+        }
+
+        $mountInfo = @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES);
+        if ($mountInfo === false) {
+            throw new \RuntimeException('Cannot verify the production storage volume mount.');
+        }
+
+        $isMounted = false;
+        foreach ($mountInfo as $line) {
+            $fields = explode(' ', explode(' - ', $line, 2)[0]);
+            if (!isset($fields[4])) {
+                continue;
+            }
+            $mountedPath = preg_replace_callback(
+                '/\\\\([0-7]{3})/',
+                static fn (array $match): string => chr(octdec($match[1])),
+                $fields[4]
+            );
+            if ($mountedPath === $mountPath) {
+                $isMounted = true;
+                break;
+            }
+        }
+
+        if (!$isMounted || !is_dir($storagePath) || !is_writable($storagePath)) {
+            throw new \RuntimeException(
+                'Production storage is not a writable persistent mount; refusing local file storage.'
+            );
+        }
+    }
+
     public static function extensionForMime(string $mime, ?string $originalName = null): string
     {
         if (isset(self::MIME_EXT[$mime])) {
@@ -52,17 +100,27 @@ class Storage
      */
     public static function save(string $buffer, string $originalName, string $mimeType, string $folder = 'misc'): array
     {
+        self::assertPersistentStorage();
         $folder = self::safeSegment($folder);
         $ext = self::extensionForMime($mimeType, $originalName);
         $key = $folder . '/' . base_convert((string) Dates::nowMs(), 10, 36) . '-' . bin2hex(random_bytes(8)) . $ext;
         $full = self::resolve($key);
 
         $dir = dirname($full);
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+        if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+            throw AppError::internal('Could not create the upload directory.');
         }
-        if (@file_put_contents($full, $buffer) === false) {
-            throw AppError::internal('Could not write the uploaded file to storage.');
+        $temporary = $full . '.tmp-' . bin2hex(random_bytes(8));
+        try {
+            $written = @file_put_contents($temporary, $buffer, LOCK_EX);
+            if ($written !== strlen($buffer) || !@rename($temporary, $full)) {
+                throw AppError::internal('Could not write the uploaded file to storage.');
+            }
+        } catch (\Throwable $e) {
+            if (is_file($temporary)) {
+                @unlink($temporary);
+            }
+            throw $e;
         }
 
         return [
@@ -75,6 +133,7 @@ class Storage
 
     public static function read(string $key): string
     {
+        self::assertPersistentStorage();
         $full = self::resolve($key);
         if (!is_file($full)) {
             throw AppError::notFound('File not found');

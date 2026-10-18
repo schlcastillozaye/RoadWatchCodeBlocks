@@ -53,6 +53,7 @@ ENV PORT=4000 \
     NODE_ENV=production \
     STORAGE_DRIVER=local \
     STORAGE_LOCAL_DIR=/app/uploads \
+    STORAGE_PERSISTENT_MOUNT_PATH=/app/uploads \
     RUN_MIGRATIONS=true \
     PHP_CLI_SERVER_WORKERS=4
 
