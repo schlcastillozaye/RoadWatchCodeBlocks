@@ -93,12 +93,25 @@ try {
     ));
 
     $badImage = tempnam($root, 'invalid-');
+    $emptyImage = tempnam($root, 'empty-');
     $partialImage = tempnam($root, 'partial-');
     $largeImage = tempnam($root, 'oversized-');
-    $tmpFiles = array_filter([$badImage, $partialImage, $largeImage]);
+    $tmpFiles = array_filter([$badImage, $emptyImage, $partialImage, $largeImage]);
     file_put_contents($badImage, 'not an image');
+    file_put_contents($emptyImage, '');
     file_put_contents($partialImage, $png);
     file_put_contents($largeImage, $png);
+
+    check('empty upload is rejected', expectAppError(
+        static fn () => ReportService::storeBuffers([[
+            'name' => 'empty.png',
+            'type' => 'image/png',
+            'tmp_name' => $emptyImage,
+            'error' => UPLOAD_ERR_OK,
+            'size' => 0,
+        ]], 'reports'),
+        400
+    ));
 
     check('spoofed image MIME is rejected', expectAppError(
         static fn () => ReportService::storeBuffers([[

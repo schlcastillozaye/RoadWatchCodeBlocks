@@ -45,7 +45,11 @@ class ReportQueries
         $photosByReport = [];
         if ($reportIds) {
             $rows = Db::all(
-                'SELECT * FROM `ReportPhoto` WHERE `reportId` IN (' . Db::placeholders($reportIds) . ') ORDER BY `createdAt` ASC',
+                'SELECT `id`, `reportId`, `kind`, `storageKey`, `mimeType`, `sizeBytes`, `width`, `height`,
+                        `blurData`, `caption`, `uploadedById`, `createdAt`
+                 FROM `ReportPhoto`
+                 WHERE `reportId` IN (' . Db::placeholders($reportIds) . ')
+                 ORDER BY `createdAt` ASC',
                 $reportIds
             );
             foreach ($rows as $row) {

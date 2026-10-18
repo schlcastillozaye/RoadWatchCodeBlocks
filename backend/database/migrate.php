@@ -81,6 +81,11 @@ function rw_apply_patches(PDO $pdo): void
         echo "  + added Report.categoryOther\n";
     }
 
+    if (rw_column_type($pdo, 'ReportPhoto', 'imageData') === '') {
+        $pdo->exec('ALTER TABLE `ReportPhoto` ADD COLUMN `imageData` MEDIUMBLOB NULL');
+        echo "  + added ReportPhoto.imageData\n";
+    }
+
     // 2. Report.category must accept every value Schema::CATEGORIES validates.
     if (!str_contains(rw_column_type($pdo, 'Report', 'category'), "'ROAD_OBSTRUCTION'")) {
         $pdo->exec(

@@ -311,11 +311,11 @@ class ReportService
             throw AppError::badRequest('At least one photo of the issue is required.');
         }
 
-        $stored = self::storeBuffers($files, 'reports');
-
+        $stored = [];
         $referenceNo = null;
         try {
-            $reportId = Db::transaction(function () use ($actor, $input, $stored, &$referenceNo) {
+            $reportId = Db::transaction(function () use ($actor, $input, $files, &$stored, &$referenceNo) {
+                $stored = self::storeBuffers($files, 'reports');
                 $referenceNo = Reference::next();
                 $id = Ids::cuid();
                 $now = Dates::toDb(Dates::now());
@@ -357,8 +357,8 @@ class ReportService
 
                 foreach ($stored as $p) {
                     Db::execute(
-                        'INSERT INTO `ReportPhoto` (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`blurData`,`caption`,`uploadedById`,`createdAt`)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                        'INSERT INTO `ReportPhoto` (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`blurData`,`caption`,`uploadedById`,`createdAt`,`imageData`)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         [
                             Ids::cuid(),
                             $id,
@@ -372,6 +372,7 @@ class ReportService
                             null,
                             $actor['id'],
                             $now,
+                            $p['stored']['data'] ?? null,
                         ]
                     );
                 }
@@ -948,16 +949,17 @@ class ReportService
         if (empty($files)) {
             return [];
         }
-        $metas = self::storeBuffers($files, $folder);
+        $metas = [];
         $created = [];
         $now = Dates::toDb(Dates::now());
         try {
-            Db::transaction(static function () use ($metas, $reportId, $kind, $uploadedById, $now, &$created): void {
+            Db::transaction(static function () use ($files, $folder, $reportId, $kind, $uploadedById, $now, &$metas, &$created): void {
+                $metas = self::storeBuffers($files, $folder);
                 foreach ($metas as $m) {
                     $id = Ids::cuid();
                     Db::execute(
-                        'INSERT INTO `ReportPhoto` (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`blurData`,`caption`,`uploadedById`,`createdAt`)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                        'INSERT INTO `ReportPhoto` (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`blurData`,`caption`,`uploadedById`,`createdAt`,`imageData`)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         [
                             $id,
                             $reportId,
@@ -971,6 +973,7 @@ class ReportService
                             null,
                             $uploadedById,
                             $now,
+                            $m['stored']['data'] ?? null,
                         ]
                     );
                     $created[] = $id;

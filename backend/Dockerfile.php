@@ -45,15 +45,13 @@ COPY . /app
 # "at least one photo is required" error instead.
 COPY php.ini /usr/local/etc/php/conf.d/roadwatch-uploads.ini
 
-# Uploads directory. On Railway this must be a mounted volume so files survive
-# redeploys; see docs/deployment-checklist.md.
+# Retained for local-driver compatibility; production uses durable DB blobs.
 RUN mkdir -p /app/uploads && chmod -R 0777 /app/uploads
 
 ENV PORT=4000 \
     NODE_ENV=production \
-    STORAGE_DRIVER=local \
+    STORAGE_DRIVER=database \
     STORAGE_LOCAL_DIR=/app/uploads \
-    STORAGE_PERSISTENT_MOUNT_PATH=/app/uploads \
     RUN_MIGRATIONS=true \
     PHP_CLI_SERVER_WORKERS=4
 

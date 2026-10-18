@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS `ReportPhoto` (
   `caption` VARCHAR(191) NULL,
   `uploadedById` VARCHAR(191) NULL,
   `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `imageData` MEDIUMBLOB NULL,
   PRIMARY KEY (`id`),
   KEY `ReportPhoto_reportId_idx` (`reportId`),
   KEY `ReportPhoto_kind_idx` (`kind`),

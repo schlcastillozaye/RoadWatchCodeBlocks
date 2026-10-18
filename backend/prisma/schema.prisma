@@ -205,6 +205,7 @@ model ReportPhoto {
   caption    String?
   uploadedById String?
   createdAt  DateTime  @default(now())
+  imageData  Bytes?    @db.MediumBlob
 
   report     Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   uploadedBy User?   @relation(fields: [uploadedById], references: [id])

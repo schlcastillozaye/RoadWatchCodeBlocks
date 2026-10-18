@@ -5,12 +5,11 @@ namespace RoadWatch\Services;
 use RoadWatch\Support\AppError;
 use RoadWatch\Support\Config;
 use RoadWatch\Support\Dates;
+use RoadWatch\Support\Db;
 
 /**
- * Local-disk storage driver. Writes uploaded images under the configured
- * storage directory and returns opaque random storage keys. S3 is not
- * implemented in the PHP backend; the local driver covers development,
- * Railway volumes and small deployments.
+ * Stores uploaded image bytes in ReportPhoto for durable deployments, with a
+ * local-disk driver retained for development and legacy local installations.
  */
 class Storage
 {
@@ -25,53 +24,18 @@ class Storage
 
     public static function name(): string
     {
-        return 'local';
+        return Config::storageDriver();
     }
 
     /**
-     * Production local storage must be the exact path of a mounted persistent
-     * volume. An explicit path alone is not enough: verify it in Linux mountinfo.
+     * Production storage must use the application database; the container
+     * filesystem is ephemeral and must never be treated as durable storage.
      */
     public static function assertPersistentStorage(): void
     {
-        if (!Config::isProd()) {
-            return;
-        }
-
-        $configuredMount = Config::storagePersistentMountPath();
-        $storagePath = realpath(Config::storageDir());
-        $mountPath = $configuredMount !== '' ? realpath($configuredMount) : false;
-        if ($storagePath === false || $mountPath === false || $storagePath !== $mountPath) {
+        if (Config::isProd() && Config::storageDriver() !== 'database') {
             throw new \RuntimeException(
-                'Production local storage must match STORAGE_PERSISTENT_MOUNT_PATH.'
-            );
-        }
-
-        $mountInfo = @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES);
-        if ($mountInfo === false) {
-            throw new \RuntimeException('Cannot verify the production storage volume mount.');
-        }
-
-        $isMounted = false;
-        foreach ($mountInfo as $line) {
-            $fields = explode(' ', explode(' - ', $line, 2)[0]);
-            if (!isset($fields[4])) {
-                continue;
-            }
-            $mountedPath = preg_replace_callback(
-                '/\\\\([0-7]{3})/',
-                static fn (array $match): string => chr(octdec($match[1])),
-                $fields[4]
-            );
-            if ($mountedPath === $mountPath) {
-                $isMounted = true;
-                break;
-            }
-        }
-
-        if (!$isMounted || !is_dir($storagePath) || !is_writable($storagePath)) {
-            throw new \RuntimeException(
-                'Production storage is not a writable persistent mount; refusing local file storage.'
+                'Production photo storage must use STORAGE_DRIVER=database; local container storage is ephemeral.'
             );
         }
     }
@@ -94,9 +58,10 @@ class Storage
     }
 
     /**
-     * Persist a buffer, returning its storage metadata.
+     * Prepare a storage key and metadata; database bytes are committed with the
+     * ReportPhoto row so failed report transactions cannot orphan image data.
      *
-     * @return array{key:string,sizeBytes:int,mimeType:string,originalName:string}
+     * @return array{key:string,sizeBytes:int,mimeType:string,originalName:string,data?:string}
      */
     public static function save(string $buffer, string $originalName, string $mimeType, string $folder = 'misc'): array
     {
@@ -104,6 +69,17 @@ class Storage
         $folder = self::safeSegment($folder);
         $ext = self::extensionForMime($mimeType, $originalName);
         $key = $folder . '/' . base_convert((string) Dates::nowMs(), 10, 36) . '-' . bin2hex(random_bytes(8)) . $ext;
+
+        if (Config::storageDriver() === 'database') {
+            return [
+                'key' => $key,
+                'sizeBytes' => strlen($buffer),
+                'mimeType' => $mimeType,
+                'originalName' => $originalName,
+                'data' => $buffer,
+            ];
+        }
+
         $full = self::resolve($key);
 
         $dir = dirname($full);
@@ -134,6 +110,16 @@ class Storage
     public static function read(string $key): string
     {
         self::assertPersistentStorage();
+        if (Config::storageDriver() === 'database') {
+            $row = Db::one(
+                'SELECT `imageData` FROM `ReportPhoto` WHERE `storageKey` = ? LIMIT 1',
+                [$key]
+            );
+            if ($row !== null && is_string($row['imageData'] ?? null) && $row['imageData'] !== '') {
+                return $row['imageData'];
+            }
+        }
+
         $full = self::resolve($key);
         if (!is_file($full)) {
             throw AppError::notFound('File not found');
@@ -148,6 +134,12 @@ class Storage
     public static function remove(string $key): void
     {
         try {
+            if (Config::storageDriver() === 'database') {
+                Db::execute(
+                    'UPDATE `ReportPhoto` SET `imageData` = NULL WHERE `storageKey` = ?',
+                    [$key]
+                );
+            }
             $full = self::resolve($key);
             if (is_file($full)) {
                 @unlink($full);
@@ -160,6 +152,12 @@ class Storage
     public static function exists(string $key): bool
     {
         try {
+            if (Config::storageDriver() === 'database') {
+                return (int) Db::scalar(
+                    'SELECT COUNT(*) FROM `ReportPhoto` WHERE `storageKey` = ? AND `imageData` IS NOT NULL',
+                    [$key]
+                ) > 0;
+            }
             return is_file(self::resolve($key));
         } catch (\Throwable $e) {
             return false;

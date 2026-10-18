@@ -177,20 +177,23 @@ MySQL database (the Railway **MySQL** plugin), then add
 two services from this repo — one with root directory `backend/` (uses
 `backend/Dockerfile.php` + `backend/railway.json`) and one with root directory `web/`
 (uses `web/Dockerfile`). Set `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`,
-`CORS_ORIGINS` and `PUBLIC_BASE_URL` on the API service, mount a volume at
-`/app/uploads` so photos survive redeploys, and set the **`RW_API_BASE_URL`** variable
-on the web service to the API service URL. Point the mobile
-app at the same API with `--dart-define=API_BASE_URL=…`.
+`CORS_ORIGINS`, `PUBLIC_BASE_URL`, and `STORAGE_DRIVER=database` on the API service,
+and set **`RW_API_BASE_URL`** on the web service to the API service URL. Photos are
+stored as `MEDIUMBLOB`s on their `ReportPhoto` rows in the existing MySQL database;
+the same storage and API serve both web and mobile. The 8 MB per-image limit fits the
+column type. Database storage usage is metered by the hosting provider, so monitor
+its disk/usage as photos accumulate. Point Android releases at the same API with
+`--dart-define=API_BASE_URL=https://roadwatchcodeblocks-production.up.railway.app`.
 
 > **Schema changes need no manual step.** The API image runs
 > `php database/migrate.php` on boot (`RUN_MIGRATIONS`, default on). It is
 > idempotent and only ever *adds* (new tables, new enum values, new nullable
 > columns), so an already-deployed database picks up changes without a reset.
 
-> **Images:** without a persistent volume the container filesystem is ephemeral and uploaded
-> photos are lost on redeploy — attach a Railway volume at `/app/uploads`. Note that the PHP
-> backend implements **only** `STORAGE_DRIVER=local`; the `S3_*` variables in the templates
-> are not wired up in PHP (they belonged to the legacy Node backend).
+> **Images:** production must use `STORAGE_DRIVER=database`; the API rejects a local
+> ephemeral-storage configuration. The migration adds `ReportPhoto.imageData` as a
+> nullable column, preserving existing photo metadata. It cannot recover old image
+> files that were already lost from the container.
 
 ---
 
