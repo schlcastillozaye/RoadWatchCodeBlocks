@@ -432,6 +432,66 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .admin-empty { padding: 2rem 1rem; }
 .admin-empty p { color: var(--ink-3); font-size: 0.875rem; }
 .admin-user-name { color: var(--navy); font-weight: 600; }
+.admin-content > .admin-panel + .admin-panel,
+.workspace-page > .admin-panel + .admin-panel { margin-top: 1rem; }
+.workspace-page { min-width: 0; }
+.rw-dashboard-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+.rw-dashboard-report-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.85rem;
+}
+.rw-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.75rem;
+}
+.rw-action-card {
+  display: flex;
+  min-width: 0;
+  min-height: 5.5rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--azure);
+  border-radius: 14px;
+  background: var(--sheet);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.rw-action-card:hover { border-color: var(--navy); background: var(--interactive-hover); }
+.rw-action-card strong { color: var(--navy); font-size: 0.9rem; }
+.rw-action-card span { color: var(--ink-3); font-size: 0.78rem; }
+
+/* Password visibility control uses the mobile app's eye / eye-off affordance. */
+.rw-password-field { position: relative; }
+.rw-password-field > .brand-input { padding-right: 3.25rem; }
+.rw-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.rw-password-toggle:hover { background: var(--interactive-hover); color: var(--navy); }
+.rw-password-toggle svg { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rw-password-eye-slash { display: none; }
+.rw-password-toggle.is-visible .rw-password-eye-slash { display: block; }
+.rw-password-toggle:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; }
 
 /* ---- Buttons ---- */
 .btn {
@@ -795,6 +855,7 @@ input[type='file'].brand-input::file-selector-button {
   .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sm\:flex-row { flex-direction: row; }
   .sm\:items-center { align-items: center; }
+  .rw-dashboard-report-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (min-width: 1024px) {
   .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -818,10 +879,14 @@ input[type='file'].brand-input::file-selector-button {
 @media (max-width: 639px) {
   .admin-page-heading { flex-direction: column; }
   .admin-page-heading > .btn { width: 100%; }
+  .rw-dashboard-actions { width: 100%; }
+  .rw-dashboard-actions .btn { flex: 1 1 9rem; }
   .admin-panel-heading { align-items: flex-start; flex-direction: column; }
   .admin-panel-heading > .btn { width: 100%; }
   .admin-filters { grid-template-columns: minmax(0, 1fr); }
   .admin-pagination { align-items: flex-start; flex-direction: column; }
+  .workspace-page > .max-w-7xl { padding-inline: 0; }
+  .workspace-page .rw-report-form-card { padding: 1rem; }
 }
 
 /* ===========================================================================

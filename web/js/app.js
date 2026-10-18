@@ -503,6 +503,16 @@
       </span>
     </span>`;
 
+  const passwordToggleHtml = (id) => `
+    <button type="button" class="rw-password-toggle" data-password-toggle="${escapeHtml(id)}"
+      aria-label="Show password" aria-pressed="false" title="Show password">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M2.5 12s3.3-6 9.5-6 9.5 6 9.5 6-3.3 6-9.5 6-9.5-6-9.5-6Z"></path>
+        <circle cx="12" cy="12" r="2.7"></circle>
+        <path class="rw-password-eye-slash" d="m4 4 16 16"></path>
+      </svg>
+    </button>`;
+
   const pageLogin = () => `
     <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet rw-auth-page">
       ${themeToggleHtml('rw-auth-theme-toggle')}
@@ -519,7 +529,10 @@
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2" for="login-password">Password</label>
-            <input id="login-password" type="password" name="password" required class="w-full brand-input" placeholder="••••••••" autocomplete="current-password" />
+            <div class="rw-password-field">
+              <input id="login-password" type="password" name="password" required class="w-full brand-input" placeholder="••••••••" autocomplete="current-password" />
+              ${passwordToggleHtml('login-password')}
+            </div>
           </div>
           <p id="login-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
           <button type="submit" class="btn btn-primary w-full">Sign in</button>
@@ -554,8 +567,11 @@
             <input type="tel" name="phone" class="w-full brand-input" placeholder="+63 912 345 6789" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-ink-2 mb-2">Password</label>
-            <input type="password" name="password" required class="w-full brand-input" placeholder="••••••••" />
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="register-password">Password</label>
+            <div class="rw-password-field">
+              <input id="register-password" type="password" name="password" required class="w-full brand-input" placeholder="••••••••" autocomplete="new-password" />
+              ${passwordToggleHtml('register-password')}
+            </div>
           </div>
           <p id="register-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
           <button type="submit" class="btn btn-primary w-full">Create account</button>
@@ -610,42 +626,101 @@
 
   const pageHome = () => {
     const u = getUser();
-    return `
-    <main class="max-w-7xl mx-auto px-6 py-8">
-      <h1 class="text-2xl font-bold text-navy mb-2">${u ? 'Welcome back, ' + escapeHtml(u.fullName || '') : 'Road issues, reported and fixed'}</h1>
-      <p class="text-slate-tint text-sm mb-6">Recently verified reports from across the network.</p>
-      <div id="home-reports" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div class="loading-block"><span class="spinner"></span> Loading reports…</div>
+    const firstName = escapeHtml((u?.fullName || '').split(' ')[0] || 'there');
+    return workspaceLayout('CITIZEN', 'dashboard', `
+      <div class="admin-page-heading">
+        <div>
+          <p class="admin-eyebrow">CITIZEN DASHBOARD</p>
+          <h1 class="admin-page-title">Welcome, ${firstName}</h1>
+          <p class="admin-page-subtitle">Track your reports and the work happening in your community.</p>
+        </div>
+        <div class="rw-dashboard-actions">
+          <button type="button" class="btn btn-secondary btn-sm" data-citizen-refresh>Refresh data</button>
+          <a href="/submit-report" data-nav="/submit-report" class="btn btn-primary btn-sm">Report an issue</a>
+        </div>
       </div>
-    </main>`;
+      <div class="admin-stat-grid" aria-label="Your report statistics">
+        ${[
+          ['Total reports', 'citizen-stat-total', 'navy'],
+          ['Awaiting review', 'citizen-stat-pending', 'amber'],
+          ['In repair', 'citizen-stat-progress', 'blue'],
+          ['Completed', 'citizen-stat-completed', 'green'],
+        ].map(([label, id, tone]) => `
+          <article class="admin-stat-card admin-stat-${tone}">
+            <p>${label}</p>
+            <strong id="${id}"><span class="spinner" aria-label="Loading"></span></strong>
+          </article>`).join('')}
+      </div>
+      <section class="admin-panel">
+        <div class="admin-panel-heading">
+          <div>
+            <h2>Recent activity</h2>
+            <p>Your latest submissions and status updates.</p>
+          </div>
+          <a href="/reports" data-nav="/reports" class="btn btn-ghost btn-sm">View all reports</a>
+        </div>
+        <div id="citizen-dashboard-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+        <div id="home-reports">
+          <div class="loading-block"><span class="spinner"></span> Loading your reports…</div>
+        </div>
+      </section>
+      <section class="admin-panel rw-citizen-quick-actions">
+        <div class="admin-panel-heading">
+          <div>
+            <h2>Quick actions</h2>
+            <p>Find a service or continue reporting.</p>
+          </div>
+        </div>
+        <div class="rw-action-grid">
+          <a href="/submit-report" data-nav="/submit-report" class="rw-action-card"><strong>Report a road issue</strong><span>Share a location, details and photo.</span></a>
+          <a href="/reports" data-nav="/reports" class="rw-action-card"><strong>Track my reports</strong><span>Review moderation and repair progress.</span></a>
+          <a href="/map" data-nav="/map" class="rw-action-card"><strong>Explore the public map</strong><span>See approved reports near the community.</span></a>
+        </div>
+      </section>
+    `);
   };
 
-  const pageReports = () => `
-    <section class="py-8">
+  const pageReports = () => workspaceLayout('CITIZEN', 'reports', `
+    <section class="workspace-page">
       <div class="max-w-7xl mx-auto px-6">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <h2 class="text-2xl font-bold text-navy">Your Reports</h2>
+        <div class="admin-page-heading">
+          <div>
+            <p class="admin-eyebrow">CITIZEN WORKSPACE</p>
+            <h1 class="admin-page-title">My reports</h1>
+            <p class="admin-page-subtitle">Review each report’s status and follow its progress.</p>
+          </div>
           <button id="btn-new-report" data-nav="/submit-report" class="btn btn-primary">Report a road issue</button>
         </div>
-        <div id="reports-list">
+        <div id="reports-list" class="admin-panel">
           <div class="loading-block"><span class="spinner"></span> Loading your reports…</div>
         </div>
       </div>
     </section>
-  `;
+  `);
 
-  const pageReportDetail = () => `
-    <section class="py-8 max-w-3xl mx-auto px-6">
+  const pageReportDetail = () => {
+    const user = getUser();
+    const role = user?.role === 'ADMIN' || user?.role === 'MAINTENANCE_OFFICER' ? user.role : 'CITIZEN';
+    const active = role === 'ADMIN' ? 'reports' : role === 'MAINTENANCE_OFFICER' ? 'assignments' : 'reports';
+    return workspaceLayout(role, active, `
+    <section class="workspace-page max-w-3xl mx-auto px-6">
       <div id="report-detail">
         <div class="loading-block"><span class="spinner"></span> Loading report…</div>
       </div>
     </section>
-  `;
+  `);
+  };
 
-  const pageSubmitReport = () => `
-    <section class="py-8 max-w-2xl mx-auto px-6">
-      <div class="rw-report-form-card brand-card p-8 rounded-xl shadow-lg">
-        <h2 class="text-2xl font-bold text-navy mb-4">Report a Road Issue</h2>
+  const pageSubmitReport = () => workspaceLayout('CITIZEN', 'submit-report', `
+    <section class="workspace-page max-w-2xl mx-auto px-6">
+      <div class="rw-report-form-card admin-panel">
+        <div class="admin-page-heading">
+          <div>
+            <p class="admin-eyebrow">CITIZEN WORKSPACE</p>
+            <h1 class="admin-page-title">Report a road issue</h1>
+            <p class="admin-page-subtitle">Add the details, location and a photo so your report can be reviewed.</p>
+          </div>
+        </div>
         <form id="report-form" class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2">Issue Title</label>
@@ -694,12 +769,21 @@
         </form>
       </div>
     </section>
-  `;
+  `);
 
-  const pageMap = () => `
-    <section class="py-8">
+  const pageMap = () => {
+    const role = getUser()?.role;
+    const workspaceRole = role === 'ADMIN' || role === 'MAINTENANCE_OFFICER' ? role : 'CITIZEN';
+    return workspaceLayout(workspaceRole, 'map', `
+    <section class="workspace-page">
       <div class="max-w-7xl mx-auto px-6">
-        <h2 class="text-2xl font-bold text-navy mb-4">Report Map</h2>
+        <div class="admin-page-heading">
+          <div>
+            <p class="admin-eyebrow">ROADWATCH MAP</p>
+            <h1 class="admin-page-title">Public report map</h1>
+            <p class="admin-page-subtitle">Explore approved reports and their repair status.</p>
+          </div>
+        </div>
         <div class="relative">
           <div id="map" class="w-full rounded-lg overflow-hidden border border-slate-300"></div>
           <div id="map-legend" class="absolute bottom-6 right-6 bg-white p-3 rounded shadow-lg max-w-xs">
@@ -722,27 +806,56 @@
         </div>
       </div>
     </section>
-  `;
+  `);
+  };
 
-  const adminLayout = (active, content) => `
+  const workspaceLayout = (role, active, content) => {
+    const links = role === 'ADMIN'
+      ? [
+          ['dashboard', '/admin', 'Dashboard'],
+          ['reports', '/admin/reports', 'Reports'],
+          ['map', '/map', 'Public map'],
+          ['users', '/admin/users', 'Users'],
+        ]
+      : role === 'MAINTENANCE_OFFICER'
+        ? [
+            ['dashboard', '/assignments', 'My dashboard'],
+            ['assignments', '#assignments-list', 'My assignments'],
+            ['map', '/map', 'Public map'],
+          ]
+        : [
+            ['dashboard', '/', 'Dashboard'],
+            ['reports', '/reports', 'My reports'],
+            ['submit-report', '/submit-report', 'Report an issue'],
+            ['map', '/map', 'Public map'],
+          ];
+    const roleName = role === 'ADMIN' ? 'Admin' : role === 'MAINTENANCE_OFFICER' ? 'Maintenance' : 'Citizen';
+    const navLabel = `${roleName} navigation`;
+    return `
     <section class="admin-workspace">
-      <aside class="admin-sidebar" aria-label="Admin navigation">
+      <aside class="admin-sidebar" aria-label="${navLabel}">
         <div class="admin-sidebar-top">
-          <p class="admin-sidebar-heading">WORKSPACE</p>
+          <p class="admin-sidebar-heading">${role === 'ADMIN' ? 'ROADWATCH OPERATIONS' : `${roleName.toUpperCase()} WORKSPACE`}</p>
           <button type="button" class="admin-sidebar-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-sidebar-nav">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
-            <span>Admin menu</span>
+            <span>Workspace menu</span>
           </button>
         </div>
         <nav id="admin-sidebar-nav" class="admin-sidebar-nav">
-          <a href="/admin" data-nav="/admin" class="${active === 'dashboard' ? 'is-active' : ''}">Dashboard</a>
-          <a href="/admin/reports" data-nav="/admin/reports" class="${active === 'reports' ? 'is-active' : ''}">Reports</a>
-          <a href="/admin/users" data-nav="/admin/users" class="${active === 'users' ? 'is-active' : ''}">Users</a>
+          ${links.map(([key, href, label]) => {
+            const hash = href.indexOf('#');
+            const path = hash < 0 ? href : href.slice(0, hash);
+            const nav = hash < 0 ? `data-nav="${path}"` : '';
+            return `<a href="${href}" ${nav} class="${active === key ? 'is-active' : ''}">${label}</a>`;
+          }).join('')}
         </nav>
         <button type="button" class="admin-sidebar-logout" data-admin-logout>Sign out</button>
       </aside>
       <div class="admin-content">${content}</div>
     </section>`;
+  };
+
+  const adminLayout = (active, content) => workspaceLayout('ADMIN', active, content);
 
   const pageAdminDashboard = () => adminLayout('dashboard', `
     <div class="admin-page-heading">
@@ -870,37 +983,43 @@
     </section>
   `);
 
-  const pageAssignments = () => `
-    <section class="py-8 max-w-7xl mx-auto px-6">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+  const pageAssignments = () => workspaceLayout('MAINTENANCE_OFFICER', 'dashboard', `
+    <section class="workspace-page">
+      <div class="admin-page-heading">
         <div>
-          <h2 class="text-2xl font-bold text-navy">Maintenance dashboard</h2>
-          <p class="text-sm text-slate-tint mt-1">Assigned work, repair progress and officer notifications.</p>
+          <p class="admin-eyebrow">MAINTENANCE WORKSPACE</p>
+          <h1 class="admin-page-title">My dashboard</h1>
+          <p class="admin-page-subtitle">Assignments, repair progress and notifications for your work.</p>
         </div>
         <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-assignments">Refresh dashboard</button>
       </div>
       <div id="officer-summary" class="admin-stat-grid" aria-label="Maintenance summary">
         <div class="loading-block"><span class="spinner"></span> Loading your summary…</div>
       </div>
-      <section class="brand-card p-5 sm:p-6 mt-5">
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <section class="admin-panel">
+        <div class="admin-panel-heading">
           <div>
-            <h3 class="font-bold text-navy">Assignment notifications</h3>
-            <p class="text-xs text-slate-tint" id="officer-unread-count">Loading unread count…</p>
+            <h2>Assignment notifications</h2>
+            <p id="officer-unread-count">Loading unread count…</p>
           </div>
           <button type="button" class="btn btn-ghost btn-sm" id="btn-mark-all-notifications-read">Mark all read</button>
         </div>
         <div id="officer-notification-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
         <div id="officer-notifications"><div class="loading-block"><span class="spinner"></span> Loading notifications…</div></div>
       </section>
-      <section class="brand-card p-5 sm:p-6 mt-5">
-        <h3 class="font-bold text-navy mb-3">My assignments</h3>
+      <section class="admin-panel" id="assigned-work">
+        <div class="admin-panel-heading">
+          <div>
+            <h2>My assignments</h2>
+            <p>Open a report to review its location, photos and repair history.</p>
+          </div>
+        </div>
         <div id="assignments-list" class="space-y-3">
           <div class="loading-block"><span class="spinner"></span> Loading assignments…</div>
         </div>
       </section>
     </section>
-  `;
+  `);
 
   const pageAudit = () => `
     <section class="py-8 max-w-3xl mx-auto px-6">
@@ -996,7 +1115,7 @@
       return;
     }
 
-    if (user && (route.name === 'login' || (route.name === 'home' && user.role === 'ADMIN'))) {
+    if (user && (route.name === 'login' || (route.name === 'home' && user.role !== 'CITIZEN'))) {
       navigateTo(landingPath(user), true);
       return;
     }
@@ -1012,6 +1131,7 @@
     }
 
     root.innerHTML = shell(route.name, route.page(params));
+    bindPasswordToggles(root);
     window.scrollTo(0, 0);
     await afterRender(route.name, params);
   };
@@ -1036,26 +1156,88 @@
 
   // --- Page init functions ---------------------------------------------------
 
+  const bindPasswordToggles = (root) => {
+    root.querySelectorAll('[data-password-toggle]').forEach((button) => {
+      const input = root.querySelector(`#${CSS.escape(button.dataset.passwordToggle || '')}`);
+      if (!input) return;
+      button.addEventListener('click', () => {
+        const visible = input.type === 'password';
+        input.type = visible ? 'text' : 'password';
+        button.setAttribute('aria-pressed', String(visible));
+        button.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+        button.title = visible ? 'Hide password' : 'Show password';
+        button.classList.toggle('is-visible', visible);
+      });
+      button.addEventListener('keydown', (event) => {
+        if ((event.key !== 'Enter' && event.key !== ' ') || event.repeat) return;
+        event.preventDefault();
+        button.click();
+      });
+    });
+  };
+
   const initHomePage = async () => {
     const host = q('#home-reports');
     if (!host) return;
-    try {
-      const data = await api('/map/reports');
-      const items = (data && data.items) || [];
-      if (items.length === 0) {
-        html(host, `
-          <div class="empty-state">
-            <h3 class="text-xl font-bold text-navy mb-2">No approved reports yet</h3>
-            <p class="text-slate-tint">Spotted a pothole, crack or flooding? Report it and help your community.</p>
-            ${getUser() ? '<button class="btn btn-primary mt-4" data-nav="/submit-report">Report an issue</button>' : ''}
-          </div>`);
-      } else {
-        html(host, items.map(reportCardHtml).join(''));
+    const feedbackId = 'citizen-dashboard-feedback';
+    const load = async () => {
+      const refreshButton = q('[data-citizen-refresh]');
+      if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.textContent = 'Refreshing…';
       }
-      hydrateAuthedImages(host);
-    } catch (err) {
-      html(host, `<p class="text-red-400">Could not load reports: ${escapeHtml(err.message)}</p>`);
-    }
+      const query = (values) => {
+        const params = new URLSearchParams({ page: '1', pageSize: '1', ...values });
+        return api(`/reports/mine?${params.toString()}`);
+      };
+      const tasks = await Promise.allSettled([
+        api('/reports/mine?page=1&pageSize=5'),
+        query({ moderationStatus: 'PENDING_REVIEW' }),
+        query({ repairStatus: 'AWAITING_MAINTENANCE' }),
+        query({ repairStatus: 'IN_PROGRESS' }),
+        query({ repairStatus: 'COMPLETED' }),
+      ]);
+      const [recentResult, pendingResult, awaitingResult, progressResult, completedResult] = tasks;
+      const stats = [
+        ['citizen-stat-total', [recentResult]],
+        ['citizen-stat-pending', [pendingResult]],
+        ['citizen-stat-progress', [awaitingResult, progressResult]],
+        ['citizen-stat-completed', [completedResult]],
+      ];
+      stats.forEach(([id, results]) => {
+        if (results.every((result) => result.status === 'fulfilled')) {
+          setText(id, results.reduce((sum, result) => sum + (Number(result.value.total) || 0), 0));
+        } else {
+          setText(id, '—');
+        }
+      });
+      const errors = tasks.filter((result) => result.status === 'rejected');
+      if (errors.length) {
+        setAdminFeedback(feedbackId, `Some dashboard information could not be loaded: ${errors.map((r) => r.reason?.message || 'request failed').join('; ')}`, 'error');
+      } else {
+        setAdminFeedback(feedbackId, '');
+      }
+
+      if (recentResult.status === 'rejected') {
+        html(host, `<div class="admin-error-block">Could not load your reports. ${escapeHtml(recentResult.reason?.message || 'Please retry.')}</div>`);
+      } else {
+        const items = recentResult.value.items || [];
+        html(host, items.length
+          ? `<div class="rw-dashboard-report-list">${items.map(reportCardHtml).join('')}</div>`
+          : `<div class="empty-state admin-empty">
+              <h3 class="text-xl font-bold text-navy mb-2">No reports yet</h3>
+              <p>Submit a road issue to start tracking its review and repair progress.</p>
+              <a href="/submit-report" data-nav="/submit-report" class="btn btn-primary mt-4">Report an issue</a>
+            </div>`);
+        hydrateAuthedImages(host);
+      }
+      if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = 'Refresh data';
+      }
+    };
+    on(q('[data-citizen-refresh]'), 'click', load);
+    await load();
   };
 
   const initLoginPage = () => {

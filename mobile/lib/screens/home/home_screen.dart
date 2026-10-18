@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/api_exception.dart';
 import '../../core/app_config.dart';
 import '../../models/models.dart';
+import '../../services/roadwatch_api.dart';
 import '../../state/auth_provider.dart';
 import '../../state/reports_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/brand_logo.dart';
 import '../../widgets/brand_surface.dart';
+import '../../widgets/dashboard_stat_grid.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/report_card.dart';
 import '../../widgets/theme_toggle.dart';
@@ -25,13 +28,38 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  Map<String, int>? _summary;
+  String? _summaryError;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<MyReportsProvider>();
       if (provider.reports.isEmpty) provider.load();
+      _loadSummary();
     });
+  }
+
+  Future<void> _loadSummary() async {
+    setState(() => _summaryError = null);
+    try {
+      final summary = await context.read<RoadWatchApi>().myReportSummary();
+      if (mounted) setState(() => _summary = summary);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _summaryError = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _summaryError = 'Could not load report statistics.');
+      }
+    }
+  }
+
+  Future<void> _refresh() async {
+    await Future.wait([
+      context.read<MyReportsProvider>().load(refresh: true),
+      _loadSummary(),
+    ]);
   }
 
   Future<void> _openSubmit() async {
@@ -39,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const SubmitReportScreen()),
     );
     if (created == true && mounted) {
-      context.read<MyReportsProvider>().load(refresh: true);
+      await _refresh();
     }
   }
 
@@ -51,16 +79,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = auth.user;
     final firstName = (user?.fullName ?? 'there').split(' ').first;
 
-    final total = reports.total;
-    final pending = reports.reports.where((r) => r.moderationStatus == ModerationStatus.pendingReview).length;
-    final inProgress = reports.reports
-        .where((r) => r.repairStatus == RepairStatus.inProgress || r.repairStatus == RepairStatus.awaitingMaintenance)
-        .length;
-    final completed = reports.reports.where((r) => r.repairStatus == RepairStatus.completed).length;
-
     return BrandSurface(
       child: RefreshIndicator(
-        onRefresh: () => context.read<MyReportsProvider>().load(refresh: true),
+        onRefresh: _refresh,
         color: AppColors.brandAccent,
         child: CustomScrollView(
           slivers: [
@@ -74,7 +95,40 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: AppSpacing.xl),
                     _PrimaryCta(onTap: _openSubmit),
                     const SizedBox(height: AppSpacing.xl),
-                    _StatsRow(total: total, pending: pending, inProgress: inProgress, completed: completed),
+                    DashboardStatGrid(
+                      metrics: [
+                        DashboardMetric(
+                          label: 'Total reports',
+                          value: '${_summary?['total'] ?? '—'}',
+                          color: AppColors.textPrimary,
+                        ),
+                        DashboardMetric(
+                          label: 'Awaiting review',
+                          value: '${_summary?['pending'] ?? '—'}',
+                          color: AppColors.statusAmberInk,
+                        ),
+                        DashboardMetric(
+                          label: 'In repair',
+                          value: '${_summary?['inRepair'] ?? '—'}',
+                          color: AppColors.statusBlueInk,
+                        ),
+                        DashboardMetric(
+                          label: 'Completed',
+                          value: '${_summary?['completed'] ?? '—'}',
+                          color: AppColors.statusGreenInk,
+                        ),
+                      ],
+                    ),
+                    if (_summaryError != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Report statistics unavailable: $_summaryError',
+                        style: AppTypography.caption(
+                          size: 12,
+                          color: AppColors.statusRedInk,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.xxl),
                     _QuickActions(
                       onReport: _openSubmit,
@@ -246,74 +300,6 @@ class _PrimaryCta extends StatelessWidget {
               Icon(Icons.arrow_forward_rounded, color: arrowColor),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.total, required this.pending, required this.inProgress, required this.completed});
-
-  final int total;
-  final int pending;
-  final int inProgress;
-  final int completed;
-
-  @override
-  Widget build(BuildContext context) {
-    AppColors.syncTo(context);
-    return Row(
-      children: [
-        _StatTile(label: 'Total', value: total, color: AppColors.textPrimary),
-        const SizedBox(width: AppSpacing.sm),
-        _StatTile(label: 'Pending', value: pending, color: AppColors.statusAmberInk),
-        const SizedBox(width: AppSpacing.sm),
-        _StatTile(label: 'Repairing', value: inProgress, color: AppColors.statusBlueInk),
-        const SizedBox(width: AppSpacing.sm),
-        _StatTile(label: 'Done', value: completed, color: AppColors.statusGreenInk),
-      ],
-    );
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.label, required this.value, required this.color});
-
-  final String label;
-  final int value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    AppColors.syncTo(context);
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: AppColors.cardSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$value',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.display(size: 20, color: color),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              label,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: AppTypography.caption(size: 11, color: AppColors.textMuted),
-            ),
-          ],
         ),
       ),
     );

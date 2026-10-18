@@ -212,6 +212,22 @@ class RoadWatchApi {
     return Paginated<RoadReport>.fromJson(asMap(json), RoadReport.fromJson);
   }
 
+  Future<Map<String, int>> myReportSummary() async {
+    final results = await Future.wait([
+      myReports(pageSize: 1),
+      myReports(pageSize: 1, moderationStatus: ModerationStatus.pendingReview),
+      myReports(pageSize: 1, repairStatus: RepairStatus.awaitingMaintenance),
+      myReports(pageSize: 1, repairStatus: RepairStatus.inProgress),
+      myReports(pageSize: 1, repairStatus: RepairStatus.completed),
+    ]);
+    return {
+      'total': results[0].total,
+      'pending': results[1].total,
+      'inRepair': results[2].total + results[3].total,
+      'completed': results[4].total,
+    };
+  }
+
   Future<RoadReport> getReport(String id) async {
     final json = await client.getJson('/api/reports/$id');
     return RoadReport.fromJson(asMap(asMap(json)['report']));

@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/dashboard_stat_grid.dart';
 import '../../widgets/report_card.dart';
 import '../../widgets/section_card.dart';
 import '../reports/report_detail_screen.dart';
@@ -225,7 +226,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     return Scaffold(
       backgroundColor: AppColors.sheetBackground,
       appBar: AppBar(
-        title: Text(widget.isAdmin ? 'Review reports' : 'Maintenance work'),
+        title: Text(widget.isAdmin ? 'Review reports' : 'My dashboard'),
         actions: [
           IconButton(
             onPressed: _load,
@@ -439,39 +440,28 @@ class _OfficerSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      ('Assigned', summary['assigned'] ?? 0, AppColors.brandAccent),
-      ('Awaiting', summary['awaiting'] ?? 0, AppColors.statusBlueInk),
-      ('In progress', summary['inProgress'] ?? 0, AppColors.statusAmberInk),
-      ('Completed', summary['completed'] ?? 0, AppColors.statusGreenInk),
-    ];
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        for (final item in items)
-          SizedBox(
-            width: (MediaQuery.sizeOf(context).width - 42) / 2,
-            child: SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.$1,
-                    style: AppTypography.caption(
-                      size: 11,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    '${item.$2}',
-                    style: AppTypography.display(size: 24, color: item.$3),
-                  ),
-                ],
-              ),
-            ),
-          ),
+    return DashboardStatGrid(
+      metrics: [
+        DashboardMetric(
+          label: 'Assigned',
+          value: '${summary['assigned'] ?? 0}',
+          color: AppColors.brandAccent,
+        ),
+        DashboardMetric(
+          label: 'Awaiting',
+          value: '${summary['awaiting'] ?? 0}',
+          color: AppColors.statusBlueInk,
+        ),
+        DashboardMetric(
+          label: 'In progress',
+          value: '${summary['inProgress'] ?? 0}',
+          color: AppColors.statusAmberInk,
+        ),
+        DashboardMetric(
+          label: 'Completed',
+          value: '${summary['completed'] ?? 0}',
+          color: AppColors.statusGreenInk,
+        ),
       ],
     );
   }
