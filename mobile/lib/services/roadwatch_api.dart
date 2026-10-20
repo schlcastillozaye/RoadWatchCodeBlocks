@@ -218,13 +218,20 @@ class RoadWatchApi {
       myReports(pageSize: 1, moderationStatus: ModerationStatus.pendingReview),
       myReports(pageSize: 1, repairStatus: RepairStatus.awaitingMaintenance),
       myReports(pageSize: 1, repairStatus: RepairStatus.inProgress),
+      myReports(pageSize: 1, repairStatus: RepairStatus.awaitingVerification),
+      myReports(pageSize: 1, repairStatus: RepairStatus.returnedForWork),
       myReports(pageSize: 1, repairStatus: RepairStatus.completed),
+      myReports(pageSize: 1, repairStatus: RepairStatus.verifiedCompleted),
     ]);
     return {
       'total': results[0].total,
       'pending': results[1].total,
-      'inRepair': results[2].total + results[3].total,
-      'completed': results[4].total,
+      'inRepair':
+          results[2].total +
+          results[3].total +
+          results[4].total +
+          results[5].total,
+      'completed': results[6].total + results[7].total,
     };
   }
 
@@ -287,10 +294,7 @@ class RoadWatchApi {
     int limit = 50,
   }) async {
     final json = asMap(
-      await client.getJson(
-        '/api/maintenance/notifications',
-        query: {'limit': limit},
-      ),
+      await client.getJson('/api/notifications', query: {'limit': limit}),
     );
     return asList(json['items'])
         .map((item) => MaintenanceNotification.fromJson(asMap(item)))
@@ -299,12 +303,12 @@ class RoadWatchApi {
 
   Future<void> markNotificationRead(String id) async {
     await client.patchJson(
-      '/api/maintenance/notifications/${Uri.encodeComponent(id)}/read',
+      '/api/notifications/${Uri.encodeComponent(id)}/read',
     );
   }
 
   Future<void> markAllNotificationsRead() async {
-    await client.patchJson('/api/maintenance/notifications/read-all');
+    await client.patchJson('/api/notifications/read-all');
   }
 
   Future<List<Map<String, dynamic>>> maintenanceOfficers() async {
@@ -346,6 +350,21 @@ class RoadWatchApi {
     final json = await client.patchJson(
       '/api/reports/$id/repair',
       body: {'repairStatus': status.api, 'completionNotes': ?completionNotes},
+    );
+    return RoadReport.fromJson(asMap(asMap(json)['report']));
+  }
+
+  Future<RoadReport> verifyRepair(
+    String id, {
+    required String decision,
+    String? reason,
+  }) async {
+    final json = await client.patchJson(
+      '/api/reports/$id/verification',
+      body: {
+        'decision': decision,
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      },
     );
     return RoadReport.fromJson(asMap(asMap(json)['report']));
   }

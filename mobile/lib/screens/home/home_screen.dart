@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'dart:async';
+
 import '../../core/api_exception.dart';
 import '../../core/app_config.dart';
 import '../../models/models.dart';
@@ -14,6 +16,7 @@ import '../../widgets/brand_surface.dart';
 import '../../widgets/dashboard_stat_grid.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/report_card.dart';
+import '../../widgets/section_card.dart';
 import '../../widgets/theme_toggle.dart';
 import '../reports/report_detail_screen.dart';
 import '../reports/submit_report_screen.dart';
@@ -30,6 +33,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Map<String, int>? _summary;
   String? _summaryError;
+  List<MaintenanceNotification> _notifications = [];
+  String? _notificationError;
+  Timer? _notificationExpiryTimer;
 
   @override
   void initState() {
@@ -38,7 +44,26 @@ class _HomeScreenState extends State<HomeScreen> {
       final provider = context.read<MyReportsProvider>();
       if (provider.reports.isEmpty) provider.load();
       _loadSummary();
+      _loadNotifications();
     });
+    _notificationExpiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      final active = _notifications
+          .where(
+            (item) => item.expiresAt != null && item.expiresAt!.isAfter(now),
+          )
+          .toList();
+      if (active.length != _notifications.length) {
+        setState(() => _notifications = active);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationExpiryTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSummary() async {
@@ -59,13 +84,53 @@ class _HomeScreenState extends State<HomeScreen> {
     await Future.wait([
       context.read<MyReportsProvider>().load(refresh: true),
       _loadSummary(),
+      _loadNotifications(),
     ]);
   }
 
+  Future<void> _loadNotifications() async {
+    try {
+      final items = await context
+          .read<RoadWatchApi>()
+          .maintenanceNotifications();
+      if (mounted) {
+        setState(() {
+          _notifications = items;
+          _notificationError = null;
+        });
+      }
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _notificationError = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _notificationError = 'Could not load notifications.');
+      }
+    }
+  }
+
+  Future<void> _openNotification(MaintenanceNotification notification) async {
+    try {
+      if (!notification.isRead) {
+        await context.read<RoadWatchApi>().markNotificationRead(
+          notification.id,
+        );
+      }
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => ReportDetailScreen(reportId: notification.reportId),
+        ),
+      );
+      if (mounted) await _loadNotifications();
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _notificationError = error.message);
+    }
+  }
+
   Future<void> _openSubmit() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const SubmitReportScreen()),
-    );
+    final created = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const SubmitReportScreen()));
     if (created == true && mounted) {
       await _refresh();
     }
@@ -85,7 +150,9 @@ class _HomeScreenState extends State<HomeScreen> {
         color: AppColors.brandAccent,
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(child: _Header(firstName: firstName, user: user)),
+            SliverToBoxAdapter(
+              child: _Header(firstName: firstName, user: user),
+            ),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
@@ -119,6 +186,44 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
+                    if (_notificationError != null ||
+                        _notifications.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      SectionCard(
+                        title: 'Notifications',
+                        subtitle: 'Active notices automatically expire after five minutes.',
+                        child: _notificationError != null
+                            ? Text(
+                                _notificationError!,
+                                style: AppTypography.caption(
+                                  size: 12,
+                                  color: AppColors.statusRedInk,
+                                ),
+                              )
+                            : Column(
+                                children: [
+                                  for (final notification
+                                      in _notifications.take(5))
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: Icon(
+                                        notification.isRead
+                                            ? Icons.notifications_none_rounded
+                                            : Icons
+                                                  .notifications_active_rounded,
+                                        color: notification.isRead
+                                            ? AppColors.textMuted
+                                            : AppColors.brandAccent,
+                                      ),
+                                      title: Text(notification.title),
+                                      subtitle: Text(notification.message),
+                                      onTap: () =>
+                                          _openNotification(notification),
+                                    ),
+                                ],
+                              ),
+                      ),
+                    ],
                     if (_summaryError != null) ...[
                       const SizedBox(height: AppSpacing.sm),
                       Text(
@@ -138,7 +243,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: AppSpacing.xxl),
                     Row(
                       children: [
-                        Expanded(child: Text('Recent activity', style: AppTypography.headingStyle(size: 18))),
+                        Expanded(
+                          child: Text(
+                            'Recent activity',
+                            style: AppTypography.headingStyle(size: 18),
+                          ),
+                        ),
                         if (reports.reports.isNotEmpty)
                           TextButton(
                             onPressed: () => widget.onNavigate(2),
@@ -155,7 +265,11 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator(color: AppColors.brandAccent)),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.brandAccent,
+                    ),
+                  ),
                 ),
               )
             else if (reports.reports.isEmpty)
@@ -176,13 +290,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 sliver: SliverList.separated(
                   itemCount: reports.reports.take(4).length,
-                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: AppSpacing.md),
                   itemBuilder: (context, i) {
                     final report = reports.reports[i];
                     return ReportCard(
                       report: report,
                       onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => ReportDetailScreen(reportId: report.id)),
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ReportDetailScreen(reportId: report.id),
+                        ),
                       ),
                     );
                   },
@@ -208,7 +326,10 @@ class _Header extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.darkBlue,
-        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(32), bottomRight: Radius.circular(32)),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 26),
       child: SafeArea(
@@ -227,11 +348,20 @@ class _Header extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 22),
-            Text('Hello, $firstName 👋', style: AppTypography.display(size: 26, color: AppColors.onPrimary)),
+            Text(
+              'Hello, $firstName 👋',
+              style: AppTypography.display(
+                size: 26,
+                color: AppColors.onPrimary,
+              ),
+            ),
             const SizedBox(height: 4),
             Text(
               AppConfig.tagline,
-              style: AppTypography.bodyStyle(size: 14, color: AppColors.lightBlue),
+              style: AppTypography.bodyStyle(
+                size: 14,
+                color: AppColors.lightBlue,
+              ),
             ),
           ],
         ),
@@ -272,26 +402,44 @@ class _PrimaryCta extends StatelessWidget {
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: isDark ? AppColors.border : AppColors.lightAzure),
+            border: Border.all(
+              color: isDark ? AppColors.border : AppColors.lightAzure,
+            ),
           ),
           child: Row(
             children: [
               Container(
                 width: 54,
                 height: 54,
-                decoration: BoxDecoration(color: AppColors.darkBlue, borderRadius: BorderRadius.circular(18)),
-                child: Icon(Icons.add_a_photo_rounded, color: AppColors.lightBlue, size: 26),
+                decoration: BoxDecoration(
+                  color: AppColors.darkBlue,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  Icons.add_a_photo_rounded,
+                  color: AppColors.lightBlue,
+                  size: 26,
+                ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Report a road issue', style: AppTypography.headingStyle(size: 17, color: titleColor)),
+                    Text(
+                      'Report a road issue',
+                      style: AppTypography.headingStyle(
+                        size: 17,
+                        color: titleColor,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       'Photo • description • GPS location',
-                      style: AppTypography.caption(size: 12.5, color: AppColors.textSecondary),
+                      style: AppTypography.caption(
+                        size: 12.5,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -307,7 +455,11 @@ class _PrimaryCta extends StatelessWidget {
 }
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.onReport, required this.onMap, required this.onReports});
+  const _QuickActions({
+    required this.onReport,
+    required this.onMap,
+    required this.onReports,
+  });
 
   final VoidCallback onReport;
   final VoidCallback onMap;
@@ -317,18 +469,34 @@ class _QuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _QuickAction(icon: Icons.camera_alt_rounded, label: 'Report', onTap: onReport),
+        _QuickAction(
+          icon: Icons.camera_alt_rounded,
+          label: 'Report',
+          onTap: onReport,
+        ),
         const SizedBox(width: 12),
-        _QuickAction(icon: Icons.map_rounded, label: 'Public map', onTap: onMap),
+        _QuickAction(
+          icon: Icons.map_rounded,
+          label: 'Public map',
+          onTap: onMap,
+        ),
         const SizedBox(width: 12),
-        _QuickAction(icon: Icons.article_rounded, label: 'My reports', onTap: onReports),
+        _QuickAction(
+          icon: Icons.article_rounded,
+          label: 'My reports',
+          onTap: onReports,
+        ),
       ],
     );
   }
 }
 
 class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.icon, required this.label, required this.onTap});
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
@@ -344,7 +512,10 @@ class _QuickAction extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: AppSpacing.sm),
+            padding: const EdgeInsets.symmetric(
+              vertical: 18,
+              horizontal: AppSpacing.sm,
+            ),
             decoration: BoxDecoration(
               color: AppColors.cardSurface,
               borderRadius: BorderRadius.circular(18),
@@ -369,7 +540,11 @@ class _QuickAction extends StatelessWidget {
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: AppTypography.caption(size: 12, weight: FontWeight.w600, color: AppColors.textSecondary),
+                  style: AppTypography.caption(
+                    size: 12,
+                    weight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -390,12 +565,18 @@ class _Footer extends StatelessWidget {
         children: [
           Container(
             height: 4,
-            decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(4),
+            ),
           ),
           const SizedBox(height: 10),
           Text(
             '${AppConfig.productName} · ${AppConfig.brandName}',
-            style: AppTypography.caption(size: 11.5, color: AppColors.textMuted),
+            style: AppTypography.caption(
+              size: 11.5,
+              color: AppColors.textMuted,
+            ),
           ),
         ],
       ),

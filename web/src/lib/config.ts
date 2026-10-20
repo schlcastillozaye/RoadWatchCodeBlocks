@@ -23,7 +23,7 @@ if (
 export const MAPS_ENABLED: boolean = true;
 
 export const BRAND = {
-  product: 'RoadWatch',
+  product: 'RoadBlocks',
   company: 'Code Blocks Inc.',
   tagline: 'Your friendly coding helper',
   system: 'Road issue reporting & maintenance management',

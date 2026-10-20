@@ -95,7 +95,7 @@ export function LoginPage() {
             </div>
 
             <h2 className="text-2xl text-navy">Sign in</h2>
-            <p className="mt-1 text-sm text-ink-3">Use your RoadWatch account to continue.</p>
+            <p className="mt-1 text-sm text-ink-3">Use your RoadBlocks account to continue.</p>
 
             {error && (
               <div className="mt-5">

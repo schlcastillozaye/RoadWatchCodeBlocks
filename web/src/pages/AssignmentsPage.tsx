@@ -12,7 +12,7 @@ import type { Report, RepairStatus } from '../lib/types';
 import { useAsync } from '../lib/useAsync';
 
 const PAGE_SIZE = 8;
-const FILTERS: (RepairStatus | '')[] = ['', 'AWAITING_MAINTENANCE', 'IN_PROGRESS', 'COMPLETED'];
+const FILTERS: (RepairStatus | '')[] = ['', 'AWAITING_MAINTENANCE', 'IN_PROGRESS', 'AWAITING_VERIFICATION', 'RETURNED_FOR_WORK', 'COMPLETED', 'VERIFIED_COMPLETED'];
 
 export function AssignmentsPage() {
   const [repairStatus, setRepairStatus] = useState<RepairStatus | ''>('');
@@ -127,7 +127,7 @@ export function AssignmentsPage() {
 
                         <div className="mt-2.5 flex flex-wrap items-center gap-2">
                           <CategoryChip category={report.category} />
-                          {report.repairStatus !== 'COMPLETED' && (
+                          {!['COMPLETED', 'VERIFIED_COMPLETED'].includes(report.repairStatus) && (
                             <button type="button" className="btn btn-primary btn-sm" onClick={() => openRepair(report)}>
                               Update status
                             </button>
@@ -173,7 +173,6 @@ export function AssignmentsPage() {
             void assignments.reload();
             void summary.reload();
           }}
-          canOverride={false}
         />
       )}
     </>

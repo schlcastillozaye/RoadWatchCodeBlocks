@@ -59,6 +59,16 @@ function rw_column_type(PDO $pdo, string $table, string $column): string
     return $type === false ? '' : (string) $type;
 }
 
+function rw_column_is_nullable(PDO $pdo, string $table, string $column): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT `IS_NULLABLE` FROM `information_schema`.`COLUMNS`
+         WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = ? AND `COLUMN_NAME` = ?'
+    );
+    $stmt->execute([$table, $column]);
+    return $stmt->fetchColumn() === 'YES';
+}
+
 /**
  * Backward-compatible migrations for databases created by an older schema.
  *
@@ -84,6 +94,30 @@ function rw_apply_patches(PDO $pdo): void
     if (rw_column_type($pdo, 'ReportPhoto', 'imageData') === '') {
         $pdo->exec('ALTER TABLE `ReportPhoto` ADD COLUMN `imageData` MEDIUMBLOB NULL');
         echo "  + added ReportPhoto.imageData\n";
+    }
+
+    $repairStatusType = rw_column_type($pdo, 'Report', 'repairStatus');
+    if ($repairStatusType !== ''
+        && (!str_contains($repairStatusType, "'AWAITING_VERIFICATION'")
+            || !str_contains($repairStatusType, "'VERIFIED_COMPLETED'"))) {
+        $pdo->exec(
+            "ALTER TABLE `Report` MODIFY `repairStatus`
+             ENUM('NOT_ASSIGNED','AWAITING_MAINTENANCE','IN_PROGRESS','AWAITING_VERIFICATION','RETURNED_FOR_WORK','COMPLETED','VERIFIED_COMPLETED')
+             NOT NULL DEFAULT 'NOT_ASSIGNED'"
+        );
+        echo "  + widened Report.repairStatus enum\n";
+    }
+
+    if (rw_column_type($pdo, 'Notification', 'assignmentId') !== ''
+        && !rw_column_is_nullable($pdo, 'Notification', 'assignmentId')) {
+        $pdo->exec('ALTER TABLE `Notification` MODIFY `assignmentId` VARCHAR(191) NULL');
+        echo "  + made Notification.assignmentId optional for workflow notifications\n";
+    }
+
+    if (rw_column_type($pdo, 'Notification', 'expiresAt') === '') {
+        $pdo->exec('ALTER TABLE `Notification` ADD COLUMN `expiresAt` DATETIME(3) NULL AFTER `readAt`');
+        $pdo->exec('UPDATE `Notification` SET `expiresAt` = DATE_ADD(`createdAt`, INTERVAL 5 MINUTE) WHERE `expiresAt` IS NULL');
+        echo "  + added Notification.expiresAt (existing notices retain bounded visibility)\n";
     }
 
     // 2. Report.category must accept every value Schema::CATEGORIES validates.

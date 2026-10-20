@@ -32,6 +32,7 @@ Router::post('/api/reports/{id}/photos', [ReportsController::class, 'addPhotos']
 Router::patch('/api/reports/{id}/moderation', [ReportsController::class, 'moderation']);
 Router::post('/api/reports/{id}/assign', [ReportsController::class, 'assign']);
 Router::patch('/api/reports/{id}/repair', [ReportsController::class, 'repair']);
+Router::patch('/api/reports/{id}/verification', [ReportsController::class, 'verification']);
 Router::delete('/api/admin/reports/{id}', [ReportsController::class, 'destroyAsAdmin']);
 Router::delete('/api/reports/{id}', [ReportsController::class, 'destroy']);
 Router::get('/api/reports/{id}', [ReportsController::class, 'show']);
@@ -42,6 +43,9 @@ Router::get('/api/maintenance/summary', [MaintenanceController::class, 'summary'
 Router::get('/api/maintenance/notifications', [NotificationsController::class, 'index']);
 Router::patch('/api/maintenance/notifications/read-all', [NotificationsController::class, 'markAllRead']);
 Router::patch('/api/maintenance/notifications/{id}/read', [NotificationsController::class, 'markRead']);
+Router::get('/api/notifications', [NotificationsController::class, 'index']);
+Router::patch('/api/notifications/read-all', [NotificationsController::class, 'markAllRead']);
+Router::patch('/api/notifications/{id}/read', [NotificationsController::class, 'markRead']);
 
 // -- Public map --------------------------------------------------------------
 Router::get('/api/map/reports', [MapController::class, 'reports']);

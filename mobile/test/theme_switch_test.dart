@@ -72,7 +72,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(
-      tester.widget<Text>(find.text('RoadWatch')).style!.color,
+      tester.widget<Text>(find.text('RoadBlocks')).style!.color,
       RoadWatchPalette.dark.ink,
     );
   });

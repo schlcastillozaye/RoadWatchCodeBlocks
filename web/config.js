@@ -44,7 +44,7 @@
   };
 
   window.RW_BRAND = {
-    product: 'RoadWatch',
+    product: 'RoadBlocks',
     company: 'Code Blocks Inc.',
     tagline: 'Your friendly coding helper',
     system: 'Road issue reporting & maintenance management',

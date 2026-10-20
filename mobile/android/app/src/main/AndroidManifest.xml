@@ -17,7 +17,7 @@
     <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
 
     <application
-        android:label="RoadWatch"
+        android:label="RoadBlocks"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

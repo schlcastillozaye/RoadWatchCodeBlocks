@@ -10,6 +10,40 @@ use RoadWatch\Support\Ids;
 /** Persistent, user-scoped in-app notifications. */
 class NotificationService
 {
+    public static function createWorkflow(
+        string $userId,
+        array $report,
+        string $title,
+        string $message,
+        string $repairStatus
+    ): void {
+        $location = trim(implode(' · ', array_filter([
+            $report['addressText'] ?? null,
+            $report['areaLabel'] ?? null,
+        ])));
+        if ($location === '') {
+            $location = number_format((float) $report['latitude'], 5) . ', ' . number_format((float) $report['longitude'], 5);
+        }
+        $now = Dates::now();
+        Db::execute(
+            'INSERT INTO `Notification`
+                (`id`,`userId`,`assignmentId`,`reportId`,`title`,`message`,`category`,`location`,`repairStatus`,`readAt`,`expiresAt`,`createdAt`)
+             VALUES (?,?,NULL,?,?,?,?,?,?,NULL,?,?)',
+            [
+                Ids::cuid(),
+                $userId,
+                $report['id'],
+                $title,
+                $message,
+                $report['category'],
+                mb_substr($location, 0, 500),
+                $repairStatus,
+                Dates::toDb($now->modify('+5 minutes')),
+                Dates::toDb($now),
+            ]
+        );
+    }
+
     public static function createAssignment(array $assignment, array $report): void
     {
         $location = trim(implode(' · ', array_filter([
@@ -23,8 +57,8 @@ class NotificationService
 
         Db::execute(
             'INSERT INTO `Notification`
-                (`id`,`userId`,`assignmentId`,`reportId`,`title`,`message`,`category`,`location`,`repairStatus`,`readAt`,`createdAt`)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                (`id`,`userId`,`assignmentId`,`reportId`,`title`,`message`,`category`,`location`,`repairStatus`,`readAt`,`expiresAt`,`createdAt`)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
             [
                 Ids::cuid(),
                 $assignment['officerId'],
@@ -36,6 +70,7 @@ class NotificationService
                 $location,
                 'AWAITING_MAINTENANCE',
                 null,
+                Dates::toDb(Dates::now()->modify('+5 minutes')),
                 Dates::toDb(Dates::now()),
             ]
         );
@@ -46,24 +81,27 @@ class NotificationService
         $limit = max(1, min(100, $limit));
         $items = Db::all(
             "SELECT n.`id`, n.`assignmentId`, n.`reportId`, n.`title`, n.`message`, n.`category`,
-                    n.`location`, n.`repairStatus`, n.`readAt`, n.`createdAt`, r.`referenceNo`
+                    n.`location`, n.`repairStatus`, n.`readAt`, n.`createdAt`, n.`expiresAt`, r.`referenceNo`
              FROM `Notification` n
              INNER JOIN `Report` r ON r.`id` = n.`reportId`
-             WHERE n.`userId` = ?
+             WHERE n.`userId` = ? AND n.`expiresAt` > ?
              ORDER BY n.`createdAt` DESC
              LIMIT {$limit}",
-            [$userId]
+            [$userId, Dates::toDb(Dates::now())]
         );
         foreach ($items as &$item) {
             $item['isRead'] = $item['readAt'] !== null;
+            $item['expiresAt'] = Dates::iso($item['expiresAt']);
+            $item['createdAt'] = Dates::iso($item['createdAt']);
+            $item['readAt'] = Dates::iso($item['readAt']);
         }
         unset($item);
 
         return [
             'items' => $items,
             'unreadCount' => (int) Db::scalar(
-                'SELECT COUNT(*) FROM `Notification` WHERE `userId` = ? AND `readAt` IS NULL',
-                [$userId]
+                'SELECT COUNT(*) FROM `Notification` WHERE `userId` = ? AND `readAt` IS NULL AND `expiresAt` > ?',
+                [$userId, Dates::toDb(Dates::now())]
             ),
         ];
     }

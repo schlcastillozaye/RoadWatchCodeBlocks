@@ -11,7 +11,7 @@ class NotificationsController
 {
     public static function index(): array
     {
-        $actor = Auth::requireRole('MAINTENANCE_OFFICER');
+        $actor = Auth::authenticate();
         $limit = Request::query('limit');
         if ($limit === null || $limit === '') {
             $limit = 50;
@@ -27,13 +27,13 @@ class NotificationsController
 
     public static function markRead(array $params): array
     {
-        $actor = Auth::requireRole('MAINTENANCE_OFFICER');
+        $actor = Auth::authenticate();
         return NotificationService::markRead($params['id'], $actor['id']);
     }
 
     public static function markAllRead(): array
     {
-        $actor = Auth::requireRole('MAINTENANCE_OFFICER');
+        $actor = Auth::authenticate();
         return NotificationService::markAllRead($actor['id']);
     }
 }

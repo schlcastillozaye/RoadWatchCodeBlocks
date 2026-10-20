@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>RoadWatch</string>
+	<string>RoadBlocks</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>RoadWatch</string>
+	<string>RoadBlocks</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -27,15 +27,15 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>RoadWatch uses your camera so you can photograph road issues when filing a report.</string>
+	<string>RoadBlocks uses your camera so you can photograph road issues when filing a report.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>RoadWatch needs access to your photos so you can attach existing pictures of a road issue.</string>
+	<string>RoadBlocks needs access to your photos so you can attach existing pictures of a road issue.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>RoadWatch saves photos of road issues you capture while reporting.</string>
+	<string>RoadBlocks saves photos of road issues you capture while reporting.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>RoadWatch uses your location to pin the exact position of the road issue you are reporting.</string>
+	<string>RoadBlocks uses your location to pin the exact position of the road issue you are reporting.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>RoadWatch uses your location to pin the exact position of the road issue you are reporting.</string>
+	<string>RoadBlocks uses your location to pin the exact position of the road issue you are reporting.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

@@ -266,8 +266,8 @@ function seed_reports(array $users): void
             // BEFORE photo (always present).
             Db::execute(
                 'INSERT INTO `ReportPhoto`
-                    (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`uploadedById`,`createdAt`)
-                 VALUES (?,?,?,?,?,?,?,?,?,?)',
+                    (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`uploadedById`,`imageData`,`createdAt`)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                 [
                     Ids::cuid(),
                     $reportId,
@@ -278,6 +278,7 @@ function seed_reports(array $users): void
                     160,
                     120,
                     $row['citizenId'],
+                    $beforeStored['data'] ?? null,
                     Dates::toDb($createdAt),
                 ]
             );
@@ -286,8 +287,8 @@ function seed_reports(array $users): void
             if ($afterStored !== null) {
                 Db::execute(
                     'INSERT INTO `ReportPhoto`
-                        (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`uploadedById`,`createdAt`)
-                     VALUES (?,?,?,?,?,?,?,?,?,?)',
+                        (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`uploadedById`,`imageData`,`createdAt`)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                     [
                         Ids::cuid(),
                         $reportId,
@@ -298,6 +299,7 @@ function seed_reports(array $users): void
                         160,
                         120,
                         $row['assignedOfficerId'],
+                        $afterStored['data'] ?? null,
                         Dates::toDb($createdAt->modify('+86400 seconds')),
                     ]
                 );

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'dart:async';
+
 import '../../core/api_exception.dart';
 import '../../models/models.dart';
 import '../../services/roadwatch_api.dart';
@@ -34,17 +36,31 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
   int _reportTotal = 0;
   int _reportTotalPages = 1;
   bool _markingRead = false;
+  Timer? _notificationExpiryTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _notificationExpiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      final remaining = _notifications
+          .where(
+            (item) => item.expiresAt != null && item.expiresAt!.isAfter(now),
+          )
+          .toList();
+      if (remaining.length != _notifications.length) {
+        setState(() => _notifications = remaining);
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _notificationExpiryTimer?.cancel();
     super.dispose();
   }
 
@@ -99,16 +115,14 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
       }
     }
 
-    if (!widget.isAdmin) {
-      try {
-        final notifications = await api.maintenanceNotifications();
-        if (mounted) setState(() => _notifications = notifications);
-      } on ApiException catch (error) {
-        if (mounted) setState(() => _notificationError = error.message);
-      } catch (_) {
-        if (mounted) {
-          setState(() => _notificationError = 'Could not load notifications.');
-        }
+    try {
+      final notifications = await api.maintenanceNotifications();
+      if (mounted) setState(() => _notifications = notifications);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _notificationError = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _notificationError = 'Could not load notifications.');
       }
     }
     if (mounted) setState(() => _loading = false);
@@ -171,6 +185,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                         isRead: true,
                         createdAt: item.createdAt,
                         readAt: DateTime.now(),
+                        expiresAt: item.expiresAt,
                       )
                     : item,
               )
@@ -210,14 +225,53 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     }
   }
 
+  Widget _notificationsSection(int unreadCount) => SectionCard(
+    title: 'Workflow notifications',
+    trailing: Text(
+      '$unreadCount unread',
+      style: AppTypography.caption(size: 12, color: AppColors.textMuted),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_notificationError != null)
+          ErrorView(message: _notificationError!, onRetry: _load)
+        else if (_notifications.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No active notifications. Notifications expire after five minutes.',
+            ),
+          )
+        else ...[
+          for (final notification in _notifications.take(5))
+            _NotificationRow(
+              notification: notification,
+              onTap: _markingRead
+                  ? null
+                  : () => _openNotification(notification),
+            ),
+          if (unreadCount > 0)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _markingRead ? null : _markAllRead,
+                child: const Text('Mark all read'),
+              ),
+            ),
+        ],
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     AppColors.syncTo(context);
     final activeReports = _reports
-        .where((report) => report.repairStatus != RepairStatus.completed)
+        .where((report) => !report.isCompleted)
         .toList();
     final completedReports = _reports
-        .where((report) => report.repairStatus == RepairStatus.completed)
+        .where((report) => report.isCompleted)
         .toList();
     final unreadCount = _notifications
         .where((notification) => !notification.isRead)
@@ -248,7 +302,9 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                       padding: EdgeInsets.all(28),
                       child: Center(child: CircularProgressIndicator()),
                     )
-                  else if (widget.isAdmin)
+                  else if (widget.isAdmin) ...[
+                    _notificationsSection(unreadCount),
+                    const SizedBox(height: 16),
                     _ReviewQueue(
                       count: _reportTotal,
                       page: _reportPage,
@@ -256,52 +312,11 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                       reports: _reports,
                       onOpen: _openReport,
                       onPage: _changeReportPage,
-                    )
-                  else ...[
+                    ),
+                  ] else ...[
                     _OfficerSummary(summary: _summary),
                     const SizedBox(height: 16),
-                    SectionCard(
-                      title: 'Assignment notifications',
-                      trailing: Text(
-                        '$unreadCount unread',
-                        style: AppTypography.caption(
-                          size: 12,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (_notificationError != null)
-                            ErrorView(
-                              message: _notificationError!,
-                              onRetry: _load,
-                            )
-                          else if (_notifications.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text('No assignment notifications yet.'),
-                            )
-                          else ...[
-                            for (final notification in _notifications.take(5))
-                              _NotificationRow(
-                                notification: notification,
-                                onTap: _markingRead
-                                    ? null
-                                    : () => _openNotification(notification),
-                              ),
-                            if (unreadCount > 0)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: _markingRead ? null : _markAllRead,
-                                  child: const Text('Mark all read'),
-                                ),
-                              ),
-                          ],
-                        ],
-                      ),
-                    ),
+                    _notificationsSection(unreadCount),
                     const SizedBox(height: 16),
                     _ReportSection(
                       title: 'Assigned work',

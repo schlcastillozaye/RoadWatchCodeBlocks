@@ -355,11 +355,11 @@ function OfficerDashboard() {
 function CitizenNotice({ name }: { name?: string | null }) {
   return (
     <>
-      <PageHeader title={`Hello, ${name?.split(' ')[0] ?? 'there'}`} subtitle="Welcome to RoadWatch." />
+      <PageHeader title={`Hello, ${name?.split(' ')[0] ?? 'there'}`} subtitle="Welcome to RoadBlocks." />
       <Section title="Use the mobile app to file reports">
         <p className="text-sm text-ink-2">
           This web platform is built for administrators and maintenance officers. To report a road issue, track your
-          submissions and receive updates, please sign in with the RoadWatch mobile app.
+          submissions and receive updates, please sign in with the RoadBlocks mobile app.
         </p>
         <p className="mt-3 text-sm text-ink-3">
           You can still browse the public map of approved reports from the navigation menu.

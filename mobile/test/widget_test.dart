@@ -17,9 +17,9 @@ void main() {
     expect(find.byType(CodeBlocksMark), findsOneWidget);
   });
 
-  testWidgets('brand logo shows the RoadWatch wordmark and brand line', (tester) async {
+  testWidgets('brand logo shows the RoadBlocks wordmark and brand line', (tester) async {
     await tester.pumpWidget(_wrap(const BrandLogo(onDark: true, size: LogoSize.medium, showTagline: true)));
-    expect(find.text('RoadWatch'), findsOneWidget);
+    expect(find.text('RoadBlocks'), findsOneWidget);
     expect(find.text('by Code Blocks Inc.'), findsOneWidget);
   });
 

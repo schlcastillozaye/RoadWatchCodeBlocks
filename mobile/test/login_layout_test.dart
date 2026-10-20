@@ -76,7 +76,7 @@ void main() {
     await pumpAt(tester, phone, ThemeMode.light);
 
     expect(find.byType(BrandLogo), findsOneWidget);
-    expect(find.text('RoadWatch'), findsOneWidget);
+    expect(find.text('RoadBlocks'), findsOneWidget);
     expect(find.text('by Code Blocks Inc.'), findsOneWidget);
 
     // The web `.rw-auth-brand` lockup is ~47px tall. The previous

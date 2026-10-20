@@ -14,7 +14,12 @@ import '../../widgets/app_button.dart';
 import '../../widgets/roadwatch_map.dart';
 
 class PickedLocation {
-  const PickedLocation({required this.latitude, required this.longitude, this.address, this.areaLabel});
+  const PickedLocation({
+    required this.latitude,
+    required this.longitude,
+    this.address,
+    this.areaLabel,
+  });
 
   final double latitude;
   final double longitude;
@@ -25,7 +30,11 @@ class PickedLocation {
 /// Lets the citizen confirm the exact location on an OpenStreetMap map (no API
 /// key needed), with GPS and manual coordinate entry as alternatives.
 class LocationPickerScreen extends StatefulWidget {
-  const LocationPickerScreen({super.key, this.initialLatitude, this.initialLongitude});
+  const LocationPickerScreen({
+    super.key,
+    this.initialLatitude,
+    this.initialLongitude,
+  });
 
   final double? initialLatitude;
   final double? initialLongitude;
@@ -35,7 +44,10 @@ class LocationPickerScreen extends StatefulWidget {
 }
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
-  static const _defaultTarget = LatLng(14.7942, 120.8790); // Bulacan State University area
+  static const _defaultTarget = LatLng(
+    14.7942,
+    120.8790,
+  ); // Bulacan State University area
 
   late double _latitude;
   late double _longitude;
@@ -52,6 +64,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   bool _locating = false;
   bool _geocoding = false;
   String? _notice;
+  int _geocodeRequest = 0;
 
   @override
   void initState() {
@@ -63,7 +76,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     _lngController.text = _longitude.toStringAsFixed(6);
 
     if (widget.initialLatitude == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _useCurrentLocation(auto: true));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _useCurrentLocation(auto: true),
+      );
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reverseGeocode());
     }
@@ -91,7 +106,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       final pos = result.position!;
       _applyPosition(pos.latitude, pos.longitude);
     } else {
-      setState(() => _notice = result.message ?? 'Could not get your location.');
+      setState(
+        () => _notice = result.message ?? 'Could not get your location.',
+      );
     }
   }
 
@@ -130,23 +147,38 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   Future<void> _reverseGeocode() async {
-    setState(() => _geocoding = true);
+    final requestId = ++_geocodeRequest;
+    final latitude = _latitude;
+    final longitude = _longitude;
+    final coordinateLabel =
+        '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+    setState(() {
+      _geocoding = true;
+      _address = coordinateLabel;
+      _areaLabel = null;
+    });
     try {
       final api = context.read<RoadWatchApi>();
-      final result = await api.reverseGeocode(latitude: _latitude, longitude: _longitude);
+      final result = await api.reverseGeocode(
+        latitude: latitude,
+        longitude: longitude,
+      );
       if (!mounted) return;
-      setState(() {
-        if (result.available) {
-          _address = result.address;
-          _areaLabel = result.areaLabel;
-        } else {
-          _address = null;
-        }
-      });
+      if (requestId == _geocodeRequest) {
+        setState(() {
+          if (result.available) {
+            _address = result.address ?? coordinateLabel;
+            _areaLabel = result.areaLabel;
+          }
+        });
+      }
     } catch (_) {
-      // Geolocation lookup is optional; the coordinates alone are enough.
+      if (!mounted || requestId != _geocodeRequest) return;
+      setState(() => _address = coordinateLabel);
     } finally {
-      if (mounted) setState(() => _geocoding = false);
+      if (mounted && requestId == _geocodeRequest) {
+        setState(() => _geocoding = false);
+      }
     }
   }
 
@@ -156,7 +188,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     final lat = double.tryParse(_latController.text.trim());
     final lng = double.tryParse(_lngController.text.trim());
     if (lat == null || lng == null || lat.abs() > 90 || lng.abs() > 180) {
-      setState(() => _notice = 'Enter valid latitude (-90..90) and longitude (-180..180).');
+      setState(
+        () => _notice =
+            'Enter valid latitude (-90..90) and longitude (-180..180).',
+      );
       return;
     }
     _applyPosition(lat, lng);
@@ -208,10 +243,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               _mapController.move(_center, 16.5);
             },
           ),
-          children: [
-            roadwatchTileLayer(),
-            roadwatchAttribution(),
-          ],
+          children: [roadwatchTileLayer(), roadwatchAttribution()],
         ),
         // Fixed centre pin.
         IgnorePointer(
@@ -226,10 +258,18 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.lightBlue, width: 3),
                   boxShadow: [
-                    BoxShadow(color: AppColors.darkBlue.withValues(alpha: 0.25), blurRadius: 10, offset: const Offset(0, 4)),
+                    BoxShadow(
+                      color: AppColors.darkBlue.withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
                   ],
                 ),
-                child: Icon(Icons.place_rounded, color: AppColors.lightBlue, size: 22),
+                child: Icon(
+                  Icons.place_rounded,
+                  color: AppColors.lightBlue,
+                  size: 22,
+                ),
               ),
             ),
           ),
@@ -245,7 +285,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             foregroundColor: AppColors.brandAccent,
             onPressed: _locating ? null : () => _useCurrentLocation(),
             child: _locating
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.my_location_rounded),
           ),
         ),
@@ -258,7 +302,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
-        borderRadius: BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
+        ),
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -270,12 +317,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.place_rounded, size: 18, color: AppColors.brandAccent),
+                  Icon(
+                    Icons.place_rounded,
+                    size: 18,
+                    color: AppColors.brandAccent,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       formatCoords(_latitude, _longitude),
-                      style: AppTypography.bodyStyle(size: 14, weight: FontWeight.w600),
+                      style: AppTypography.bodyStyle(
+                        size: 14,
+                        weight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -284,15 +338,29 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               if (_geocoding)
                 Row(
                   children: [
-                    const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                     const SizedBox(width: 8),
-                    Text('Looking up address…', style: AppTypography.caption(size: 12)),
+                    Text(
+                      'Looking up address…',
+                      style: AppTypography.caption(size: 12),
+                    ),
                   ],
                 )
               else
                 Text(
-                  _address ?? (_notice ?? 'Address lookup unavailable — coordinates will be used.'),
-                  style: AppTypography.caption(size: 12, color: _notice != null ? AppColors.statusAmberInk : AppColors.textMuted),
+                  _address ??
+                      (_notice ??
+                          'Address lookup unavailable — coordinates will be used.'),
+                  style: AppTypography.caption(
+                    size: 12,
+                    color: _notice != null
+                        ? AppColors.statusAmberInk
+                        : AppColors.textMuted,
+                  ),
                 ),
               const SizedBox(height: 14),
               AppButton(
@@ -303,9 +371,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               const SizedBox(height: 4),
               TextButton.icon(
                 onPressed: () => setState(() => _showManual = !_showManual),
-                icon: Icon(_showManual ? Icons.expand_less_rounded : Icons.keyboard_rounded, size: 16),
-                label: Text(_showManual ? 'Hide coordinate entry' : 'Enter coordinates manually'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+                icon: Icon(
+                  _showManual
+                      ? Icons.expand_less_rounded
+                      : Icons.keyboard_rounded,
+                  size: 16,
+                ),
+                label: Text(
+                  _showManual
+                      ? 'Hide coordinate entry'
+                      : 'Enter coordinates manually',
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary,
+                ),
               ),
               if (_showManual) ...[
                 Row(
@@ -313,16 +392,26 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     Expanded(
                       child: TextField(
                         controller: _latController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                        decoration: const InputDecoration(labelText: 'Latitude'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                          signed: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Latitude',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
                         controller: _lngController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                        decoration: const InputDecoration(labelText: 'Longitude'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                          signed: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Longitude',
+                        ),
                       ),
                     ),
                   ],

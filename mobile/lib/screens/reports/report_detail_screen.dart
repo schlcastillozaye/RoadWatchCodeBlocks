@@ -309,12 +309,81 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     }
   }
 
+  Future<void> _verifyRepair(String decision) async {
+    final controller = TextEditingController();
+    final returning = decision == 'RETURN';
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(returning ? 'Return for further work?' : 'Verify repair?'),
+        content: returning
+            ? TextField(
+                controller: controller,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 4,
+                maxLength: 1000,
+                decoration: const InputDecoration(
+                  labelText: 'Reason (at least 5 characters)',
+                ),
+              )
+            : const Text(
+                'Confirm the officer’s completion notes and after-photo show that the road issue has been resolved.',
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(returning ? 'Return for work' : 'Verify completion'),
+          ),
+        ],
+      ),
+    );
+    final reason = controller.text.trim();
+    controller.dispose();
+    if (accepted != true) return;
+    if (returning && reason.length < 5) {
+      _snack('Enter a return reason of at least 5 characters.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _actionBusy = true);
+    try {
+      final updated = await context.read<RoadWatchApi>().verifyRepair(
+        widget.reportId,
+        decision: decision,
+        reason: reason,
+      );
+      if (!mounted) return;
+      setState(() => _report = updated);
+      await _load();
+      if (mounted) {
+        _snack(
+          returning
+              ? 'Repair returned to the assigned officer.'
+              : 'Repair verified. The citizen was notified.',
+        );
+      }
+    } on ApiException catch (error) {
+      if (mounted) _snack(error.message);
+    } catch (_) {
+      if (mounted) {
+        _snack('The repair verification decision could not be saved.');
+      }
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
   Future<void> _completeRepair() async {
     final notesController = TextEditingController();
     final notes = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Complete repair'),
+        title: const Text('Finish work and submit for review'),
         content: TextField(
           controller: notesController,
           autofocus: true,
@@ -350,7 +419,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       imageQuality: 85,
     );
     if (image == null) {
-      _snack('Choose an after-repair photo before completing this report.');
+      _snack(
+        'Choose an after-repair photo before submitting for verification.',
+      );
       return;
     }
     if (!mounted) return;
@@ -370,13 +441,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       );
       final updated = await api.updateRepair(
         widget.reportId,
-        status: RepairStatus.completed,
+        status: RepairStatus.awaitingVerification,
         completionNotes: notes,
       );
       if (!mounted) return;
       setState(() => _report = updated);
       await _load();
-      if (mounted) _snack('Repair completed.');
+      if (mounted) {
+        _snack('Completion evidence submitted for admin verification.');
+      }
     } on ApiException catch (error) {
       if (mounted) _snack(error.message);
     } catch (_) {
@@ -422,13 +495,22 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     final canAssign =
         user?.isAdmin == true &&
         report.moderationStatus == ModerationStatus.approved &&
-        report.repairStatus != RepairStatus.completed;
+        report.repairStatus != RepairStatus.completed &&
+        report.repairStatus != RepairStatus.verifiedCompleted &&
+        report.repairStatus != RepairStatus.awaitingVerification;
+    final canVerifyRepair =
+        user?.isAdmin == true &&
+        report.moderationStatus == ModerationStatus.approved &&
+        report.repairStatus == RepairStatus.awaitingVerification;
     final canMaintain =
         user?.isOfficer == true &&
         report.assignedOfficerId == user?.id &&
         report.moderationStatus == ModerationStatus.approved &&
-        report.repairStatus != RepairStatus.notAssigned &&
-        report.repairStatus != RepairStatus.completed;
+        [
+          RepairStatus.awaitingMaintenance,
+          RepairStatus.inProgress,
+          RepairStatus.returnedForWork,
+        ].contains(report.repairStatus);
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -437,15 +519,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
           _Summary(report: report),
-          if (canModerate || canAssign || canMaintain) ...[
+          if (canModerate || canAssign || canMaintain || canVerifyRepair) ...[
             const SizedBox(height: 14),
             SectionCard(
               title: 'Staff actions',
               subtitle: canModerate
                   ? 'Review this report and choose a moderation decision.'
                   : user?.isAdmin == true
-                  ? 'Manage assignments and monitor repair progress. The assigned officer reports completion.'
-                  : 'Update your assigned repair and submit completion evidence when it is finished.',
+                  ? 'Manage assignments, review submitted evidence and verify completed repairs.'
+                  : 'Update your assigned repair and submit completion evidence for admin verification.',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -498,12 +580,20 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                     ),
                   ],
                   if (canMaintain &&
-                      report.repairStatus == RepairStatus.awaitingMaintenance)
+                      [
+                        RepairStatus.awaitingMaintenance,
+                        RepairStatus.returnedForWork,
+                      ].contains(report.repairStatus))
                     if (canAssign) const SizedBox(height: 12),
                   if (canMaintain &&
-                      report.repairStatus == RepairStatus.awaitingMaintenance)
+                      [
+                        RepairStatus.awaitingMaintenance,
+                        RepairStatus.returnedForWork,
+                      ].contains(report.repairStatus))
                     AppButton(
-                      label: 'Start work',
+                      label: report.repairStatus == RepairStatus.returnedForWork
+                          ? 'Resume work'
+                          : 'Start work',
                       icon: Icons.play_arrow_rounded,
                       onPressed: _actionBusy ? null : _startRepair,
                     ),
@@ -513,10 +603,28 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   if (canMaintain &&
                       report.repairStatus == RepairStatus.inProgress)
                     AppButton(
-                      label: 'Add after photo and complete',
-                      icon: Icons.task_alt_rounded,
+                      label: 'Finish work and submit evidence',
+                      icon: Icons.upload_file_rounded,
                       onPressed: _actionBusy ? null : _completeRepair,
                     ),
+                  if (canVerifyRepair) ...[
+                    AppButton(
+                      label: 'Verify completion',
+                      icon: Icons.verified_rounded,
+                      onPressed: _actionBusy
+                          ? null
+                          : () => _verifyRepair('VERIFY'),
+                    ),
+                    const SizedBox(height: 8),
+                    AppButton(
+                      label: 'Return for further work',
+                      variant: AppButtonVariant.danger,
+                      icon: Icons.assignment_return_rounded,
+                      onPressed: _actionBusy
+                          ? null
+                          : () => _verifyRepair('RETURN'),
+                    ),
+                  ],
                   if (_actionBusy)
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
@@ -979,7 +1087,10 @@ class _TimelineRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     entry.note?.isNotEmpty == true
-                        ? entry.note!
+                        ? entry.note!.replaceFirst(
+                            'Completion evidence submitted: ',
+                            '',
+                          )
                         : entry.toValue.replaceAll('_', ' ').toLowerCase(),
                     style: AppTypography.caption(size: 12),
                   ),

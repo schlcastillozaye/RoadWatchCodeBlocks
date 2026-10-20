@@ -1,4 +1,4 @@
-# RoadWatch — End-to-end test checklist
+# RoadBlocks — End-to-end test checklist
 
 Use this after setup to verify the whole system, not just individual screens.
 Tick each box as you go.
@@ -11,9 +11,9 @@ These cover most of the checklist below without manual clicking:
 
 | Layer | Command | Expect |
 | --- | --- | --- |
-| PHP API | `node backend/tests/api_integration.mjs` | `103 passed, 0 failed` |
-| Schema | `php backend/database/migrate.php` | `9 tables`, idempotent |
-| Mobile | `cd mobile; flutter analyze; flutter test` | No issues · 12/12 pass |
+| PHP API | `node backend/tests/api_integration.mjs` | All checks pass |
+| Schema | `php backend/database/migrate.php` | Applies idempotently |
+| Mobile | `cd mobile; flutter analyze; flutter test` | No analysis issues · all tests pass |
 | Web | `node web/tests/e2e.mjs` | browser E2E (see script output) |
 
 > The section names below use the original Node (`npm run …`) commands. With the PHP
@@ -43,6 +43,9 @@ These cover most of the checklist below without manual clicking:
 - [ ] An unauthenticated request to `GET /api/reports` returns **401**.
 - [ ] A citizen calling `GET /api/reports` (staff-only) gets **403**.
 - [ ] Access token expiry triggers an automatic refresh instead of a logout (web and mobile).
+- [ ] An officer submits completion notes and an after-photo for admin verification.
+- [ ] Only an administrator can verify or return submitted work; the citizen is notified only after verification.
+- [ ] Active in-app notifications are omitted from lists and unread counts after their five-minute expiry.
 
 ## 2. Server-side RBAC (not just hidden buttons)
 
@@ -69,11 +72,12 @@ These cover most of the checklist below without manual clicking:
 - [ ] Attach a photo from the gallery instead.
 - [ ] A pin is set using the current GPS location.
 - [ ] Alternatively, pick the location manually / place a pin on the map.
+- [ ] Selecting or moving the map pin updates the location text with an address or coordinates.
 - [ ] Submitting shows an upload progress indicator.
 - [ ] On success the report appears in **My reports** with `PENDING_REVIEW` and `NOT_ASSIGNED`.
 - [ ] Submitting with an empty title, a too-short description, or no photo is blocked with a readable message.
 - [ ] A unique reference number (`RW-YYYY-NNNNNN`) is issued and visible.
-- [ ] Photos are written to the storage directory, **not** into database rows.
+- [ ] Uploaded photos use the configured storage driver; production stores bytes in MySQL `ReportPhoto.imageData`.
 - [ ] The category picker offers Pothole, Road cracks, Damaged pavement,
       Flooding or water accumulation, Road obstruction and Other.
 - [ ] Choosing **Other** reveals a required description field; submitting without
@@ -105,20 +109,27 @@ These cover most of the checklist below without manual clicking:
 ## 6. Maintenance progress (web, officer)
 
 - [ ] The officer opens an assigned report and moves it to `IN_PROGRESS` with a note.
+- [ ] Starting work requires confirmation and does not complete the repair.
 - [ ] The note appears in the timeline.
 - [ ] Progress photos uploaded here are stored and visible.
-- [ ] Attempting to complete **without completion notes** is refused (**422**).
-- [ ] Attempting to complete **without an after photo** is refused (**422**).
-- [ ] Completing with notes + an after photo succeeds.
-- [ ] The repair status becomes `COMPLETED` and `completedAt` is set.
+- [ ] Attempting to submit for verification **without completion notes** is refused (**422**).
+- [ ] Attempting to submit for verification **without an after photo** is refused (**422**).
+- [ ] Finishing work with notes and an after photo moves the report to `AWAITING_VERIFICATION`.
+- [ ] The officer's submission notifies admins, but does not notify the citizen or set `completedAt`.
+- [ ] The admin can verify the evidence or return the repair with a reason of at least five characters.
+- [ ] Verification moves the report to `VERIFIED_COMPLETED`, sets `completedAt`, and notifies the citizen.
+- [ ] A returned report moves to `RETURNED_FOR_WORK` and the assigned officer can resume it.
 
 ## 7. Role boundaries for repair evidence
 
 - [ ] An **admin** cannot change repair status or submit an after-photo (**403**).
 - [ ] An **officer not assigned** to the report cannot change repair status or add repair photos (**403**).
-- [ ] The currently assigned officer cannot complete without completion notes or an after photo (**422**).
-- [ ] The assigned officer can complete only after moving the report to `IN_PROGRESS` and adding an after-photo.
-- [ ] The report, assignment, timeline and audit log reflect the officer's completion.
+- [ ] The currently assigned officer cannot submit for verification without notes or an after photo (**422**).
+- [ ] Only the assigned officer can submit work for review from `IN_PROGRESS`.
+- [ ] Only an admin can verify a report in `AWAITING_VERIFICATION`; approval cannot skip that state.
+- [ ] A citizen is notified only after admin verification, not when an officer submits evidence.
+- [ ] Legacy `COMPLETED` records remain unchanged and are not treated as `VERIFIED_COMPLETED`.
+- [ ] The report, assignment, timeline, notifications and audit log reflect each transition.
 
 ## 8. Public map
 
@@ -151,7 +162,8 @@ These cover most of the checklist below without manual clicking:
 
 ## 11. Responsiveness
 
-- [ ] Web platform at 1920px, 1280px, 768px and 390px wide — no horizontal scrolling, all actions reachable.
+- [ ] Web at 375×667, 768×1024, 1024×768 and 1440×900 — no horizontal overflow and all actions reachable.
+- [ ] Light and dark themes keep text and controls readable.
 - [ ] The mobile drawer navigation works on small screens.
 - [ ] Mobile app on a phone-sized viewport and a tablet-sized viewport.
 - [ ] Tables degrade into readable cards on narrow screens.

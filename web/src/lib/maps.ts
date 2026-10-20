@@ -20,7 +20,10 @@ export const REPAIR_COLORS: Record<string, string> = {
   NOT_ASSIGNED: '#5b6a82',
   AWAITING_MAINTENANCE: '#2f6fd0',
   IN_PROGRESS: '#c9821f',
+  AWAITING_VERIFICATION: '#2f6fd0',
+  RETURNED_FOR_WORK: '#c9821f',
   COMPLETED: '#1f8a5b',
+  VERIFIED_COMPLETED: '#1f8a5b',
 };
 
 /** Distinct colour for a searched place, which is not a report. */

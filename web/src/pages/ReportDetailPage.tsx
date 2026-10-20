@@ -41,12 +41,12 @@ export function ReportDetailPage() {
   if (!report) return null;
 
   const canModerate = isAdmin && report.moderationStatus === 'PENDING_REVIEW';
-  const canAssign = isAdmin && report.moderationStatus === 'APPROVED' && report.repairStatus !== 'COMPLETED';
+  const canAssign = isAdmin && report.moderationStatus === 'APPROVED' &&
+    !['AWAITING_VERIFICATION', 'COMPLETED', 'VERIFIED_COMPLETED'].includes(report.repairStatus);
   const canMaintain =
     report.moderationStatus === 'APPROVED' &&
-    report.repairStatus !== 'NOT_ASSIGNED' &&
-    (isAdmin || (isOfficer && report.assignedOfficer?.id === user?.id)) &&
-    report.repairStatus !== undefined;
+    isOfficer && report.assignedOfficer?.id === user?.id &&
+    ['AWAITING_MAINTENANCE', 'IN_PROGRESS', 'RETURNED_FOR_WORK'].includes(report.repairStatus);
 
   const isPublicViewer = report.moderationStatus === 'APPROVED';
 
@@ -236,7 +236,6 @@ export function ReportDetailPage() {
           open={repairOpen}
           onClose={() => setRepairOpen(false)}
           onDone={applyUpdate}
-          canOverride={isAdmin}
         />
       )}
 

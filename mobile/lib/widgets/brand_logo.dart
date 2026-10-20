@@ -16,7 +16,7 @@ enum LogoSize {
   auth,
 }
 
-/// Brand lockup: Code Blocks symbol + "RoadWatch" wordmark (+ optional
+/// Brand lockup: Code Blocks symbol + "RoadBlocks" wordmark (+ optional
 /// "by Code Blocks Inc." tagline).
 class BrandLogo extends StatelessWidget {
   const BrandLogo({

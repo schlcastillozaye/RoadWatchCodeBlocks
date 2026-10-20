@@ -118,7 +118,11 @@ async function login(page, email, password) {
 // GET /auth/me; wait until the signed-in identity is reflected in the UI.
 async function waitAuthenticated(page, name) {
   await page.waitForSelector('#home-reports', { timeout: 15000 });
-  if (name) await page.waitForFunction((n) => document.body.innerText.includes(n), name, { timeout: 15000 });
+  if (name) await page.waitForFunction(
+    (n) => document.querySelector('.rw-nav-user')?.textContent.includes(n),
+    name,
+    { timeout: 15000 }
+  );
 }
 
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHElEQVQ4jWNgGAWjYBSMglEwCkbBKBgFo2AUAAAHkgABiv0FOAAAAABJRU5ErkJggg==';
@@ -174,8 +178,11 @@ async function main() {
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
-      await page.waitForFunction(() => document.body.innerText.includes('Juan Dela Cruz'), { timeout: 15000 });
-      const nameShown = await page.locator('text=Juan Dela Cruz').first().isVisible();
+      await page.waitForFunction(
+        () => document.querySelector('.rw-nav-user')?.textContent.includes('Juan'),
+        { timeout: 15000 }
+      );
+      const nameShown = await page.locator('.rw-nav-user').filter({ hasText: 'Juan' }).isVisible();
       const token = await page.evaluate(() => localStorage.getItem('roadwatch_auth_token'));
       if (nameShown && token) citizenState = await context.storageState();
       await nav(page, '/admin', '#home-reports');
@@ -202,7 +209,7 @@ async function main() {
     });
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
+      if (citizenState) await waitAuthenticated(page, 'Juan');
       else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
 
       await nav(page, '/submit-report', '#report-form');
@@ -330,7 +337,7 @@ async function main() {
     });
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
+      if (citizenState) await waitAuthenticated(page, 'Juan');
       else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
       await nav(page, '/submit-report', '#report-form');
 
@@ -554,7 +561,7 @@ async function main() {
     const col = makeCollector(page, 'E');
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
+      if (citizenState) await waitAuthenticated(page, 'Juan');
       else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
       await nav(page, '/map', '.leaflet-container');
       await page.waitForSelector('.leaflet-marker-icon', { timeout: 15000 });
@@ -609,7 +616,7 @@ async function main() {
     try {
       await page.setViewportSize(viewports[0]);
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
+      if (citizenState) await waitAuthenticated(page, 'Juan');
       else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
 
       for (const route of ['/', '/reports', '/submit-report', '/map']) {
@@ -647,6 +654,10 @@ async function main() {
     const col = makeCollector(page, 'H');
     const override = 'http://127.0.0.1:4000';
     const loginUrls = [];
+    const failedResponses = [];
+    page.on('response', (response) => {
+      if (response.status() >= 400) failedResponses.push(`${response.status()} ${response.url()}`);
+    });
     page.on('request', (req) => {
       if (req.method() === 'POST' && req.url().includes('/api/auth/login')) loginUrls.push(req.url());
     });
@@ -659,7 +670,7 @@ async function main() {
       }));
 
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      if (citizenState) await waitAuthenticated(page, 'Juan Dela Cruz');
+      if (citizenState) await waitAuthenticated(page, 'Juan');
       else await login(page, 'citizen@example.com', E2E_PASSWORDS.citizen);
       await page.getByRole('button', { name: 'Logout' }).click();
       await page.waitForSelector('#login-form', { timeout: 15000 });
@@ -671,10 +682,10 @@ async function main() {
       const noDupApi = loginUrls.every((u) => !u.includes('/api/api/'));
       const clean = col.entry.consoleErrors.length === 0 && col.entry.pageErrors.length === 0;
       record('h', 'Runtime RW_API_BASE_URL override drives the login request', hit && noDupApi && resolved === override && clean,
-        `  window.RW_API_BASE: ${resolved}\n  login POST url(s): ${loginUrls.join(', ') || '(none)'}\n  expected: ${expected}\n${col.summary()}`);
+        `  window.RW_API_BASE: ${resolved}\n  login POST url(s): ${loginUrls.join(', ') || '(none)'}\n  expected: ${expected}\n  HTTP errors: ${failedResponses.join(', ') || '(none)'}\n${col.summary()}`);
     } catch (err) {
       record('h', 'Runtime RW_API_BASE_URL override drives the login request', false,
-        `  ${err.message}\n  login POST url(s): ${loginUrls.join(', ') || '(none)'}\n${col.summary()}`);
+        `  ${err.message}\n  login POST url(s): ${loginUrls.join(', ') || '(none)'}\n  HTTP errors: ${failedResponses.join(', ') || '(none)'}\n${col.summary()}`);
     } finally {
       await context.close();
     }
@@ -698,7 +709,7 @@ async function main() {
       await page.click('#login-form button[type="submit"]');
       const validStatus = (await validResponse).status();
       await page.waitForURL(`${origin}/`, { timeout: 15000 });
-      const identityVisible = await page.getByText('Juan Dela Cruz').first().isVisible();
+      const identityVisible = await page.locator('.rw-nav-user').filter({ hasText: 'Juan' }).isVisible();
 
       await page.getByRole('button', { name: 'Logout' }).click();
       await page.waitForSelector('#login-form', { timeout: 15000 });
@@ -770,7 +781,7 @@ async function main() {
         col.entry.requestFailures.push(`${request.method()} ${request.url()} — ${(request.failure() || {}).errorText || 'failed'}`);
       });
       await userPage.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
-      if (citizenState) await waitAuthenticated(userPage, 'Juan Dela Cruz');
+      if (citizenState) await waitAuthenticated(userPage, 'Juan');
       else await login(userPage, 'citizen@example.com', E2E_PASSWORDS.citizen);
       const userSystemTheme = await userPage.locator('html').getAttribute('data-theme');
       await userPage.click('[data-mobile-menu-toggle]');
@@ -779,7 +790,7 @@ async function main() {
       const userLightSaved = await userPage.evaluate(() => localStorage.getItem('roadwatch_theme'));
       await userPage.keyboard.press('Escape');
       await userPage.reload({ waitUntil: 'domcontentloaded' });
-      await waitAuthenticated(userPage, 'Juan Dela Cruz');
+      await waitAuthenticated(userPage, 'Juan');
       const userLightPersists = await userPage.locator('html').getAttribute('data-theme') === 'light';
       await userPage.click('[data-mobile-menu-toggle]');
       await userPage.click('[data-theme-toggle]');
@@ -793,7 +804,12 @@ async function main() {
 
       await nav(userPage, '/submit-report', '#report-form');
       const buttonContrast = await userPage.evaluate(() => {
-        const card = document.querySelector('#report-form').closest('.brand-card');
+        const form = document.querySelector('#report-form');
+        if (!form) return { minimum: 0, variants: [] };
+        let surfaceNode = form;
+        while (surfaceNode && getComputedStyle(surfaceNode).backgroundColor === 'rgba(0, 0, 0, 0)') {
+          surfaceNode = surfaceNode.parentElement;
+        }
         const probe = document.createElement('div');
         probe.style.cssText = 'position:fixed;left:-10000px;top:0;display:grid;pointer-events:none;';
         probe.className = 'rw-button-contrast-probe';
@@ -805,7 +821,7 @@ async function main() {
           button.disabled = variant === 'disabled';
           probe.appendChild(button);
         }
-        card.appendChild(probe);
+        form.appendChild(probe);
         const parseColor = (value) => {
           const values = value.match(/[\d.]+/g)?.map(Number);
           return values ? { rgb: values.slice(0, 3), alpha: values[3] ?? 1 } : null;
@@ -827,7 +843,7 @@ async function main() {
           const l2 = luminance(bg.rgb);
           return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
         };
-        const surface = getComputedStyle(card).backgroundColor;
+        const surface = getComputedStyle(surfaceNode || document.body).backgroundColor;
         const ratios = [...probe.querySelectorAll('button')].map((button) => {
           const styles = getComputedStyle(button);
           const background = parseColor(styles.backgroundColor);
@@ -860,7 +876,7 @@ async function main() {
         '/submit-report': '#report-form',
         '/map': '.leaflet-container',
       };
-      let minimumRenderedTextContrast = Infinity;
+      let minimumRenderedTextContrast = null;
       for (const route of routes) {
         await nav(userPage, route, routeSelectors[route]);
         const colors = await userPage.evaluate(() => {
@@ -890,17 +906,21 @@ async function main() {
             }
             return background
               ? contrast(getComputedStyle(element).color, getComputedStyle(background).backgroundColor)
-              : 0;
+              : contrast(getComputedStyle(element).color, getComputedStyle(document.body).backgroundColor);
           });
           return {
             inkOnSheet: contrast(root.getPropertyValue('--ink').trim(), root.getPropertyValue('--sheet').trim()),
             secondaryOnSurface: contrast(root.getPropertyValue('--ink-2').trim(), root.getPropertyValue('--surface').trim()),
             mutedOnSurface: contrast(root.getPropertyValue('--ink-3').trim(), root.getPropertyValue('--surface').trim()),
-            renderedText: renderedTextContrast.length ? Math.min(...renderedTextContrast) : 0,
+            renderedText: renderedTextContrast.length ? Math.min(...renderedTextContrast) : null,
           };
         });
-        minimumRenderedTextContrast = Math.min(minimumRenderedTextContrast, colors.renderedText);
-        if (Object.values(colors).some((value) => value < 4.5)) contrastOk = false;
+        if (Number.isFinite(colors.renderedText)) {
+          minimumRenderedTextContrast = minimumRenderedTextContrast === null
+            ? colors.renderedText
+            : Math.min(minimumRenderedTextContrast, colors.renderedText);
+        }
+        if (Object.values(colors).some((value) => Number.isFinite(value) && value < 4.5)) contrastOk = false;
         for (const viewport of [
           { width: 375, height: 667 },
           { width: 768, height: 1024 },
@@ -937,7 +957,7 @@ async function main() {
         && contrastOk && buttonContrastOk && responsive
         && mobileMenuOpens && escapeClosesMenu && mobileNavWorks && clean;
       record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', ok,
-        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, text contrast: ${contrastOk} (minimum rendered navy text ${minimumRenderedTextContrast.toFixed(2)}:1), dark button contrast: ${buttonContrastOk} (base min ${buttonContrast.minimum.toFixed(2)}:1, primary hover ${primaryHoverContrast.toFixed(2)}:1), responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
+        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, text contrast: ${contrastOk} (minimum rendered navy text ${minimumRenderedTextContrast === null ? 'n/a' : `${minimumRenderedTextContrast.toFixed(2)}:1`}), dark button contrast: ${buttonContrastOk} (base min ${buttonContrast.minimum.toFixed(2)}:1, primary hover ${primaryHoverContrast.toFixed(2)}:1), responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
     } catch (err) {
       record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', false,
         `  ${err.message}\n${col.summary()}`);

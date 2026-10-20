@@ -25,7 +25,7 @@ class SplashScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             Text(
-              'RoadWatch',
+              'RoadBlocks',
               style: AppTypography.display(size: 34, color: AppColors.onPrimary),
             ),
             const SizedBox(height: 4),

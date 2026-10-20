@@ -132,7 +132,7 @@ class ProfileScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Choose how RoadWatch looks. System follows your device setting.',
+                        'Choose how RoadBlocks looks. System follows your device setting.',
                         style: AppTypography.bodyStyle(size: 13, color: AppColors.textSecondary),
                       ),
                       const SizedBox(height: 12),

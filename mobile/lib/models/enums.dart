@@ -9,22 +9,22 @@ enum UserRole {
   admin;
 
   static UserRole fromApi(String? value) => switch (value) {
-        'ADMIN' => UserRole.admin,
-        'MAINTENANCE_OFFICER' => UserRole.maintenanceOfficer,
-        _ => UserRole.citizen,
-      };
+    'ADMIN' => UserRole.admin,
+    'MAINTENANCE_OFFICER' => UserRole.maintenanceOfficer,
+    _ => UserRole.citizen,
+  };
 
   String get api => switch (this) {
-        UserRole.admin => 'ADMIN',
-        UserRole.maintenanceOfficer => 'MAINTENANCE_OFFICER',
-        UserRole.citizen => 'CITIZEN',
-      };
+    UserRole.admin => 'ADMIN',
+    UserRole.maintenanceOfficer => 'MAINTENANCE_OFFICER',
+    UserRole.citizen => 'CITIZEN',
+  };
 
   String get label => switch (this) {
-        UserRole.admin => 'Administrator',
-        UserRole.maintenanceOfficer => 'Maintenance Officer',
-        UserRole.citizen => 'Citizen',
-      };
+    UserRole.admin => 'Administrator',
+    UserRole.maintenanceOfficer => 'Maintenance Officer',
+    UserRole.citizen => 'Citizen',
+  };
 }
 
 enum IssueCategory {
@@ -58,44 +58,44 @@ enum IssueCategory {
   static const int otherDescriptionMax = 300;
 
   static IssueCategory fromApi(String? value) => switch (value) {
-        'POTHOLE' => IssueCategory.pothole,
-        'DAMAGED_PAVEMENT' => IssueCategory.damagedPavement,
-        'ROAD_CRACK' => IssueCategory.roadCrack,
-        'FLOODING' => IssueCategory.flooding,
-        'DAMAGED_DRAINAGE' => IssueCategory.damagedDrainage,
-        'ROAD_OBSTRUCTION' => IssueCategory.roadObstruction,
-        _ => IssueCategory.other,
-      };
+    'POTHOLE' => IssueCategory.pothole,
+    'DAMAGED_PAVEMENT' => IssueCategory.damagedPavement,
+    'ROAD_CRACK' => IssueCategory.roadCrack,
+    'FLOODING' => IssueCategory.flooding,
+    'DAMAGED_DRAINAGE' => IssueCategory.damagedDrainage,
+    'ROAD_OBSTRUCTION' => IssueCategory.roadObstruction,
+    _ => IssueCategory.other,
+  };
 
   String get api => switch (this) {
-        IssueCategory.pothole => 'POTHOLE',
-        IssueCategory.damagedPavement => 'DAMAGED_PAVEMENT',
-        IssueCategory.roadCrack => 'ROAD_CRACK',
-        IssueCategory.flooding => 'FLOODING',
-        IssueCategory.damagedDrainage => 'DAMAGED_DRAINAGE',
-        IssueCategory.roadObstruction => 'ROAD_OBSTRUCTION',
-        IssueCategory.other => 'OTHER',
-      };
+    IssueCategory.pothole => 'POTHOLE',
+    IssueCategory.damagedPavement => 'DAMAGED_PAVEMENT',
+    IssueCategory.roadCrack => 'ROAD_CRACK',
+    IssueCategory.flooding => 'FLOODING',
+    IssueCategory.damagedDrainage => 'DAMAGED_DRAINAGE',
+    IssueCategory.roadObstruction => 'ROAD_OBSTRUCTION',
+    IssueCategory.other => 'OTHER',
+  };
 
   String get label => switch (this) {
-        IssueCategory.pothole => 'Pothole',
-        IssueCategory.damagedPavement => 'Damaged pavement',
-        IssueCategory.roadCrack => 'Road cracks',
-        IssueCategory.flooding => 'Flooding or water accumulation',
-        IssueCategory.damagedDrainage => 'Damaged drainage',
-        IssueCategory.roadObstruction => 'Road obstruction',
-        IssueCategory.other => 'Other',
-      };
+    IssueCategory.pothole => 'Pothole',
+    IssueCategory.damagedPavement => 'Damaged pavement',
+    IssueCategory.roadCrack => 'Road cracks',
+    IssueCategory.flooding => 'Flooding or water accumulation',
+    IssueCategory.damagedDrainage => 'Damaged drainage',
+    IssueCategory.roadObstruction => 'Road obstruction',
+    IssueCategory.other => 'Other',
+  };
 
   IconData get icon => switch (this) {
-        IssueCategory.pothole => Icons.trip_origin,
-        IssueCategory.damagedPavement => Icons.grid_view_rounded,
-        IssueCategory.roadCrack => Icons.timeline,
-        IssueCategory.flooding => Icons.water_rounded,
-        IssueCategory.damagedDrainage => Icons.water_damage_rounded,
-        IssueCategory.roadObstruction => Icons.construction_rounded,
-        IssueCategory.other => Icons.flag_rounded,
-      };
+    IssueCategory.pothole => Icons.trip_origin,
+    IssueCategory.damagedPavement => Icons.grid_view_rounded,
+    IssueCategory.roadCrack => Icons.timeline,
+    IssueCategory.flooding => Icons.water_rounded,
+    IssueCategory.damagedDrainage => Icons.water_damage_rounded,
+    IssueCategory.roadObstruction => Icons.construction_rounded,
+    IssueCategory.other => Icons.flag_rounded,
+  };
 }
 
 enum ModerationStatus {
@@ -104,73 +104,86 @@ enum ModerationStatus {
   rejected;
 
   static ModerationStatus fromApi(String? value) => switch (value) {
-        'APPROVED' => ModerationStatus.approved,
-        'REJECTED' => ModerationStatus.rejected,
-        _ => ModerationStatus.pendingReview,
-      };
+    'APPROVED' => ModerationStatus.approved,
+    'REJECTED' => ModerationStatus.rejected,
+    _ => ModerationStatus.pendingReview,
+  };
 
   String get api => switch (this) {
-        ModerationStatus.pendingReview => 'PENDING_REVIEW',
-        ModerationStatus.approved => 'APPROVED',
-        ModerationStatus.rejected => 'REJECTED',
-      };
+    ModerationStatus.pendingReview => 'PENDING_REVIEW',
+    ModerationStatus.approved => 'APPROVED',
+    ModerationStatus.rejected => 'REJECTED',
+  };
 
   String get label => switch (this) {
-        ModerationStatus.pendingReview => 'Pending review',
-        ModerationStatus.approved => 'Approved',
-        ModerationStatus.rejected => 'Rejected',
-      };
+    ModerationStatus.pendingReview => 'Pending review',
+    ModerationStatus.approved => 'Approved',
+    ModerationStatus.rejected => 'Rejected',
+  };
 }
 
 enum RepairStatus {
   notAssigned,
   awaitingMaintenance,
   inProgress,
-  completed;
+  awaitingVerification,
+  returnedForWork,
+  completed,
+  verifiedCompleted;
 
   static RepairStatus fromApi(String? value) => switch (value) {
-        'AWAITING_MAINTENANCE' => RepairStatus.awaitingMaintenance,
-        'IN_PROGRESS' => RepairStatus.inProgress,
-        'COMPLETED' => RepairStatus.completed,
-        _ => RepairStatus.notAssigned,
-      };
+    'AWAITING_MAINTENANCE' => RepairStatus.awaitingMaintenance,
+    'IN_PROGRESS' => RepairStatus.inProgress,
+    'AWAITING_VERIFICATION' => RepairStatus.awaitingVerification,
+    'RETURNED_FOR_WORK' => RepairStatus.returnedForWork,
+    'COMPLETED' => RepairStatus.completed,
+    'VERIFIED_COMPLETED' => RepairStatus.verifiedCompleted,
+    _ => RepairStatus.notAssigned,
+  };
 
   String get api => switch (this) {
-        RepairStatus.notAssigned => 'NOT_ASSIGNED',
-        RepairStatus.awaitingMaintenance => 'AWAITING_MAINTENANCE',
-        RepairStatus.inProgress => 'IN_PROGRESS',
-        RepairStatus.completed => 'COMPLETED',
-      };
+    RepairStatus.notAssigned => 'NOT_ASSIGNED',
+    RepairStatus.awaitingMaintenance => 'AWAITING_MAINTENANCE',
+    RepairStatus.inProgress => 'IN_PROGRESS',
+    RepairStatus.awaitingVerification => 'AWAITING_VERIFICATION',
+    RepairStatus.returnedForWork => 'RETURNED_FOR_WORK',
+    RepairStatus.completed => 'COMPLETED',
+    RepairStatus.verifiedCompleted => 'VERIFIED_COMPLETED',
+  };
 
   String get label => switch (this) {
-        RepairStatus.notAssigned => 'Not assigned',
-        RepairStatus.awaitingMaintenance => 'Awaiting maintenance',
-        RepairStatus.inProgress => 'In progress',
-        RepairStatus.completed => 'Completed',
-      };
+    RepairStatus.notAssigned => 'Not assigned',
+    RepairStatus.awaitingMaintenance => 'Awaiting maintenance',
+    RepairStatus.inProgress => 'In progress',
+    RepairStatus.awaitingVerification => 'Awaiting admin verification',
+    RepairStatus.returnedForWork => 'Returned for further work',
+    RepairStatus.completed => 'Completed',
+    RepairStatus.verifiedCompleted => 'Verified completed',
+  };
 }
 
 enum PhotoKind {
   before,
   progress,
   after;
+
   static PhotoKind fromApi(String? value) => switch (value) {
-        'PROGRESS' => PhotoKind.progress,
-        'AFTER' => PhotoKind.after,
-        _ => PhotoKind.before,
-      };
+    'PROGRESS' => PhotoKind.progress,
+    'AFTER' => PhotoKind.after,
+    _ => PhotoKind.before,
+  };
 
   String get api => switch (this) {
-        PhotoKind.before => 'BEFORE',
-        PhotoKind.progress => 'PROGRESS',
-        PhotoKind.after => 'AFTER',
-      };
+    PhotoKind.before => 'BEFORE',
+    PhotoKind.progress => 'PROGRESS',
+    PhotoKind.after => 'AFTER',
+  };
 
   String get label => switch (this) {
-        PhotoKind.before => 'Before',
-        PhotoKind.progress => 'Progress',
-        PhotoKind.after => 'After',
-      };
+    PhotoKind.before => 'Before',
+    PhotoKind.progress => 'Progress',
+    PhotoKind.after => 'After',
+  };
 }
 
 enum Priority {
@@ -180,23 +193,23 @@ enum Priority {
   urgent;
 
   static Priority fromApi(String? value) => switch (value) {
-        'LOW' => Priority.low,
-        'HIGH' => Priority.high,
-        'URGENT' => Priority.urgent,
-        _ => Priority.medium,
-      };
+    'LOW' => Priority.low,
+    'HIGH' => Priority.high,
+    'URGENT' => Priority.urgent,
+    _ => Priority.medium,
+  };
 
   String get api => switch (this) {
-        Priority.low => 'LOW',
-        Priority.medium => 'MEDIUM',
-        Priority.high => 'HIGH',
-        Priority.urgent => 'URGENT',
-      };
+    Priority.low => 'LOW',
+    Priority.medium => 'MEDIUM',
+    Priority.high => 'HIGH',
+    Priority.urgent => 'URGENT',
+  };
 
   String get label => switch (this) {
-        Priority.low => 'Low',
-        Priority.medium => 'Medium',
-        Priority.high => 'High',
-        Priority.urgent => 'Urgent',
-      };
+    Priority.low => 'Low',
+    Priority.medium => 'Medium',
+    Priority.high => 'High',
+    Priority.urgent => 'Urgent',
+  };
 }

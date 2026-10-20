@@ -481,6 +481,28 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .rw-staff-feedback { margin-top: 0.75rem; color: var(--ink-3); font-size: 0.82rem; overflow-wrap: anywhere; }
 .rw-staff-feedback:empty { display: none; }
 .rw-staff-feedback.is-error { color: var(--red-ink); }
+.rw-notification-list { display: grid; gap: 0.65rem; }
+.rw-notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--card-surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.rw-notification-item:hover { border-color: var(--blue); background: var(--interactive-hover); }
+.rw-notification-dot { flex: 0 0 0.6rem; width: 0.6rem; height: 0.6rem; margin-top: 0.35rem; border-radius: 999px; background: var(--blue-ink); }
+.rw-notification-item.is-read .rw-notification-dot { background: var(--ink-3); }
+.rw-notification-copy { display: grid; gap: 0.25rem; min-width: 0; }
+.rw-notification-copy strong { color: var(--ink); font-size: 0.88rem; }
+.rw-notification-copy span { color: var(--ink-2); font-size: 0.8rem; overflow-wrap: anywhere; }
+.rw-notification-copy small { color: var(--ink-3); font-size: 0.72rem; }
+.rw-notification-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; color: var(--ink-3); font-size: 0.75rem; }
 .rw-staff-completion { display: grid; gap: 0.65rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--azure); }
 .rw-staff-completion label { color: var(--ink-2); font-size: 0.82rem; font-weight: 600; }
 .rw-staff-completion label span,
@@ -1014,6 +1036,7 @@ body,
 :root[data-theme='dark'] .admin-panel-heading h2,
 :root[data-theme='dark'] .admin-stat-card strong { color: var(--ink); }
 :root[data-theme='dark'] .text-navy { color: var(--ink); }
+:root[data-theme='dark'] .text-red-400 { color: #ff9a9a; }
 :root[data-theme='dark'] .admin-sidebar-nav a,
 :root[data-theme='dark'] .admin-sidebar-logout { color: var(--sky); }
 :root[data-theme='dark'] .rw-brand-lockup--dark { color: var(--ink); }

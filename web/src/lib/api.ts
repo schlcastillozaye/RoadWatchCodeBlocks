@@ -265,14 +265,13 @@ class ApiClient {
       repairStatus?: Exclude<RepairStatus, 'NOT_ASSIGNED'>;
       note?: string;
       completionNotes?: string;
-      overrideCompletion?: boolean;
       photos?: File[];
     },
   ): Promise<Report> {
     const { photos, ...fields } = input;
 
     if (photos && photos.length > 0) {
-      const kind = fields.repairStatus === 'COMPLETED' ? 'AFTER' : 'PROGRESS';
+      const kind = fields.repairStatus === 'AWAITING_VERIFICATION' ? 'AFTER' : 'PROGRESS';
       const form = new FormData();
       form.set('kind', kind);
       const fieldName = kind === 'AFTER' ? 'afterPhotos' : 'progressPhotos';

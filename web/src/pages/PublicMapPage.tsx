@@ -152,7 +152,10 @@ export function PublicMapPage() {
               <option value="NOT_ASSIGNED">Not assigned</option>
               <option value="AWAITING_MAINTENANCE">Awaiting maintenance</option>
               <option value="IN_PROGRESS">In progress</option>
-              <option value="COMPLETED">Completed</option>
+              <option value="AWAITING_VERIFICATION">Awaiting admin verification</option>
+              <option value="RETURNED_FOR_WORK">Returned for further work</option>
+              <option value="COMPLETED">Completed (legacy)</option>
+              <option value="VERIFIED_COMPLETED">Verified completed</option>
             </select>
           </div>
           <div>

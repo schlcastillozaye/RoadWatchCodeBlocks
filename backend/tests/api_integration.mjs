@@ -558,8 +558,12 @@ async function main() {
         !!assignedNotification?.createdAt &&
         notifications.body?.unreadCount > 0
     );
-    const citizenNotifications = await api('GET', '/api/maintenance/notifications', { token: citizenToken });
-    check('citizens cannot read maintenance notifications (403)', citizenNotifications.status === 403);
+    const citizenNotifications = await api('GET', '/api/notifications', { token: citizenToken });
+    check(
+      'citizens can read their own notification list without seeing officer assignments',
+      citizenNotifications.status === 200 &&
+        !citizenNotifications.body?.items?.some((item) => item.reportId === reportId)
+    );
     const privateRead = await api('PATCH', `/api/maintenance/notifications/${assignedNotification?.id}/read`, {
       token: officer2Token,
     });
@@ -649,7 +653,7 @@ async function main() {
 
     const skipToComplete = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: officer1Token,
-      json: { repairStatus: 'COMPLETED', completionNotes: 'Attempted to skip the required in-progress stage.' },
+      json: { repairStatus: 'AWAITING_VERIFICATION', completionNotes: 'Attempted to skip the required in-progress stage.' },
     });
     check('server rejects skipped repair transitions (409)', skipToComplete.status === 409, `status=${skipToComplete.status}`);
 
@@ -675,29 +679,96 @@ async function main() {
 
     const completeNoNotes = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: officer1Token,
-      json: { repairStatus: 'COMPLETED' },
+      json: { repairStatus: 'AWAITING_VERIFICATION' },
     });
-    check('complete without notes 422', completeNoNotes.status === 422, `status=${completeNoNotes.status}`);
+    check('submit without notes 422', completeNoNotes.status === 422, `status=${completeNoNotes.status}`);
 
     const completeNoPhoto = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: officer1Token,
-      json: { repairStatus: 'COMPLETED', completionNotes: 'Filled and levelled the pothole completely.' },
+      json: { repairStatus: 'AWAITING_VERIFICATION', completionNotes: 'Filled and levelled the pothole completely.' },
     });
-    check('complete without after photo 422 (officer)', completeNoPhoto.status === 422, `status=${completeNoPhoto.status}`);
+    check('submit without after photo 422 (officer)', completeNoPhoto.status === 422, `status=${completeNoPhoto.status}`);
 
-    // Officer uploads an after photo, then completes.
+    // Officer uploads evidence, then submits for admin review.
     const addAfter = await api('POST', `/api/reports/${reportId}/photos`, {
       token: officer1Token,
       form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
     });
     check('officer can add AFTER photo 201', addAfter.status === 201, `status=${addAfter.status}`);
 
-    const complete = await api('PATCH', `/api/reports/${reportId}/repair`, {
+    const submitted = await api('PATCH', `/api/reports/${reportId}/repair`, {
       token: officer1Token,
-      json: { repairStatus: 'COMPLETED', completionNotes: 'Filled and levelled the pothole completely.' },
+      json: { repairStatus: 'AWAITING_VERIFICATION', completionNotes: 'Filled and levelled the pothole completely.' },
     });
-    check('complete with notes + after photo 200', complete.status === 200 && complete.body?.report?.repairStatus === 'COMPLETED', `status=${complete.status}`);
-    check('completion recorded completedAt', !!complete.body?.report?.completedAt && complete.body?.report?.completionOverride === false);
+    check('officer submits notes + after photo for verification', submitted.status === 200 && submitted.body?.report?.repairStatus === 'AWAITING_VERIFICATION', `status=${submitted.status}`);
+    check('officer submission does not mark verified completion', !submitted.body?.report?.completedAt);
+
+    const adminNotifications = await api('GET', '/api/notifications', { token: adminToken });
+    check(
+      'admin receives evidence-submission notification with five-minute expiry',
+      adminNotifications.status === 200 &&
+        adminNotifications.body?.items?.some((item) =>
+          item.reportId === reportId &&
+          item.repairStatus === 'AWAITING_VERIFICATION' &&
+          Date.parse(item.expiresAt) > Date.now() &&
+          Date.parse(item.expiresAt) <= Date.now() + 5 * 60 * 1000),
+      `status=${adminNotifications.status}`
+    );
+
+    const earlyVerify = await api('PATCH', `/api/reports/${reportId}/verification`, {
+      token: officer1Token,
+      json: { decision: 'VERIFY' },
+    });
+    check('maintenance officer cannot verify completion (403)', earlyVerify.status === 403, `status=${earlyVerify.status}`);
+
+    const returnWithoutReason = await api('PATCH', `/api/reports/${reportId}/verification`, {
+      token: adminToken,
+      json: { decision: 'RETURN', reason: 'no' },
+    });
+    check('admin return requires a meaningful reason (422)', returnWithoutReason.status === 422, `status=${returnWithoutReason.status}`);
+
+    const returned = await api('PATCH', `/api/reports/${reportId}/verification`, {
+      token: adminToken,
+      json: { decision: 'RETURN', reason: 'The repair edge is still uneven; please finish leveling it.' },
+    });
+    check('admin can return repair for more work', returned.status === 200 && returned.body?.report?.repairStatus === 'RETURNED_FOR_WORK', `status=${returned.status}`);
+
+    const citizenBeforeVerify = await api('GET', '/api/notifications', { token: citizenToken });
+    check('citizen is not told repair is verified before admin approval', !citizenBeforeVerify.body?.items?.some((item) => item.reportId === reportId));
+
+    const resume = await api('PATCH', `/api/reports/${reportId}/repair`, {
+      token: officer1Token,
+      json: { repairStatus: 'IN_PROGRESS', note: 'Resumed leveling after admin feedback.' },
+    });
+    check('assigned officer resumes returned repair', resume.status === 200 && resume.body?.report?.repairStatus === 'IN_PROGRESS', `status=${resume.status}`);
+
+    const revisedPhoto = await api('POST', `/api/reports/${reportId}/photos`, {
+      token: officer1Token,
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    check('assigned officer can add revised evidence after return', revisedPhoto.status === 201, `status=${revisedPhoto.status}`);
+
+    const resubmitted = await api('PATCH', `/api/reports/${reportId}/repair`, {
+      token: officer1Token,
+      json: { repairStatus: 'AWAITING_VERIFICATION', completionNotes: 'Releveled the edge and compacted the surface.' },
+    });
+    check('officer resubmits repaired evidence', resubmitted.status === 200 && resubmitted.body?.report?.repairStatus === 'AWAITING_VERIFICATION', `status=${resubmitted.status}`);
+
+    const verified = await api('PATCH', `/api/reports/${reportId}/verification`, {
+      token: adminToken,
+      json: { decision: 'VERIFY' },
+    });
+    check('admin verifies submitted repair', verified.status === 200 && verified.body?.report?.repairStatus === 'VERIFIED_COMPLETED', `status=${verified.status}`);
+    check('verified completion timestamp set only on admin verification', !!verified.body?.report?.completedAt && verified.body?.report?.completionOverride === false);
+
+    const citizenVerified = await api('GET', '/api/notifications', { token: citizenToken });
+    check('citizen receives notification only after repair verification', citizenVerified.status === 200 &&
+      citizenVerified.body?.items?.some((item) => item.reportId === reportId && item.repairStatus === 'VERIFIED_COMPLETED'));
+
+    const history = await api('GET', `/api/reports/${reportId}/history`, { token: adminToken });
+    check('admin can see officer evidence notes and admin decision history', history.status === 200 &&
+      history.body?.history?.some((item) => item.actorRole === 'MAINTENANCE_OFFICER' && item.note?.includes('Releveled the edge')) &&
+      history.body?.history?.some((item) => item.actorRole === 'ADMIN' && item.note?.includes('verified')));
   }
 
   // ---------------------------------------------------------------------

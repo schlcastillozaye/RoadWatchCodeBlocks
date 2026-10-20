@@ -173,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             alignment: WrapAlignment.center,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              Text('New to RoadWatch?',
+                              Text('New to RoadBlocks?',
                                   style: AppTypography.bodyStyle(size: 14, color: AppColors.textSecondary)),
                               TextButton(
                                 onPressed: busy

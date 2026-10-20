@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   AppConfig._();
 
-  static const String productName = 'RoadWatch';
+  static const String productName = 'RoadBlocks';
   static const String brandName = 'Code Blocks Inc.';
   static const String tagline = 'Report road issues. Track the repair.';
 

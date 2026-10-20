@@ -13,7 +13,7 @@ export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 export type ModerationStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
 
-export type RepairStatus = 'NOT_ASSIGNED' | 'AWAITING_MAINTENANCE' | 'IN_PROGRESS' | 'COMPLETED';
+export type RepairStatus = 'NOT_ASSIGNED' | 'AWAITING_MAINTENANCE' | 'IN_PROGRESS' | 'AWAITING_VERIFICATION' | 'RETURNED_FOR_WORK' | 'COMPLETED' | 'VERIFIED_COMPLETED';
 
 export type PhotoKind = 'BEFORE' | 'PROGRESS' | 'AFTER';
 

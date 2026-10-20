@@ -2,7 +2,7 @@
   "name": "roadwatch-web",
   "private": true,
   "version": "1.0.0",
-  "description": "RoadWatch admin & maintenance officer web platform (Code Blocks Inc. brand).",
+  "description": "RoadBlocks admin & maintenance officer web platform (Code Blocks Inc. brand).",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -1,13 +1,15 @@
-# RoadWatch
+# RoadBlocks
 
 **Road issue reporting & maintenance management system**
 by **Code Blocks Inc.** — *"Your friendly coding helper"*
 
 A BSIT 3H-G2, Group 5 project at Bulacan State University.
 
-RoadWatch lets citizens report road problems from their phone, lets administrators
+RoadBlocks lets citizens report road problems from their phone, lets administrators
 moderate and assign those reports, and lets maintenance officers record progress and
-completion. Approved reports appear on a public map; pending and rejected ones never do.
+submit completion evidence. Administrators verify repairs before citizens are notified
+and the report is marked verified. Approved reports appear on a public map; pending and
+rejected ones never do.
 
 ---
 
@@ -21,7 +23,7 @@ Project/
 │  ├─ database/    schema.sql (10 tables) + migrate.php (idempotent)
 │  ├─ seed.php     Demo accounts + sample reports
 │  ├─ router.php   Router for the PHP built-in dev server
-│  ├─ tests/       api_integration.mjs  (103 end-to-end API checks)
+│  ├─ tests/       api_integration.mjs  (166 end-to-end API checks)
 │  └─ Dockerfile.php · railway.json     (Railway deploy)
 ├─ db/
 │  └─ setup.sql    One-time MySQL database + user setup
@@ -54,17 +56,19 @@ Every report carries **two independent statuses**. This is the core of the domai
 | Track | Values | Who changes it |
 | --- | --- | --- |
 | **Moderation** | `PENDING_REVIEW` → `APPROVED` / `REJECTED` | Administrators only |
-| **Repair** | `NOT_ASSIGNED` → `AWAITING_MAINTENANCE` → `IN_PROGRESS` → `COMPLETED` | Assigned maintenance officer only |
+| **Repair** | `NOT_ASSIGNED` → `AWAITING_MAINTENANCE` → `IN_PROGRESS` → `AWAITING_VERIFICATION` → `VERIFIED_COMPLETED` (or `RETURNED_FOR_WORK`) | Assigned maintenance officer submits; administrators verify or return |
 
 Rules enforced on the server:
 
 - Rejecting requires a reason.
 - `PENDING_REVIEW` and `REJECTED` reports are **never** returned by the public map API.
-- A repair can only be completed with **completion notes** and at least **one after photo**.
+- An officer can submit repair evidence only with **completion notes** and at least **one after photo**.
+- Only an administrator can verify the submitted evidence; legacy `COMPLETED` records remain unchanged and are not relabeled as verified.
+- Returned repairs require a reason and can be resumed only by the assigned officer.
 - Maintenance updates are only accepted for **approved** reports.
 - Officers can only update reports assigned to them; they cannot approve or reject.
-- Administrators can approve/reject reports, assign or reassign officers, and monitor repair history;
-  they cannot submit repair updates, after-photos, or completion reports.
+- Administrators can approve/reject reports, assign or reassign officers, review repair notes and photos, and verify or return submitted work; they cannot submit repair updates or completion reports.
+- Active in-app notifications expire from the visible list after five minutes; report history remains persistent.
 
 ---
 

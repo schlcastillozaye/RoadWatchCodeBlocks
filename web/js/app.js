@@ -57,7 +57,7 @@
       try {
         localStorage.setItem(THEME_KEY, theme);
       } catch (error) {
-        console.warn('Could not save RoadWatch theme preference:', error);
+        console.warn('Could not save RoadBlocks theme preference:', error);
       }
     }
     updateThemeToggleLabels();
@@ -68,7 +68,7 @@
     try {
       if (localStorage.getItem(THEME_KEY) === 'light' || localStorage.getItem(THEME_KEY) === 'dark') return;
     } catch (error) {
-      console.warn('Could not read RoadWatch theme preference:', error);
+      console.warn('Could not read RoadBlocks theme preference:', error);
     }
     setTheme(event.matches ? 'dark' : 'light');
   });
@@ -134,6 +134,9 @@
     dismiss.addEventListener('click', () => notice.remove());
     notice.append(text, dismiss);
     region.replaceChildren(notice);
+    window.setTimeout(() => {
+      if (notice.isConnected) notice.remove();
+    }, 5 * 60 * 1000);
   };
 
   // --- State -----------------------------------------------------------------
@@ -454,6 +457,9 @@
     if (mod === 'REJECTED') return `<span class="text-red-100 bg-red-900/20 px-2 py-1 rounded text-[10]">Rejected</span>`;
     if (mod === 'PENDING_REVIEW' || !mod) return `<span class="text-amber-100 bg-amber-900/20 px-2 py-1 rounded text-[10]">Pending review</span>`;
     if (repair === 'COMPLETED') return `<span class="text-green-100 bg-green-900/20 px-2 py-1 rounded text-[10]">Completed</span>`;
+    if (repair === 'VERIFIED_COMPLETED') return `<span class="text-green-100 bg-green-900/20 px-2 py-1 rounded text-[10]">Verified completed</span>`;
+    if (repair === 'AWAITING_VERIFICATION') return `<span class="text-blue-100 bg-blue-900/20 px-2 py-1 rounded text-[10]">Awaiting verification</span>`;
+    if (repair === 'RETURNED_FOR_WORK') return `<span class="text-amber-100 bg-amber-900/20 px-2 py-1 rounded text-[10]">Returned for further work</span>`;
     if (repair === 'IN_PROGRESS') return `<span class="text-blue-100 bg-blue-900/20 px-2 py-1 rounded text-[10]">In progress</span>`;
     if (repair === 'AWAITING_MAINTENANCE') return `<span class="text-amber-100 bg-amber-900/20 px-2 py-1 rounded text-[10]">Awaiting maintenance</span>`;
     return `<span class="text-green-100 bg-green-900/20 px-2 py-1 rounded text-[10]">Approved</span>`;
@@ -462,16 +468,22 @@
   const reportCardHtml = (r) => {
     const photo = (r.photos && r.photos[0]) || null;
     const thumb = r.thumbnailUrl || (photo ? photo.url : '');
-    // A thumbnailUrl is always a public (APPROVED) image; a photos[] entry is
-    // private unless the API marks it public, so it must be auth-fetched.
+    const currentUser = getUser();
+    // A thumbnailUrl is always public; private photos are only fetchable by
+    // staff or the report owner.
     const needsAuth = !r.thumbnailUrl && photo && photo.isPublic === false;
+    const canViewPrivatePhoto = currentUser
+      && (currentUser.role === 'ADMIN'
+        || currentUser.role === 'MAINTENANCE_OFFICER'
+        || r.citizen?.id === currentUser.id);
+    const showThumb = Boolean(thumb) && (!needsAuth || canViewPrivatePhoto);
     const imgAttr = needsAuth
       ? `data-authed-src="${escapeHtml(absoluteUrl(thumb))}"`
       : `src="${escapeHtml(absoluteUrl(thumb))}"`;
     return `
     <article class="brand-card p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer" data-nav="/report/${encodeURIComponent(r.id)}">
       <div class="flex items-start gap-4">
-        ${thumb
+        ${showThumb
           ? `<button type="button" class="rw-photo-trigger flex-shrink-0" ${photoViewerAttrs(r)} aria-label="View photo for ${escapeHtml(r.title)}"><img ${imgAttr} alt="${escapeHtml(r.title)}" class="w-16 h-16 rounded object-cover" /></button>`
           : `<div class="w-16 h-16 rounded flex-shrink-0 bg-sheet flex items-center justify-center"><span class="text-sm font-medium text-ink-3">${categoryIcon(r.category)}</span></div>`}
         <div class="flex-1 min-w-0">
@@ -537,7 +549,7 @@
           <p id="login-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
           <button type="submit" class="btn btn-primary w-full">Sign in</button>
           <p class="text-center text-sm text-slate-tint mt-3">
-            New to RoadWatch? <a href="/register" id="show-register" class="font-medium text-navy underline">Create account</a>
+            New to RoadBlocks? <a href="/register" id="show-register" class="font-medium text-navy underline">Create account</a>
           </p>
         </form>
       </div>
@@ -551,7 +563,7 @@
         <div class="text-center mb-6">
           <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
           <h1 class="text-3xl font-bold text-navy tracking-tight">Create account</h1>
-          <p class="text-sm text-slate-tint mt-1">Join RoadWatch and report road issues</p>
+          <p class="text-sm text-slate-tint mt-1">Join RoadBlocks and report road issues</p>
         </div>
         <form id="register-form" class="space-y-4">
           <div>
@@ -602,7 +614,7 @@
     return `
     <header class="rw-header">
       <div class="rw-header-inner">
-        <a href="/" id="nav-home" data-nav="/" class="rw-brand-home" aria-label="RoadWatch by Code Blocks Inc.">${brandLogoHtml('dark')}</a>
+        <a href="/" id="nav-home" data-nav="/" class="rw-brand-home" aria-label="RoadBlocks by Code Blocks Inc.">${brandLogoHtml('dark')}</a>
         <button type="button" class="rw-mobile-menu-toggle" data-mobile-menu-toggle aria-expanded="false" aria-controls="rw-primary-nav">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
           <span>Menu</span>
@@ -663,6 +675,12 @@
         <div id="home-reports">
           <div class="loading-block"><span class="spinner"></span> Loading your reports…</div>
         </div>
+      </section>
+      <section class="admin-panel">
+        <div class="admin-panel-heading">
+          <div><h2>Notifications</h2><p>Active notices automatically expire after five minutes.</p></div>
+        </div>
+        <div id="citizen-notifications"><div class="loading-block"><span class="spinner"></span> Loading notifications…</div></div>
       </section>
       <section class="admin-panel rw-citizen-quick-actions">
         <div class="admin-panel-heading">
@@ -754,6 +772,12 @@
               <p id="location-feedback" class="rw-location-feedback" role="alert" hidden></p>
               <input type="hidden" name="latitude" id="lat-input" />
               <input type="hidden" name="longitude" id="lon-input" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-ink-2 mb-2" for="report-address">Place or address</label>
+              <input type="text" name="addressText" id="report-address" maxlength="500" class="w-full brand-input"
+                placeholder="Select a map point to fill in the location, or edit this field" autocomplete="street-address" />
+              <p id="address-lookup-status" class="text-xs text-slate-tint mt-1" aria-live="polite">A coordinate label will be used if address lookup is unavailable.</p>
             </div>
             <div>
               <label class="block text-sm font-medium text-ink-2 mb-2">Area/Barangay (optional)</label>
@@ -904,6 +928,12 @@
         <div class="loading-block"><span class="spinner"></span> Loading recent reports…</div>
       </div>
     </section>
+    <section class="admin-panel">
+      <div class="admin-panel-heading">
+        <div><h2>Workflow notifications</h2><p>Repair submissions that need review expire from this active list after five minutes.</p></div>
+      </div>
+      <div id="admin-notifications"><div class="loading-block"><span class="spinner"></span> Loading notifications…</div></div>
+    </section>
   `);
 
   const pageAdminReports = () => adminLayout('reports', `
@@ -930,7 +960,10 @@
             <option value="moderationStatus:REJECTED">Rejected</option>
             <option value="repairStatus:AWAITING_MAINTENANCE">Awaiting maintenance</option>
             <option value="repairStatus:IN_PROGRESS">In progress</option>
-            <option value="repairStatus:COMPLETED">Completed</option>
+            <option value="repairStatus:AWAITING_VERIFICATION">Awaiting admin verification</option>
+            <option value="repairStatus:RETURNED_FOR_WORK">Returned for further work</option>
+            <option value="repairStatus:COMPLETED">Completed (legacy)</option>
+            <option value="repairStatus:VERIFIED_COMPLETED">Verified completed (admin approved)</option>
           </select>
         </label>
         <label>
@@ -1176,7 +1209,63 @@
     });
   };
 
+  let notificationExpiryTimer = null;
+
+  const loadNotificationPanel = (hostId) => {
+    const host = q(`#${hostId}`);
+    if (!host) return;
+    const render = async () => {
+      try {
+        const data = await api('/notifications?limit=50');
+        const items = data.items || [];
+        const unread = Number(data.unreadCount) || 0;
+        host.innerHTML = items.length
+          ? `<div class="rw-notification-list">${items.map((item) => `
+              <button type="button" class="rw-notification-item${item.isRead ? ' is-read' : ''}" data-notification-report="${escapeHtml(item.reportId)}" data-notification-id="${escapeHtml(item.id)}">
+                <span class="rw-notification-dot" aria-hidden="true"></span>
+                <span class="rw-notification-copy">
+                  <strong>${escapeHtml(item.title)}</strong>
+                  <span>${escapeHtml(item.message)}</span>
+                  <small>${escapeHtml(relativeDate(item.createdAt))} · ${escapeHtml(adminRepairLabel(item.repairStatus))}</small>
+                </span>
+              </button>`).join('')}
+              <div class="rw-notification-footer"><span>${unread} unread · expires after five minutes</span>
+                <button type="button" class="btn btn-ghost btn-sm" data-notifications-mark-all ${unread ? '' : 'disabled'}>Mark all read</button>
+              </div>
+            </div>`
+          : '<div class="empty-state admin-empty"><p>No active notifications.</p></div>';
+        if (notificationExpiryTimer) window.clearTimeout(notificationExpiryTimer);
+        const expirations = items.map((item) => Date.parse(item.expiresAt)).filter(Number.isFinite);
+        if (expirations.length) {
+          const untilExpiry = Math.max(0, Math.min(...expirations) - Date.now());
+          notificationExpiryTimer = window.setTimeout(() => {
+            if (host.isConnected) void render();
+          }, untilExpiry + 20);
+        }
+      } catch (err) {
+        host.innerHTML = `<div class="admin-error-block">Could not load notifications. ${escapeHtml(err.message)}</div>`;
+      }
+    };
+    host.addEventListener('click', async (event) => {
+      const markAll = event.target.closest('[data-notifications-mark-all]');
+      const item = event.target.closest('[data-notification-id]');
+      try {
+        if (markAll) {
+          await api('/notifications/read-all', { method: 'PATCH' });
+          await render();
+        } else if (item) {
+          await api(`/notifications/${encodeURIComponent(item.dataset.notificationId)}/read`, { method: 'PATCH' });
+          navigateTo(`/report/${encodeURIComponent(item.dataset.notificationReport)}`);
+        }
+      } catch (err) {
+        notify(`Could not update notification: ${err.message}`);
+      }
+    });
+    void render();
+  };
+
   const initHomePage = async () => {
+    loadNotificationPanel('citizen-notifications');
     const host = q('#home-reports');
     if (!host) return;
     const feedbackId = 'citizen-dashboard-feedback';
@@ -1195,14 +1284,17 @@
         query({ moderationStatus: 'PENDING_REVIEW' }),
         query({ repairStatus: 'AWAITING_MAINTENANCE' }),
         query({ repairStatus: 'IN_PROGRESS' }),
+        query({ repairStatus: 'AWAITING_VERIFICATION' }),
+        query({ repairStatus: 'RETURNED_FOR_WORK' }),
         query({ repairStatus: 'COMPLETED' }),
+        query({ repairStatus: 'VERIFIED_COMPLETED' }),
       ]);
-      const [recentResult, pendingResult, awaitingResult, progressResult, completedResult] = tasks;
+      const [recentResult, pendingResult, awaitingResult, progressResult, verificationResult, returnedResult, completedResult, verifiedResult] = tasks;
       const stats = [
         ['citizen-stat-total', [recentResult]],
         ['citizen-stat-pending', [pendingResult]],
-        ['citizen-stat-progress', [awaitingResult, progressResult]],
-        ['citizen-stat-completed', [completedResult]],
+        ['citizen-stat-progress', [awaitingResult, progressResult, verificationResult, returnedResult]],
+        ['citizen-stat-completed', [completedResult, verifiedResult]],
       ];
       stats.forEach(([id, results]) => {
         if (results.every((result) => result.status === 'fulfilled')) {
@@ -1481,6 +1573,67 @@
       }
     });
 
+    const verificationButton = host.querySelector('[data-repair-verify]');
+    const returnButton = host.querySelector('[data-repair-return]');
+    const decideVerification = async (decision) => {
+      const returning = decision === 'RETURN';
+      const dialog = document.createElement('dialog');
+      dialog.className = 'rw-confirm-dialog';
+      dialog.innerHTML = `<form class="rw-confirm-content">
+        <p class="rw-confirm-eyebrow">REPAIR VERIFICATION</p>
+        <h2>${returning ? 'Return this repair?' : 'Verify repair completion?'}</h2>
+        <p>${returning
+          ? 'The officer will be asked to continue work. Explain what still needs attention.'
+          : 'Confirm the submitted notes and after-repair evidence show the issue is resolved.'}</p>
+        ${returning ? '<label for="repair-return-reason">Reason (at least 5 characters)</label><textarea id="repair-return-reason" name="reason" class="brand-input" rows="3" minlength="5" maxlength="1000" required></textarea><p class="rw-decision-error" role="alert"></p>' : ''}
+        <div class="rw-confirm-actions">
+          <button type="button" class="btn btn-secondary" data-verification-cancel>Cancel</button>
+          <button type="submit" class="btn ${returning ? 'btn-danger' : 'btn-primary'}">${returning ? 'Return for work' : 'Verify completion'}</button>
+        </div>
+      </form>`;
+      document.body.appendChild(dialog);
+      const form = dialog.querySelector('form');
+      const close = () => {
+        if (dialog.open) dialog.close();
+        dialog.remove();
+      };
+      dialog.querySelector('[data-verification-cancel]').addEventListener('click', close);
+      dialog.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        close();
+      });
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const reason = String(new FormData(form).get('reason') || '').trim();
+        if (returning && reason.length < 5) {
+          form.querySelector('.rw-decision-error').textContent = 'Enter a reason of at least 5 characters.';
+          form.querySelector('textarea').focus();
+          return;
+        }
+        const submit = form.querySelector('[type="submit"]');
+        submit.disabled = true;
+        submit.textContent = returning ? 'Returning…' : 'Verifying…';
+        try {
+          await api(`/reports/${encodeURIComponent(report.id)}/verification`, {
+            method: 'PATCH',
+            body: JSON.stringify({ decision, ...(returning ? { reason } : {}) }),
+          });
+          close();
+          notify(returning ? 'Repair returned to the assigned officer.' : 'Repair verified. The citizen was notified.');
+          await refresh();
+        } catch (err) {
+          submit.disabled = false;
+          submit.textContent = returning ? 'Return for work' : 'Verify completion';
+          setActionFeedback(`Could not update repair verification: ${err.message}`, 'error');
+          notify(`Could not update repair verification: ${err.message}`);
+        }
+      });
+      dialog.showModal();
+      if (returning) form.querySelector('textarea').focus();
+    };
+    on(verificationButton, 'click', () => void decideVerification('VERIFY'));
+    on(returnButton, 'click', () => void decideVerification('RETURN'));
+
     const assignButton = host.querySelector('[data-report-assign]');
     on(assignButton, 'click', async () => {
       setBusy(assignButton, true, 'Loading officers…');
@@ -1577,7 +1730,7 @@
         notify('Add completion notes and at least one after-repair photo.');
         return;
       }
-      if (!window.confirm('Submit this repair as completed?')) return;
+      if (!window.confirm('Submit this repair for admin verification? The citizen will not be notified until an admin verifies it.')) return;
       const submit = completionForm.querySelector('[type="submit"]');
       setBusy(submit, true, 'Uploading and submitting…');
       try {
@@ -1587,9 +1740,9 @@
         await api(`/reports/${encodeURIComponent(report.id)}/photos`, { method: 'POST', body: upload });
         await api(`/reports/${encodeURIComponent(report.id)}/repair`, {
           method: 'PATCH',
-          body: JSON.stringify({ repairStatus: 'COMPLETED', completionNotes: notes }),
+          body: JSON.stringify({ repairStatus: 'AWAITING_VERIFICATION', completionNotes: notes }),
         });
-        notify('Repair completed and saved.');
+        notify('Completion evidence submitted for admin verification.');
         await refresh();
       } catch (err) {
         setActionFeedback(`Could not complete repair: ${err.message}`, 'error');
@@ -1608,11 +1761,13 @@
       && report.assignedOfficer
       && report.assignedOfficer.id === currentUser.id;
     const canModerate = isAdmin && report.moderationStatus === 'PENDING_REVIEW';
-    const canAssign = isAdmin && report.moderationStatus === 'APPROVED' && report.repairStatus !== 'COMPLETED';
+    const canAssign = isAdmin && report.moderationStatus === 'APPROVED'
+      && !['AWAITING_VERIFICATION', 'COMPLETED', 'VERIFIED_COMPLETED'].includes(report.repairStatus);
     const canMaintain = report.moderationStatus === 'APPROVED'
-      && report.repairStatus !== 'NOT_ASSIGNED'
-      && report.repairStatus !== 'COMPLETED'
+      && ['AWAITING_MAINTENANCE', 'IN_PROGRESS', 'RETURNED_FOR_WORK'].includes(report.repairStatus)
       && isAssignedOfficer;
+    const canVerifyRepair = isAdmin && report.moderationStatus === 'APPROVED'
+      && report.repairStatus === 'AWAITING_VERIFICATION';
     const staffActions = (canModerate || canAssign || canMaintain) ? `
       <section class="brand-card rw-staff-actions mt-6">
         <div class="rw-staff-actions-heading">
@@ -1639,34 +1794,53 @@
             <p class="rw-staff-group-label">${report.assignedOfficer ? 'Current assignment' : 'Next step'}</p>
             <button type="button" class="btn btn-primary rw-staff-assign" data-report-assign>${report.assignedOfficer ? 'Reassign officer' : 'Assign to officer'}</button>
           </div>` : ''}
-        ${canMaintain && report.repairStatus === 'AWAITING_MAINTENANCE' ? `
+        ${canVerifyRepair ? `
+          <div class="rw-staff-action-group">
+            <p class="rw-staff-group-label">Review submitted repair evidence</p>
+            <div class="rw-staff-review-actions">
+              <button type="button" class="btn btn-primary" data-repair-verify>Verify completion</button>
+              <button type="button" class="btn btn-danger" data-repair-return>Return for further work</button>
+            </div>
+          </div>` : ''}
+        ${canMaintain && ['AWAITING_MAINTENANCE', 'RETURNED_FOR_WORK'].includes(report.repairStatus) ? `
           <div class="rw-staff-action-group">
             <p class="rw-staff-group-label">Repair progress</p>
-            <button type="button" class="btn btn-primary rw-staff-assign" data-repair-start>Start work</button>
+            <button type="button" class="btn btn-primary rw-staff-assign" data-repair-start>${report.repairStatus === 'RETURNED_FOR_WORK' ? 'Resume work' : 'Start work'}</button>
           </div>` : ''}
         ${isAdmin && report.moderationStatus === 'APPROVED' ? `
           <p class="rw-staff-monitor" role="status">Current repair status: <strong>${escapeHtml(adminRepairLabel(report.repairStatus))}</strong>. Completion notes and after-photos are submitted by the assigned maintenance officer.</p>` : ''}
         <p class="rw-staff-feedback" data-report-action-feedback role="status" aria-live="polite"></p>
         ${canMaintain && report.repairStatus === 'IN_PROGRESS' ? `
           <form class="rw-staff-completion" data-repair-complete-form>
-            <p class="rw-staff-group-label">Report completed repair</p>
+            <p class="rw-staff-group-label">Submit repair for verification</p>
             <label for="repair-completion-notes">Completion notes</label>
-            <textarea id="repair-completion-notes" name="completionNotes" required minlength="5" maxlength="4000" rows="3" class="w-full brand-input" placeholder="Describe the repair completed."></textarea>
+            <textarea id="repair-completion-notes" name="completionNotes" required minlength="5" maxlength="4000" rows="3" class="w-full brand-input" placeholder="Describe the work completed and the current condition."></textarea>
             <label for="repair-after-photos">After-repair photo <span>(required)</span></label>
             <input id="repair-after-photos" name="afterPhotos" type="file" accept="image/*" multiple required class="w-full brand-input" />
-            <button type="submit" class="btn btn-primary">Submit completion</button>
+            <button type="submit" class="btn btn-primary">Finish work and submit evidence</button>
           </form>` : ''}
       </section>` : '';
-    const historyItems = history.map((h) => `
+    const historyItems = history.map((h) => {
+      const submittedNotes = String(h.note || '').startsWith('Completion evidence submitted: ');
+      const title = h.type === 'REPAIR' && h.actorRole === 'MAINTENANCE_OFFICER'
+        ? (submittedNotes ? 'Officer completion notes' : 'Officer progress update')
+        : h.type === 'REPAIR' && h.actorRole === 'ADMIN' ? 'Admin repair verification' : h.type;
+      const note = submittedNotes ? String(h.note).slice('Completion evidence submitted: '.length) : h.note;
+      const actor = h.actor && h.actor.fullName
+        ? `<span class="block text-xs text-ink-3">${escapeHtml(h.actor.fullName)}${h.actorRole ? ` · ${escapeHtml(h.actorRole === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : h.actorRole === 'ADMIN' ? 'Administrator' : 'Citizen')}` : ''}</span>`
+        : '';
+      return `
       <div class="p-3 rounded border border-slate-200">
         <div class="flex justify-between items-start gap-4">
           <div>
-            <p class="font-medium text-navy text-sm">${escapeHtml(h.type)}${h.toValue ? `: ${escapeHtml(h.toValue)}` : ''}</p>
-            ${h.note ? `<p class="text-slate-tint text-xs">${escapeHtml(h.note)}</p>` : ''}
+            <p class="font-medium text-navy text-sm">${escapeHtml(title)}${h.toValue ? `: ${escapeHtml(adminRepairLabel(h.toValue) || h.toValue)}` : ''}</p>
+            ${actor}
+            ${note ? `<p class="text-ink-2 text-sm mt-1">${escapeHtml(note)}</p>` : ''}
           </div>
           <span class="text-slate-400 text-xs flex-shrink-0">${escapeHtml(relativeDate(h.createdAt))}</span>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     return `
       <div class="brand-card p-8 rounded-xl shadow-lg">
@@ -1689,7 +1863,8 @@
             <div class="grid grid-cols-2 gap-2">
               ${photos.map((p, i) => `
                 <button type="button" class="rw-photo-trigger rounded border border-slate-300 overflow-hidden group text-left" ${photoViewerAttrs(report, i)} aria-label="View ${escapeHtml(p.caption || 'report photo')} full size">
-                  <img ${p.isPublic ? `src="${escapeHtml(absoluteUrl(p.url))}"` : `data-authed-src="${escapeHtml(absoluteUrl(p.url))}"`} alt="${escapeHtml(p.caption || 'Report photo')}" class="w-full h-32 object-cover group-hover:opacity-90 transition-opacity" />
+                  <span class="rw-photo-kind">${escapeHtml(p.kind === 'AFTER' ? 'After repair' : p.kind === 'PROGRESS' ? 'Progress' : 'Before')}</span>
+                  <img ${p.isPublic ? `src="${escapeHtml(absoluteUrl(p.url))}"` : `data-authed-src="${escapeHtml(absoluteUrl(p.url))}"`} alt="${escapeHtml(p.caption || (p.kind === 'AFTER' ? 'After-repair photo' : p.kind === 'PROGRESS' ? 'Repair progress photo' : 'Before photo'))}" class="w-full h-32 object-cover group-hover:opacity-90 transition-opacity" />
                 </button>`).join('')}
             </div>
           </div>` : ''}
@@ -1700,6 +1875,8 @@
             <div><span class="font-medium text-ink-2">Reference:</span> ${escapeHtml(report.referenceNo)}</div>
             <div><span class="font-medium text-ink-2">Reported:</span> ${escapeHtml(relativeDate(report.createdAt))}</div>
             <div><span class="font-medium text-ink-2">Assigned to:</span> ${report.assignedOfficer ? escapeHtml(report.assignedOfficer.fullName || 'Officer') : 'Unassigned'}</div>
+            <div><span class="font-medium text-ink-2">Repair status:</span> ${escapeHtml(adminRepairLabel(report.repairStatus))}</div>
+            <div><span class="font-medium text-ink-2">Last updated:</span> ${escapeHtml(relativeDate(report.updatedAt))}</div>
             <div><span class="font-medium text-ink-2">Coordinates:</span> ${escapeHtml(Number(report.latitude).toFixed(6))}, ${escapeHtml(Number(report.longitude).toFixed(6))}</div>
           </div>
           ${report.rejectionReason ? `<p class="mt-4 text-sm text-red-400">Rejected: ${escapeHtml(report.rejectionReason)}</p>` : ''}
@@ -1707,6 +1884,12 @@
       </div>
 
       ${staffActions}
+
+      ${report.completionNotes ? `
+        <section class="brand-card p-6 rounded-xl shadow-sm mt-6 rw-completion-notes">
+          <h2 class="font-bold text-navy text-lg mb-2">Officer completion notes</h2>
+          <p class="text-ink-2 text-sm whitespace-pre-wrap">${escapeHtml(report.completionNotes)}</p>
+        </section>` : ''}
 
       <div class="brand-card p-8 rounded-xl shadow-lg mt-6">
         <h2 class="font-bold text-navy text-lg mb-4">History</h2>
@@ -1732,6 +1915,10 @@
     const form = q('#report-form');
     let locationMap = null;
     let locationMarker = null;
+    let geocodeRequest = 0;
+    const addressInput = q('#report-address');
+    const addressStatus = q('#address-lookup-status');
+    const areaInput = q('input[name="areaLabel"]');
 
     const setSelectedLocation = (latitude, longitude) => {
       const lat = Number(latitude);
@@ -1760,10 +1947,30 @@
       latInput.value = lat.toFixed(6);
       lonInput.value = lng.toFixed(6);
       if (gpsCoords) gpsCoords.textContent = `Selected: Lat ${lat.toFixed(6)}, Lng ${lng.toFixed(6)}`;
+      if (addressInput) addressInput.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      if (areaInput) areaInput.value = '';
+      const requestId = ++geocodeRequest;
+      if (addressStatus) addressStatus.textContent = 'Looking up this address…';
       if (locationFeedback) {
         locationFeedback.textContent = '';
         locationFeedback.hidden = true;
       }
+      void api(`/map/geocode/reverse?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`)
+        .then((result) => {
+          if (requestId !== geocodeRequest) return;
+          if (result && result.available && result.address) {
+            if (addressInput) addressInput.value = result.address;
+            if (areaInput && result.areaLabel) areaInput.value = result.areaLabel;
+            if (addressStatus) addressStatus.textContent = 'Address found. You can edit it before submitting.';
+          } else if (addressStatus) {
+            addressStatus.textContent = 'Address lookup unavailable; the selected coordinates are saved as the location.';
+          }
+        })
+        .catch(() => {
+          if (requestId === geocodeRequest && addressStatus) {
+            addressStatus.textContent = 'Address lookup failed; the selected coordinates are saved as the location.';
+          }
+        });
     };
 
     const locationMapElement = q('#report-location-map');
@@ -1926,7 +2133,10 @@
       NOT_ASSIGNED: '#94a3b8',
       AWAITING_MAINTENANCE: '#fbbf24',
       IN_PROGRESS: '#60a5fa',
+      AWAITING_VERIFICATION: '#60a5fa',
+      RETURNED_FOR_WORK: '#fbbf24',
       COMPLETED: '#4ade80',
+      VERIFIED_COMPLETED: '#4ade80',
     }[repairStatus] || '#94a3b8');
 
     try {
@@ -1962,7 +2172,10 @@
     NOT_ASSIGNED: 'Not assigned',
     AWAITING_MAINTENANCE: 'Awaiting maintenance',
     IN_PROGRESS: 'In progress',
-    COMPLETED: 'Completed',
+    AWAITING_VERIFICATION: 'Awaiting admin verification',
+    RETURNED_FOR_WORK: 'Returned for further work',
+    COMPLETED: 'Completed (legacy)',
+    VERIFIED_COMPLETED: 'Verified completed',
   }[status] || 'Not assigned');
 
   const adminReportTableHtml = (items, pagination, allowDelete) => {
@@ -2114,7 +2327,8 @@
       setText('stat-pending', totals.pending ?? 0);
       setText('stat-approved', totals.approved ?? 0);
       setText('stat-rejected', totals.rejected ?? 0);
-      setText('stat-under-repair', (Number(totals.awaiting) || 0) + (Number(totals.inProgress) || 0));
+      setText('stat-under-repair', (Number(totals.awaiting) || 0) + (Number(totals.inProgress) || 0)
+        + (Number(totals.awaitingVerification) || 0) + (Number(totals.returnedForWork) || 0));
       return data;
     } catch (err) {
       ['stat-total', 'stat-pending', 'stat-approved', 'stat-rejected', 'stat-under-repair'].forEach((id) => setText(id, '—'));
@@ -2165,6 +2379,7 @@
   };
 
   const initAdminDashboard = async () => {
+    loadNotificationPanel('admin-notifications');
     const refresh = async () => {
       const params = new URLSearchParams({ page: '1', pageSize: '8', sort: 'newest' });
       const pendingParams = new URLSearchParams({
@@ -2251,6 +2466,7 @@
     const notificationsHost = q('#officer-notifications');
     const feedbackHost = q('#officer-notification-feedback');
     const unreadCountHost = q('#officer-unread-count');
+    let expiryRefreshTimer = null;
     const refresh = async () => {
       const refreshButton = q('#btn-refresh-assignments');
       if (refreshButton) {
@@ -2319,6 +2535,13 @@
       if (notificationsResult.status === 'fulfilled') {
         const notificationData = notificationsResult.value || {};
         const items = notificationData.items || [];
+        if (expiryRefreshTimer) window.clearTimeout(expiryRefreshTimer);
+        const expirationTimes = items.map((item) => Date.parse(item.expiresAt)).filter(Number.isFinite);
+        if (expirationTimes.length) {
+          expiryRefreshTimer = window.setTimeout(() => {
+            if (host.isConnected) void refresh();
+          }, Math.max(0, Math.min(...expirationTimes) - Date.now()) + 20);
+        }
         const unread = Number(notificationData.unreadCount) || 0;
         const markAllButton = q('#btn-mark-all-notifications-read');
         if (markAllButton) markAllButton.disabled = unread === 0;

@@ -95,7 +95,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               children: [
                 const Center(child: BrandLogo(onDark: false, size: LogoSize.medium)),
                 const SizedBox(height: 20),
-                Text('Join RoadWatch', style: AppTypography.display(size: 26)),
+                Text('Join RoadBlocks', style: AppTypography.display(size: 26)),
                 const SizedBox(height: 6),
                 Text(
                   'Report road issues in your community and follow the repair progress.',

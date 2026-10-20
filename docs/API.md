@@ -1,4 +1,4 @@
-# RoadWatch API Reference
+# RoadBlocks API Reference
 
 Base URL in development: `http://localhost:4000`
 
@@ -220,7 +220,7 @@ Auth required, **staff only** (officer or admin). All reports, filterable.
 | `category` | category enum | — |
 | `priority` | priority enum | — |
 | `moderationStatus` | `PENDING_REVIEW` / `APPROVED` / `REJECTED` | — |
-| `repairStatus` | `NOT_ASSIGNED` / `AWAITING_MAINTENANCE` / `IN_PROGRESS` / `COMPLETED` | — |
+| `repairStatus` | `NOT_ASSIGNED` / `AWAITING_MAINTENANCE` / `IN_PROGRESS` / `AWAITING_VERIFICATION` / `RETURNED_FOR_WORK` / `COMPLETED` (legacy) / `VERIFIED_COMPLETED` | — |
 | `areaLabel` | text | — |
 | `assignedOfficerId` | id | — |
 | `citizenId` | id | — |
@@ -308,9 +308,10 @@ cannot upload repair evidence.
 
 Sets the repair track to `AWAITING_MAINTENANCE`. Repeating assignment to the
 current officer is idempotent and does not create a second assignment or
-notification. Assigning a different officer creates one persistent in-app
-notification in the same database transaction as the new assignment; push
-notifications are not configured. **200** `{ "report": { … } }`
+notification. Assigning a different officer creates an in-app notification in
+the same database transaction as the new assignment; active notifications expire
+five minutes after creation, while the assignment and report history remain
+persistent. Push notifications are not configured. **200** `{ "report": { … } }`
 
 ### `PATCH /api/reports/:id/repair`
 
@@ -327,8 +328,7 @@ completion report. JSON body.
 
 ```json
 {
-  "repairStatus": "COMPLETED",
-  "note": "Work finished and the road reopened.",
+  "repairStatus": "AWAITING_VERIFICATION",
   "completionNotes": "Cold-mix patched, compacted and levelled with surrounding asphalt."
 }
 ```
@@ -338,13 +338,40 @@ Business rules:
 - Only **approved** reports accept maintenance updates.
 - Only the **currently assigned maintenance officer** may update; other officers,
   administrators, and citizens receive **403**.
-- Repair status transitions are sequential: `AWAITING_MAINTENANCE` →
-  `IN_PROGRESS` → `COMPLETED`. Skips, backwards transitions and duplicate
+- Repair status transitions are sequential: `AWAITING_MAINTENANCE` or
+  `RETURNED_FOR_WORK` → `IN_PROGRESS` → `AWAITING_VERIFICATION`. Skips,
+  backwards transitions and duplicate
   status decisions return **409**.
-- `COMPLETED` requires `completionNotes` (≥ 5 characters) **and** at least one `AFTER` photo.
+- Submitting for verification requires `completionNotes` (≥ 5 characters)
+  **and** at least one `AFTER` photo. Submission notifies administrators; it
+  does not verify the repair or notify the citizen.
 - Only the assigned officer may add `PROGRESS` and `AFTER` photos. `AFTER`
-  photos can be added while the report is `IN_PROGRESS`; citizens may add
-  `BEFORE` photos only to their own pending report.
+  photos can be added while the report is `IN_PROGRESS` or `RETURNED_FOR_WORK`;
+  citizens may add `BEFORE` photos only to their own pending report.
+
+**200** `{ "report": { … } }`
+
+### `PATCH /api/reports/:id/verification`
+
+**Admin only.** Reviews repair evidence after officer submission.
+
+```json
+{ "decision": "VERIFY" }
+```
+
+On success, changes the repair status to `VERIFIED_COMPLETED`, records the
+verification timestamp, completes the active assignment, and notifies the
+citizen. Completion notes and at least one after-photo are checked again before
+the transition.
+
+```json
+{ "decision": "RETURN", "reason": "The patch edge remains uneven; please level it." }
+```
+
+Returning requires a reason of at least five characters and changes the state
+to `RETURNED_FOR_WORK`; the assigned officer can resume work and submit revised
+evidence. Only `AWAITING_VERIFICATION` reports can be reviewed. Historical
+`COMPLETED` rows are left unchanged and are not treated as admin-verified.
 
 **200** `{ "report": { … } }`
 
@@ -375,9 +402,12 @@ Approved reports assigned to the caller. Supports the [list query parameters](#l
 { "assigned": 12, "awaiting": 3, "inProgress": 5, "completed": 4 }
 ```
 
-### `GET /api/maintenance/notifications`
+### `GET /api/notifications`
 
-Returns up to 50 newest notifications for the authenticated officer only:
+Returns up to 50 newest active notifications for the authenticated user,
+regardless of role. Items expire five minutes after creation and are excluded
+from both the list and unread count after expiry. The database records remain
+available as history and are not deleted:
 
 ```json
 {
@@ -393,26 +423,28 @@ Returns up to 50 newest notifications for the authenticated officer only:
     "repairStatus": "AWAITING_MAINTENANCE",
     "isRead": false,
     "readAt": null,
+    "expiresAt": "2026-10-18T06:05:00.000Z",
     "createdAt": "2026-10-18T06:00:00.000Z"
   }],
   "unreadCount": 1
 }
 ```
 
-Notifications are database-backed and scoped to the target officer. A unique
-assignment key prevents duplicate notifications for assignment retries.
-Approval itself does not broadcast to officers: an administrator must assign
-the approved report first, preserving the existing admin-controlled assignment
-model.
+Notifications are database-backed and scoped to the authenticated user.
+Assignment notices go to the assigned officer; repair-verification submissions
+go to active administrators; the citizen is notified only after an administrator
+verifies the repair. The legacy `/api/maintenance/notifications` path remains
+available for compatibility.
 
-### `PATCH /api/maintenance/notifications/:id/read`
+### `PATCH /api/notifications/:id/read`
 
 Marks the caller's notification as read. A notification belonging to another
-officer returns **404**.
+user returns **404**.
 
-### `PATCH /api/maintenance/notifications/read-all`
+### `PATCH /api/notifications/read-all`
 
-Marks all notifications belonging to the caller as read.
+Marks all notifications belonging to the caller as read. Both read endpoints
+also retain the legacy `/api/maintenance/notifications/...` aliases.
 
 ---
 

@@ -4,7 +4,7 @@ import 'enums.dart';
 class MaintenanceNotification {
   const MaintenanceNotification({
     required this.id,
-    required this.assignmentId,
+    this.assignmentId,
     required this.reportId,
     required this.referenceNo,
     required this.title,
@@ -15,10 +15,11 @@ class MaintenanceNotification {
     required this.isRead,
     required this.createdAt,
     this.readAt,
+    this.expiresAt,
   });
 
   final String id;
-  final String assignmentId;
+  final String? assignmentId;
   final String reportId;
   final String referenceNo;
   final String title;
@@ -29,11 +30,12 @@ class MaintenanceNotification {
   final bool isRead;
   final DateTime? createdAt;
   final DateTime? readAt;
+  final DateTime? expiresAt;
 
   factory MaintenanceNotification.fromJson(Map<String, dynamic> json) =>
       MaintenanceNotification(
         id: asString(json['id']),
-        assignmentId: asString(json['assignmentId']),
+        assignmentId: asStringOrNull(json['assignmentId']),
         reportId: asString(json['reportId']),
         referenceNo: asString(json['referenceNo']),
         title: asString(json['title']),
@@ -46,5 +48,6 @@ class MaintenanceNotification {
         isRead: asBool(json['isRead']),
         createdAt: asDate(json['createdAt']),
         readAt: asDate(json['readAt']),
+        expiresAt: asDate(json['expiresAt']),
       );
 }

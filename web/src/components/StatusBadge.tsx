@@ -42,7 +42,10 @@ const REPAIR_TONES: Record<RepairStatus, BadgeTone> = {
   NOT_ASSIGNED: 'slate',
   AWAITING_MAINTENANCE: 'blue',
   IN_PROGRESS: 'amber',
+  AWAITING_VERIFICATION: 'blue',
+  RETURNED_FOR_WORK: 'amber',
   COMPLETED: 'green',
+  VERIFIED_COMPLETED: 'green',
 };
 
 const PRIORITY_TONES: Record<Priority, BadgeTone> = {

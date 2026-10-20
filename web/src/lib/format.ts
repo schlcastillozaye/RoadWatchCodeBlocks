@@ -30,7 +30,10 @@ export const REPAIR_LABELS: Record<RepairStatus, string> = {
   NOT_ASSIGNED: 'Not assigned',
   AWAITING_MAINTENANCE: 'Awaiting maintenance',
   IN_PROGRESS: 'In progress',
-  COMPLETED: 'Completed',
+  AWAITING_VERIFICATION: 'Awaiting admin verification',
+  RETURNED_FOR_WORK: 'Returned for further work',
+  COMPLETED: 'Completed (legacy)',
+  VERIFIED_COMPLETED: 'Verified completed',
 };
 
 export const PRIORITY_LABELS: Record<Priority, string> = {

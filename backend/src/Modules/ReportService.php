@@ -437,11 +437,11 @@ class ReportService
             if ($report['moderationStatus'] !== 'APPROVED') {
                 throw AppError::conflict('Repair photos can only be added to approved reports.');
             }
-            if ($report['repairStatus'] === 'COMPLETED') {
+            if (in_array($report['repairStatus'], ['COMPLETED', 'VERIFIED_COMPLETED'], true)) {
                 throw AppError::conflict('Repair photos cannot be added after the report is completed.');
             }
-            if ($kind === 'AFTER' && $report['repairStatus'] !== 'IN_PROGRESS') {
-                throw AppError::conflict('After-repair photos can only be added while repair work is in progress.');
+            if ($kind === 'AFTER' && !in_array($report['repairStatus'], ['IN_PROGRESS', 'RETURNED_FOR_WORK'], true)) {
+                throw AppError::conflict('After-repair photos can only be added while repair work is active.');
             }
         }
 
@@ -605,8 +605,8 @@ class ReportService
             if ($report['moderationStatus'] !== 'APPROVED') {
                 throw AppError::conflict('Only approved reports can be assigned to maintenance.');
             }
-            if ($report['repairStatus'] === 'COMPLETED') {
-                throw AppError::conflict('A completed report cannot be assigned again.');
+            if (in_array($report['repairStatus'], ['AWAITING_VERIFICATION', 'COMPLETED', 'VERIFIED_COMPLETED'], true)) {
+                throw AppError::conflict('A report awaiting verification or already completed cannot be reassigned.');
             }
             $officer = Db::one('SELECT * FROM `User` WHERE `id` = ? FOR UPDATE', [$input['officerId']]);
             if ($officer === null || $officer['role'] !== 'MAINTENANCE_OFFICER') {
@@ -700,8 +700,8 @@ class ReportService
 
     private static function repairTransitionAllowed(string $from, string $to): bool
     {
-        return ($from === 'AWAITING_MAINTENANCE' && $to === 'IN_PROGRESS')
-            || ($from === 'IN_PROGRESS' && $to === 'COMPLETED');
+        return (in_array($from, ['AWAITING_MAINTENANCE', 'RETURNED_FOR_WORK'], true) && $to === 'IN_PROGRESS')
+            || ($from === 'IN_PROGRESS' && $to === 'AWAITING_VERIFICATION');
     }
 
     public static function updateRepair(string $reportId, array $actor, array $input): array
@@ -721,25 +721,13 @@ class ReportService
                 'Invalid repair transition from ' . $report['repairStatus'] . ' to ' . $targetStatus . '.'
             );
         }
-        $wantsCompletion = $targetStatus === 'COMPLETED';
-
         $completionNotes = $input['completionNotes'] ?? $report['completionNotes'];
 
-        if ($wantsCompletion) {
-            $afterPhotoCount = (int) Db::scalar('SELECT COUNT(*) FROM `ReportPhoto` WHERE `reportId` = ? AND `kind` = ?', [$reportId, 'AFTER']);
-            $notesOk = is_string($completionNotes) && mb_strlen(trim($completionNotes)) >= 5;
-
-            if (!$notesOk) {
-                throw AppError::unprocessable('Completion notes are required to mark a repair as completed.');
-            }
-            if ($afterPhotoCount < 1) {
-                throw AppError::unprocessable('At least one completion (after) photo is required.');
-            }
-        }
+        $submitsForVerification = $targetStatus === 'AWAITING_VERIFICATION';
 
         $now = Dates::now();
 
-        Db::transaction(function () use ($reportId, $actor, $input, $targetStatus, $wantsCompletion, $completionNotes, $now) {
+        Db::transaction(function () use ($reportId, $actor, $input, $targetStatus, $submitsForVerification, $completionNotes, $now) {
             $report = Db::one('SELECT * FROM `Report` WHERE `id` = ? FOR UPDATE', [$reportId]);
             if ($report === null) {
                 throw AppError::notFound('Report not found.');
@@ -755,17 +743,17 @@ class ReportService
                     'Invalid repair transition from ' . $report['repairStatus'] . ' to ' . $targetStatus . '.'
                 );
             }
-            if ($wantsCompletion) {
+            if ($submitsForVerification) {
                 $afterPhotoCount = (int) Db::scalar(
                     'SELECT COUNT(*) FROM `ReportPhoto` WHERE `reportId` = ? AND `kind` = ?',
                     [$reportId, 'AFTER']
                 );
                 $notesOk = is_string($completionNotes) && mb_strlen(trim($completionNotes)) >= 5;
                 if (!$notesOk) {
-                    throw AppError::unprocessable('Completion notes are required to mark a repair as completed.');
+                    throw AppError::unprocessable('Completion notes of at least 5 characters are required for admin verification.');
                 }
                 if ($afterPhotoCount < 1) {
-                    throw AppError::unprocessable('At least one completion (after) photo is required.');
+                    throw AppError::unprocessable('At least one after-repair photo is required for admin verification.');
                 }
             }
 
@@ -775,15 +763,9 @@ class ReportService
                 $sets[] = '`repairStatus` = ?';
                 $params[] = $targetStatus;
             }
-            if (!empty($input['completionNotes'])) {
+            if ($submitsForVerification && !empty($input['completionNotes'])) {
                 $sets[] = '`completionNotes` = ?';
                 $params[] = $completionNotes;
-            }
-            if ($wantsCompletion) {
-                $sets[] = '`completedAt` = ?';
-                $params[] = Dates::toDb($now);
-                $sets[] = '`completionOverride` = ?';
-                $params[] = 0;
             }
             $params[] = $reportId;
             $where = '`id` = ?';
@@ -802,25 +784,33 @@ class ReportService
                     'type' => 'REPAIR',
                     'fromValue' => $report['repairStatus'],
                     'toValue' => $targetStatus,
-                    'note' => $input['note'] ?? null,
+                    'note' => $submitsForVerification
+                        ? 'Completion evidence submitted: ' . trim((string) $completionNotes)
+                        : ($input['note'] ?? null),
                     'actorId' => $actor['id'],
                     'actorRole' => $actor['role'],
                 ]);
 
-                $assignmentStatus = $targetStatus === 'COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS';
-                $assignmentParams = [$assignmentStatus];
-                $assignmentSql = "UPDATE `Assignment` SET `status` = ?";
-                if ($targetStatus === 'COMPLETED') {
-                    $assignmentSql .= ', `completedAt` = ?';
-                    $assignmentParams[] = Dates::toDb($now);
-                }
-                $assignmentSql .= " WHERE `reportId` = ? AND `status` IN ('ASSIGNED','IN_PROGRESS')";
-                $assignmentParams[] = $reportId;
+                $assignmentParams = ['IN_PROGRESS', $reportId];
+                $assignmentSql = "UPDATE `Assignment` SET `status` = ?, `completedAt` = NULL
+                    WHERE `reportId` = ? AND `status` IN ('ASSIGNED','IN_PROGRESS')";
                 if (!empty($report['assignedOfficerId'])) {
                     $assignmentSql .= ' AND `officerId` = ?';
                     $assignmentParams[] = $report['assignedOfficerId'];
                 }
                 Db::execute($assignmentSql, $assignmentParams);
+                if ($submitsForVerification) {
+                    $admins = Db::all("SELECT `id` FROM `User` WHERE `role` = 'ADMIN' AND `status` = 'ACTIVE'");
+                    foreach ($admins as $admin) {
+                        NotificationService::createWorkflow(
+                            $admin['id'],
+                            $report,
+                            'Repair submitted for verification',
+                            $report['referenceNo'] . ' has completion notes and after-repair evidence ready for review.',
+                            'AWAITING_VERIFICATION'
+                        );
+                    }
+                }
             } elseif (!empty($input['note'])) {
                 Audit::history([
                     'reportId' => $reportId,
@@ -836,12 +826,94 @@ class ReportService
         Audit::record(array_merge([
             'actorId' => $actor['id'],
             'actorRole' => $actor['role'],
-            'action' => $wantsCompletion ? 'REPAIR_COMPLETED' : 'REPAIR_UPDATED',
+            'action' => $submitsForVerification ? 'REPAIR_SUBMITTED_FOR_VERIFICATION' : 'REPAIR_UPDATED',
             'entityType' => 'Report',
             'entityId' => $reportId,
-            'metadata' => ['to' => $targetStatus ?? $report['repairStatus'], 'override' => false],
+            'metadata' => ['to' => $targetStatus ?? $report['repairStatus']],
         ], Audit::actorContext()));
 
+        return Dto::report(self::getOrThrow($reportId));
+    }
+
+    public static function verifyRepair(string $reportId, array $actor, array $input): array
+    {
+        $decision = $input['decision'];
+        $now = Dates::now();
+        Db::transaction(function () use ($reportId, $actor, $input, $decision, $now): void {
+            $report = Db::one('SELECT * FROM `Report` WHERE `id` = ? FOR UPDATE', [$reportId]);
+            if ($report === null) {
+                throw AppError::notFound('Report not found.');
+            }
+            if ($report['moderationStatus'] !== 'APPROVED' || $report['repairStatus'] !== 'AWAITING_VERIFICATION') {
+                throw AppError::conflict('Only repair submissions awaiting admin verification can be reviewed.');
+            }
+            if ($decision === 'VERIFY') {
+                $afterPhotoCount = (int) Db::scalar(
+                    'SELECT COUNT(*) FROM `ReportPhoto` WHERE `reportId` = ? AND `kind` = ?',
+                    [$reportId, 'AFTER']
+                );
+                if (empty($report['completionNotes']) || mb_strlen(trim((string) $report['completionNotes'])) < 5 || $afterPhotoCount < 1) {
+                    throw AppError::conflict('The submitted completion notes and after-photo evidence are required before verification.');
+                }
+                $nextStatus = 'VERIFIED_COMPLETED';
+                Db::execute(
+                    "UPDATE `Report` SET `repairStatus` = ?, `completedAt` = ?, `updatedAt` = ? WHERE `id` = ? AND `repairStatus` = 'AWAITING_VERIFICATION'",
+                    [$nextStatus, Dates::toDb($now), Dates::toDb($now), $reportId]
+                );
+                Db::execute(
+                    "UPDATE `Assignment` SET `status` = 'COMPLETED', `completedAt` = ?
+                     WHERE `reportId` = ? AND `officerId` = ? AND `status` = 'IN_PROGRESS'",
+                    [Dates::toDb($now), $reportId, $report['assignedOfficerId']]
+                );
+                NotificationService::createWorkflow(
+                    $report['citizenId'],
+                    $report,
+                    'Repair verified as complete',
+                    $report['referenceNo'] . ' has been verified as repaired by an administrator.',
+                    $nextStatus
+                );
+                $note = 'Repair completion verified by an administrator.';
+            } else {
+                $reason = trim((string) $input['reason']);
+                $nextStatus = 'RETURNED_FOR_WORK';
+                Db::execute(
+                    "UPDATE `Report` SET `repairStatus` = ?, `completedAt` = NULL, `updatedAt` = ? WHERE `id` = ? AND `repairStatus` = 'AWAITING_VERIFICATION'",
+                    [$nextStatus, Dates::toDb($now), $reportId]
+                );
+                Db::execute(
+                    "UPDATE `Assignment` SET `status` = 'IN_PROGRESS', `completedAt` = NULL
+                     WHERE `reportId` = ? AND `officerId` = ? AND `status` = 'IN_PROGRESS'",
+                    [$reportId, $report['assignedOfficerId']]
+                );
+                if (!empty($report['assignedOfficerId'])) {
+                    NotificationService::createWorkflow(
+                        $report['assignedOfficerId'],
+                        $report,
+                        'Repair returned for further work',
+                        $report['referenceNo'] . ': ' . $reason,
+                        $nextStatus
+                    );
+                }
+                $note = 'Returned for further work: ' . $reason;
+            }
+            Audit::history([
+                'reportId' => $reportId,
+                'type' => 'REPAIR',
+                'fromValue' => 'AWAITING_VERIFICATION',
+                'toValue' => $nextStatus,
+                'note' => $note,
+                'actorId' => $actor['id'],
+                'actorRole' => $actor['role'],
+            ]);
+        });
+        Audit::record(array_merge([
+            'actorId' => $actor['id'],
+            'actorRole' => $actor['role'],
+            'action' => $decision === 'VERIFY' ? 'REPAIR_VERIFIED' : 'REPAIR_RETURNED_FOR_WORK',
+            'entityType' => 'Report',
+            'entityId' => $reportId,
+            'metadata' => ['decision' => $decision, 'reason' => $input['reason'] ?? null],
+        ], Audit::actorContext()));
         return Dto::report(self::getOrThrow($reportId));
     }
 
@@ -851,8 +923,9 @@ class ReportService
         return [
             'assigned' => $count('SELECT COUNT(*) FROM `Report` WHERE `assignedOfficerId` = ?', [$officerId]),
             'awaiting' => $count("SELECT COUNT(*) FROM `Report` WHERE `assignedOfficerId` = ? AND `repairStatus` = 'AWAITING_MAINTENANCE'", [$officerId]),
-            'inProgress' => $count("SELECT COUNT(*) FROM `Report` WHERE `assignedOfficerId` = ? AND `repairStatus` = 'IN_PROGRESS'", [$officerId]),
-            'completed' => $count("SELECT COUNT(*) FROM `Report` WHERE `assignedOfficerId` = ? AND `repairStatus` = 'COMPLETED'", [$officerId]),
+            'inProgress' => $count("SELECT COUNT(*) FROM `Report` WHERE `assignedOfficerId` = ? AND `repairStatus` IN ('IN_PROGRESS','RETURNED_FOR_WORK','AWAITING_VERIFICATION')", [$officerId]),
+            'awaitingVerification' => $count("SELECT COUNT(*) FROM `Report` WHERE `assignedOfficerId` = ? AND `repairStatus` = 'AWAITING_VERIFICATION'", [$officerId]),
+            'completed' => $count("SELECT COUNT(*) FROM `Report` WHERE `assignedOfficerId` = ? AND `repairStatus` IN ('COMPLETED','VERIFIED_COMPLETED')", [$officerId]),
         ];
     }
 
@@ -872,7 +945,9 @@ class ReportService
             'notAssigned' => $count("SELECT COUNT(*) FROM `Report` WHERE `repairStatus` = 'NOT_ASSIGNED'"),
             'awaiting' => $count("SELECT COUNT(*) FROM `Report` WHERE `repairStatus` = 'AWAITING_MAINTENANCE'"),
             'inProgress' => $count("SELECT COUNT(*) FROM `Report` WHERE `repairStatus` = 'IN_PROGRESS'"),
-            'completed' => $count("SELECT COUNT(*) FROM `Report` WHERE `repairStatus` = 'COMPLETED'"),
+            'awaitingVerification' => $count("SELECT COUNT(*) FROM `Report` WHERE `repairStatus` = 'AWAITING_VERIFICATION'"),
+            'returnedForWork' => $count("SELECT COUNT(*) FROM `Report` WHERE `repairStatus` = 'RETURNED_FOR_WORK'"),
+            'completed' => $count("SELECT COUNT(*) FROM `Report` WHERE `repairStatus` IN ('COMPLETED','VERIFIED_COMPLETED')"),
         ];
 
         $byCategory = array_map(static fn ($r) => ['category' => $r['category'], 'count' => (int) $r['c']], Db::all('SELECT `category`, COUNT(*) AS `c` FROM `Report` GROUP BY `category`'));

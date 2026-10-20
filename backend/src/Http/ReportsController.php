@@ -170,4 +170,19 @@ class ReportsController
             'completionNotes' => $completionNotes,
         ])];
     }
+
+    public static function verification(array $params): array
+    {
+        $actor = Auth::requireAdmin();
+        $body = Request::body();
+        $decision = Validate::enum($body['decision'] ?? null, 'decision', ['VERIFY', 'RETURN']);
+        $reason = Validate::string($body['reason'] ?? null, 'reason', false, 0, 1000);
+        if ($decision === 'RETURN' && ($reason === null || mb_strlen(trim($reason)) < 5)) {
+            Validate::fail('reason', 'A return reason of at least 5 characters is required.');
+        }
+        return ['report' => ReportService::verifyRepair($params['id'], $actor, [
+            'decision' => $decision,
+            'reason' => $reason,
+        ])];
+    }
 }
