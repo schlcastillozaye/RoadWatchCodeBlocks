@@ -23,25 +23,58 @@ const String kOsmAttributionUrl = 'https://www.openstreetmap.org/copyright';
 
 /// Standard tile layer used by every RoadWatch map.
 TileLayer roadwatchTileLayer() => TileLayer(
-      urlTemplate: kOsmTileUrl,
-      userAgentPackageName: kOsmUserAgentPackageName,
-      maxZoom: 19,
-    );
+  urlTemplate: kOsmTileUrl,
+  userAgentPackageName: kOsmUserAgentPackageName,
+  maxZoom: 19,
+);
 
 /// Attribution box — required by the OpenStreetMap tile usage policy.
-Widget roadwatchAttribution() => SimpleAttributionWidget(
-      backgroundColor: AppColors.cardSurface.withValues(alpha: 0.9),
-      source: Text(
-        kOsmAttributionText,
-        style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+Widget roadwatchAttribution() => LayoutBuilder(
+  builder: (context, constraints) {
+    final maxWidth = constraints.maxWidth.isFinite
+        ? constraints.maxWidth
+        : 240.0;
+    return Align(
+      alignment: Alignment.bottomRight,
+      child: SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Material(
+            color: AppColors.cardSurface.withValues(alpha: 0.9),
+            child: InkWell(
+              onTap: () => launchUrl(
+                Uri.parse(kOsmAttributionUrl),
+                mode: LaunchMode.externalApplication,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: Text.rich(
+                  const TextSpan(
+                    children: [
+                      TextSpan(text: 'flutter_map | © '),
+                      TextSpan(text: kOsmAttributionText),
+                    ],
+                  ),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textSecondary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
-      onTap: () => launchUrl(Uri.parse(kOsmAttributionUrl), mode: LaunchMode.externalApplication),
     );
+  },
+);
 
 /// A public link to these coordinates on OpenStreetMap.
 Uri openStreetMapUri(double latitude, double longitude) => Uri.parse(
-      'https://www.openstreetmap.org/?mlat=$latitude&mlon=$longitude#map=17/$latitude/$longitude',
-    );
+  'https://www.openstreetmap.org/?mlat=$latitude&mlon=$longitude#map=17/$latitude/$longitude',
+);
 
 /// Circular, white-ringed status pin — the mobile twin of the web platform's
 /// Leaflet dots.

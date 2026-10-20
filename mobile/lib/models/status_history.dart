@@ -25,7 +25,12 @@ class StatusHistoryEntry {
   String get typeLabel => switch (type) {
     'CREATION' => 'Report submitted',
     'MODERATION' => 'Moderation',
+    'ASSIGNMENT' when actorRole == UserRole.admin =>
+      'Administrator instructions',
     'ASSIGNMENT' => 'Assignment',
+    'REPAIR'
+        when actorRole == UserRole.admin && toValue == 'RETURNED_FOR_WORK' =>
+      'Administrator feedback',
     'REPAIR' when actorRole == UserRole.admin => 'Admin repair verification',
     'REPAIR' when note?.startsWith('Completion evidence submitted: ') == true =>
       'Officer completion notes',

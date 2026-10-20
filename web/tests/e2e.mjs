@@ -755,6 +755,7 @@ async function main() {
     const col = makeCollector(page, 'J');
     let contrastOk = true;
     let responsive = true;
+    const textContrastFailures = [];
     try {
       await page.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('#login-form', { timeout: 15000 });
@@ -899,20 +900,56 @@ async function main() {
             const bg = luminance(parse(background));
             return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
           };
-          const renderedTextContrast = [...document.querySelectorAll('.text-navy')].map((element) => {
+          const parseColor = (value) => {
+            const match = value.match(/rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?/);
+            return match ? { rgb: match.slice(1, 4).map(Number), alpha: Number(match[4] ?? 1) } : null;
+          };
+          const textContrast = (foreground, background) => {
+            const fg = parseColor(foreground);
+            const bg = parseColor(background);
+            if (!fg || !bg) return null;
+            const composite = fg.rgb.map((channel, index) =>
+              channel * fg.alpha + bg.rgb[index] * (1 - fg.alpha));
+            const l1 = luminance(composite);
+            const l2 = luminance(bg.rgb);
+            return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+          };
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          const textFailures = [];
+          let renderedMinimum = null;
+          while (walker.nextNode()) {
+            const node = walker.currentNode;
+            if (!node.textContent.trim()) continue;
+            const element = node.parentElement;
+            if (!element || element.closest('[aria-hidden="true"],svg,script,style')) continue;
+            const bounds = element.getBoundingClientRect();
+            const styles = getComputedStyle(element);
+            if (!bounds.width || !bounds.height || styles.visibility === 'hidden' || styles.display === 'none') continue;
             let background = element;
-            while (background && getComputedStyle(background).backgroundColor === 'rgba(0, 0, 0, 0)') {
+            let backgroundColor = 'rgb(11, 23, 41)';
+            while (background) {
+              const color = parseColor(getComputedStyle(background).backgroundColor);
+              if (color && color.alpha > 0) {
+                backgroundColor = getComputedStyle(background).backgroundColor;
+                break;
+              }
               background = background.parentElement;
             }
-            return background
-              ? contrast(getComputedStyle(element).color, getComputedStyle(background).backgroundColor)
-              : contrast(getComputedStyle(element).color, getComputedStyle(document.body).backgroundColor);
-          });
+            const ratio = textContrast(styles.color, backgroundColor);
+            if (!Number.isFinite(ratio)) continue;
+            renderedMinimum = renderedMinimum === null ? ratio : Math.min(renderedMinimum, ratio);
+            const fontSize = Number.parseFloat(styles.fontSize);
+            const largeText = fontSize >= 24 || (fontSize >= 18.66 && Number.parseInt(styles.fontWeight, 10) >= 700);
+            if (ratio < (largeText ? 3 : 4.5)) {
+              textFailures.push({ text: node.textContent.trim().slice(0, 60), ratio: Number(ratio.toFixed(2)) });
+            }
+          }
           return {
             inkOnSheet: contrast(root.getPropertyValue('--ink').trim(), root.getPropertyValue('--sheet').trim()),
             secondaryOnSurface: contrast(root.getPropertyValue('--ink-2').trim(), root.getPropertyValue('--surface').trim()),
             mutedOnSurface: contrast(root.getPropertyValue('--ink-3').trim(), root.getPropertyValue('--surface').trim()),
-            renderedText: renderedTextContrast.length ? Math.min(...renderedTextContrast) : null,
+            renderedText: renderedMinimum,
+            textFailures,
           };
         });
         if (Number.isFinite(colors.renderedText)) {
@@ -920,7 +957,10 @@ async function main() {
             ? colors.renderedText
             : Math.min(minimumRenderedTextContrast, colors.renderedText);
         }
-        if (Object.values(colors).some((value) => Number.isFinite(value) && value < 4.5)) contrastOk = false;
+        textContrastFailures.push(...colors.textFailures.map((failure) => `${route}: "${failure.text}" ${failure.ratio}:1`));
+        if (Object.entries(colors).some(([key, value]) =>
+          key !== 'textFailures' && Number.isFinite(value) && value < 4.5)
+          || colors.textFailures.length > 0) contrastOk = false;
         for (const viewport of [
           { width: 375, height: 667 },
           { width: 768, height: 1024 },
@@ -957,7 +997,7 @@ async function main() {
         && contrastOk && buttonContrastOk && responsive
         && mobileMenuOpens && escapeClosesMenu && mobileNavWorks && clean;
       record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', ok,
-        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, text contrast: ${contrastOk} (minimum rendered navy text ${minimumRenderedTextContrast === null ? 'n/a' : `${minimumRenderedTextContrast.toFixed(2)}:1`}), dark button contrast: ${buttonContrastOk} (base min ${buttonContrast.minimum.toFixed(2)}:1, primary hover ${primaryHoverContrast.toFixed(2)}:1), responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
+        `  system dark + live updates: ${systemTheme === 'dark' && systemPreferenceUpdates}, auth-page persistence: ${lightSurvivesRefresh && savedDark === 'dark'}, signed-in theme persistence: ${userLightPersists && userDarkSaved === 'dark'}, rendered text contrast: ${contrastOk} (minimum ${minimumRenderedTextContrast === null ? 'n/a' : `${minimumRenderedTextContrast.toFixed(2)}:1`}, failures: ${textContrastFailures.slice(0, 6).join('; ') || 'none'}), dark button contrast: ${buttonContrastOk} (base min ${buttonContrast.minimum.toFixed(2)}:1, primary hover ${primaryHoverContrast.toFixed(2)}:1), responsive: ${responsive}, mobile menu + route: ${mobileMenuOpens && escapeClosesMenu && mobileNavWorks}\n${col.summary()}`);
     } catch (err) {
       record('j', 'Theme preference, contrast, responsive pages, and mobile navigation', false,
         `  ${err.message}\n${col.summary()}`);

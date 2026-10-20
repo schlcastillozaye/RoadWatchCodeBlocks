@@ -28,10 +28,12 @@ class ReportDetailScreen extends StatefulWidget {
     super.key,
     required this.reportId,
     this.initialReport,
+    this.initialHistory,
   });
 
   final String reportId;
   final RoadReport? initialReport;
+  final List<StatusHistoryEntry>? initialHistory;
 
   @override
   State<ReportDetailScreen> createState() => _ReportDetailScreenState();
@@ -48,6 +50,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   void initState() {
     super.initState();
     _report = widget.initialReport;
+    _history = widget.initialHistory ?? [];
     _loading = widget.initialReport == null;
     _load();
   }
@@ -217,24 +220,41 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         return;
       }
       var selectedId = '';
+      final noteController = TextEditingController();
       final officerId = await showDialog<String>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
             title: const Text('Assign maintenance officer'),
-            content: DropdownButtonFormField<String>(
-              initialValue: selectedId.isEmpty ? null : selectedId,
-              items: officers
-                  .map(
-                    (officer) => DropdownMenuItem<String>(
-                      value: asString(officer['id']),
-                      child: Text(asString(officer['fullName'])),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) =>
-                  setDialogState(() => selectedId = value ?? ''),
-              decoration: const InputDecoration(labelText: 'Officer'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: selectedId.isEmpty ? null : selectedId,
+                  items: officers
+                      .map(
+                        (officer) => DropdownMenuItem<String>(
+                          value: asString(officer['id']),
+                          child: Text(asString(officer['fullName'])),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) =>
+                      setDialogState(() => selectedId = value ?? ''),
+                  decoration: const InputDecoration(labelText: 'Officer'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: noteController,
+                  minLines: 2,
+                  maxLines: 4,
+                  maxLength: 1000,
+                  decoration: const InputDecoration(
+                    labelText: 'Instructions for the officer (optional)',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
             ),
             actions: [
               TextButton(
@@ -251,11 +271,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ),
         ),
       );
+      final note = noteController.text.trim();
+      noteController.dispose();
       if (officerId == null) return;
       if (!mounted) return;
       final updated = await context.read<RoadWatchApi>().assignReport(
         widget.reportId,
         officerId: officerId,
+        note: note,
       );
       if (!mounted) return;
       setState(() => _report = updated);
@@ -753,6 +776,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             ),
           ],
           const SizedBox(height: 14),
+          _AdministratorGuidance(
+            history: _history,
+            isAuthorized:
+                user?.isAdmin == true ||
+                (user?.role == UserRole.maintenanceOfficer &&
+                    report.assignedOfficerId == user?.id),
+          ),
+          const SizedBox(height: 14),
           _Timeline(history: _history),
           if (report.moderationStatus == ModerationStatus.pendingReview) ...[
             const SizedBox(height: 20),
@@ -762,6 +793,64 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               icon: Icons.delete_outline_rounded,
               onPressed: _confirmDelete,
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdministratorGuidance extends StatelessWidget {
+  const _AdministratorGuidance({
+    required this.history,
+    required this.isAuthorized,
+  });
+
+  final List<StatusHistoryEntry> history;
+  final bool isAuthorized;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isAuthorized) return const SizedBox.shrink();
+    final guidance = history.where(
+      (entry) =>
+          (entry.type == 'ASSIGNMENT' && entry.actorRole == UserRole.admin) ||
+          (entry.type == 'REPAIR' &&
+              entry.actorRole == UserRole.admin &&
+              entry.toValue == 'RETURNED_FOR_WORK' &&
+              entry.note?.isNotEmpty == true),
+    );
+    if (guidance.isEmpty) return const SizedBox.shrink();
+
+    return SectionCard(
+      title: 'Administrator guidance',
+      color: AppColors.tintBlue,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final entry in guidance) ...[
+            if (entry != guidance.first) const SizedBox(height: 12),
+            Text(
+              entry.type == 'ASSIGNMENT'
+                  ? 'Assignment instructions'
+                  : 'Returned for further work',
+              style: AppTypography.bodyStyle(size: 13, weight: FontWeight.w600),
+            ),
+            if (entry.note?.isNotEmpty == true) ...[
+              const SizedBox(height: 4),
+              Text(
+                entry.note!
+                    .replaceFirst(RegExp(r'^Assigned to [^:]+:\s*'), '')
+                    .replaceFirst(
+                      RegExp(r'^Returned for further work:\s*'),
+                      '',
+                    ),
+                style: AppTypography.bodyStyle(
+                  size: 13.5,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ],
         ],
       ),

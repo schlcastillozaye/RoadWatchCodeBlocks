@@ -99,7 +99,13 @@ class ReportService
 
     public static function getHistory(string $id, ?array $actor): array
     {
-        self::getForViewer($id, $actor);
+        $report = self::getOrThrow($id);
+        if (!self::canViewReport($report, $actor) && !self::isPubliclyVisible((string) $report['moderationStatus'])) {
+            throw AppError::forbidden('You do not have access to this report.');
+        }
+        $canViewStaffNotes = ($actor['role'] ?? null) === 'ADMIN'
+            || (($actor['role'] ?? null) === 'MAINTENANCE_OFFICER'
+                && ($report['assignedOfficerId'] ?? null) === ($actor['id'] ?? null));
         $rows = Db::all(
             'SELECT h.*, u.`fullName` AS actor_fullName
              FROM `StatusHistory` h
@@ -108,7 +114,12 @@ class ReportService
              ORDER BY h.`createdAt` ASC',
             [$id]
         );
-        return array_map(static function (array $row): array {
+        return array_map(static function (array $row) use ($canViewStaffNotes): array {
+            $isStaffNote = $row['type'] === 'ASSIGNMENT'
+                || ($row['type'] === 'REPAIR' && $row['actorRole'] === 'ADMIN');
+            if ($isStaffNote && !$canViewStaffNotes) {
+                $row['note'] = null;
+            }
             $row['actor'] = !empty($row['actorId']) ? ['id' => $row['actorId'], 'fullName' => $row['actor_fullName']] : null;
             return Dto::history($row);
         }, $rows);

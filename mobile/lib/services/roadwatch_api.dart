@@ -334,10 +334,14 @@ class RoadWatchApi {
   Future<RoadReport> assignReport(
     String id, {
     required String officerId,
+    String? note,
   }) async {
     final json = await client.postJson(
       '/api/reports/$id/assign',
-      body: {'officerId': officerId},
+      body: {
+        'officerId': officerId,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      },
     );
     return RoadReport.fromJson(asMap(asMap(json)['report']));
   }

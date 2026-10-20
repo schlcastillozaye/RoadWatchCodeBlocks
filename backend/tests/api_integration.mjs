@@ -541,10 +541,18 @@ async function main() {
 
     const ok = await api('POST', `/api/reports/${reportId}/assign`, {
       token: adminToken,
-      json: { officerId: officer1Id, note: 'Please inspect', priority: 'HIGH' },
+      json: { officerId: officer1Id, note: 'Please inspect and document the damaged edge.', priority: 'HIGH' },
     });
     check('assign to officer 200 -> AWAITING_MAINTENANCE', ok.status === 200 && ok.body?.report?.repairStatus === 'AWAITING_MAINTENANCE', `status=${ok.status}`);
     check('assignment sets officer + priority', ok.body?.report?.assignedOfficer?.id === officer1Id && ok.body?.report?.priority === 'HIGH');
+
+    const officerAssignmentHistory = await api('GET', `/api/reports/${reportId}/history`, { token: officer1Token });
+    const citizenAssignmentHistory = await api('GET', `/api/reports/${reportId}/history`, { token: citizenToken });
+    check('assigned officer can retrieve administrator assignment instructions', officerAssignmentHistory.status === 200 &&
+      officerAssignmentHistory.body?.history?.some((item) => item.type === 'ASSIGNMENT' &&
+        item.note?.includes('Please inspect and document the damaged edge.')));
+    check('citizen report history does not disclose administrator assignment instructions', citizenAssignmentHistory.status === 200 &&
+      !citizenAssignmentHistory.body?.history?.some((item) => item.note?.includes('Please inspect and document the damaged edge.')));
 
     const notifications = await api('GET', '/api/maintenance/notifications', { token: officer1Token });
     const assignedNotification = notifications.body?.items?.find((item) => item.reportId === reportId);
@@ -732,6 +740,14 @@ async function main() {
       json: { decision: 'RETURN', reason: 'The repair edge is still uneven; please finish leveling it.' },
     });
     check('admin can return repair for more work', returned.status === 200 && returned.body?.report?.repairStatus === 'RETURNED_FOR_WORK', `status=${returned.status}`);
+
+    const officerReturnHistory = await api('GET', `/api/reports/${reportId}/history`, { token: officer1Token });
+    const citizenReturnHistory = await api('GET', `/api/reports/${reportId}/history`, { token: citizenToken });
+    check('assigned officer can retrieve administrator return feedback after reopening report', officerReturnHistory.status === 200 &&
+      officerReturnHistory.body?.history?.some((item) => item.toValue === 'RETURNED_FOR_WORK' &&
+        item.note?.includes('The repair edge is still uneven; please finish leveling it.')));
+    check('citizen history does not disclose private repair return feedback', citizenReturnHistory.status === 200 &&
+      !citizenReturnHistory.body?.history?.some((item) => item.note?.includes('The repair edge is still uneven; please finish leveling it.')));
 
     const citizenBeforeVerify = await api('GET', '/api/notifications', { token: citizenToken });
     check('citizen is not told repair is verified before admin approval', !citizenBeforeVerify.body?.items?.some((item) => item.reportId === reportId));

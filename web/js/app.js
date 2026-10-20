@@ -1822,10 +1822,20 @@
       </section>` : '';
     const historyItems = history.map((h) => {
       const submittedNotes = String(h.note || '').startsWith('Completion evidence submitted: ');
-      const title = h.type === 'REPAIR' && h.actorRole === 'MAINTENANCE_OFFICER'
-        ? (submittedNotes ? 'Officer completion notes' : 'Officer progress update')
-        : h.type === 'REPAIR' && h.actorRole === 'ADMIN' ? 'Admin repair verification' : h.type;
-      const note = submittedNotes ? String(h.note).slice('Completion evidence submitted: '.length) : h.note;
+      const title = h.type === 'ASSIGNMENT' && h.actorRole === 'ADMIN'
+        ? 'Administrator instructions'
+        : h.type === 'REPAIR' && h.actorRole === 'ADMIN' && h.toValue === 'RETURNED_FOR_WORK'
+          ? 'Administrator feedback'
+          : h.type === 'REPAIR' && h.actorRole === 'MAINTENANCE_OFFICER'
+            ? (submittedNotes ? 'Officer completion notes' : 'Officer progress update')
+            : h.type === 'REPAIR' && h.actorRole === 'ADMIN' ? 'Admin repair verification' : h.type;
+      const note = submittedNotes
+        ? String(h.note).slice('Completion evidence submitted: '.length)
+        : h.type === 'ASSIGNMENT' && h.actorRole === 'ADMIN'
+          ? String(h.note || '').replace(/^Assigned to [^:]+:\s*/, '')
+          : h.type === 'REPAIR' && h.actorRole === 'ADMIN' && h.toValue === 'RETURNED_FOR_WORK'
+            ? String(h.note || '').replace(/^Returned for further work:\s*/, '')
+            : h.note;
       const actor = h.actor && h.actor.fullName
         ? `<span class="block text-xs text-ink-3">${escapeHtml(h.actor.fullName)}${h.actorRole ? ` · ${escapeHtml(h.actorRole === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : h.actorRole === 'ADMIN' ? 'Administrator' : 'Citizen')}` : ''}</span>`
         : '';
@@ -1841,6 +1851,18 @@
         </div>
       </div>`;
     }).join('');
+    const adminGuidance = (isAdmin || isAssignedOfficer)
+      ? history.filter((h) => (h.type === 'ASSIGNMENT' && h.actorRole === 'ADMIN')
+        || (h.type === 'REPAIR' && h.actorRole === 'ADMIN' && h.toValue === 'RETURNED_FOR_WORK'))
+        .map((h) => {
+          const isAssignment = h.type === 'ASSIGNMENT';
+          const note = String(h.note || '')
+            .replace(/^Assigned to [^:]+:\s*/, '')
+            .replace(/^Returned for further work:\s*/, '');
+          if (!note) return '';
+          return `<li class="rw-admin-guidance-item"><strong>${isAssignment ? 'Assignment instructions' : 'Returned for further work'}</strong><p class="text-ink-2 text-sm mt-1 whitespace-pre-wrap">${escapeHtml(note)}</p></li>`;
+        }).filter(Boolean).join('')
+      : '';
 
     return `
       <div class="brand-card p-8 rounded-xl shadow-lg">
@@ -1889,6 +1911,12 @@
         <section class="brand-card p-6 rounded-xl shadow-sm mt-6 rw-completion-notes">
           <h2 class="font-bold text-navy text-lg mb-2">Officer completion notes</h2>
           <p class="text-ink-2 text-sm whitespace-pre-wrap">${escapeHtml(report.completionNotes)}</p>
+        </section>` : ''}
+
+      ${adminGuidance ? `
+        <section class="brand-card p-6 rounded-xl shadow-sm mt-6 rw-admin-guidance" aria-labelledby="rw-admin-guidance-title">
+          <h2 id="rw-admin-guidance-title" class="font-bold text-navy text-lg mb-3">Administrator guidance</h2>
+          <ul class="space-y-3">${adminGuidance}</ul>
         </section>` : ''}
 
       <div class="brand-card p-8 rounded-xl shadow-lg mt-6">
