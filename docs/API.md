@@ -259,6 +259,11 @@ Same visibility rules. Returns the audit-grade status timeline:
 }
 ```
 
+Assignment instructions and administrator repair feedback are staff-only. Their
+`note` value is returned to administrators and the report's assigned
+maintenance officer; it is `null` for citizens and other viewers. Status
+history remains available according to the report visibility rules above.
+
 ### `POST /api/reports/:id/photos`
 
 Auth required. **`multipart/form-data`**. Adds photos to an existing report.
