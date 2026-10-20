@@ -14,6 +14,7 @@ These cover most of the checklist below without manual clicking:
 | PHP API | `node backend/tests/api_integration.mjs` | All checks pass |
 | Schema | `php backend/database/migrate.php` | Applies idempotently |
 | Mobile | `cd mobile; flutter analyze; flutter test` | No analysis issues · all tests pass |
+| Web admin actions | `node web/tests/admin-actions-smoke.mjs` | Synthetic admin review and verification controls render and remain responsive; no live data is used |
 | Web | `node web/tests/e2e.mjs` | browser E2E (see script output) |
 
 > The section names below use the original Node (`npm run …`) commands. With the PHP

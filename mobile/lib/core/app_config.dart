@@ -16,8 +16,8 @@ class AppConfig {
   /// therefore with the Android `versionName`/`versionCode` of a release build).
   /// `test/version_test.dart` asserts the two agree, so the Profile screen can
   /// never advertise a version the APK was not built with.
-  static const String appVersion = '1.0.2';
-  static const String buildNumber = '4';
+  static const String appVersion = '1.0.3';
+  static const String buildNumber = '5';
 
   /// e.g. `1.0.1+2`.
   static String get versionLabel => '$appVersion+$buildNumber';

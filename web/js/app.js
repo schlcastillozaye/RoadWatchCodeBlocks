@@ -803,7 +803,7 @@
       <div class="max-w-7xl mx-auto px-6">
         <div class="admin-page-heading">
           <div>
-            <p class="admin-eyebrow">ROADWATCH MAP</p>
+            <p class="admin-eyebrow">ROADBLOCKS MAP</p>
             <h1 class="admin-page-title">Public report map</h1>
             <p class="admin-page-subtitle">Explore approved reports and their repair status.</p>
           </div>
@@ -859,7 +859,7 @@
     <section class="admin-workspace">
       <aside class="admin-sidebar" aria-label="${navLabel}">
         <div class="admin-sidebar-top">
-          <p class="admin-sidebar-heading">${role === 'ADMIN' ? 'ROADWATCH OPERATIONS' : `${roleName.toUpperCase()} WORKSPACE`}</p>
+          <p class="admin-sidebar-heading">${role === 'ADMIN' ? 'ROADBLOCKS OPERATIONS' : `${roleName.toUpperCase()} WORKSPACE`}</p>
           <button type="button" class="admin-sidebar-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-sidebar-nav">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
             <span>Workspace menu</span>
@@ -884,7 +884,7 @@
   const pageAdminDashboard = () => adminLayout('dashboard', `
     <div class="admin-page-heading">
       <div>
-        <p class="admin-eyebrow">ROADWATCH OPERATIONS</p>
+        <p class="admin-eyebrow">ROADBLOCKS OPERATIONS</p>
         <h1 id="admin-dashboard-title" class="admin-page-title">Dashboard</h1>
         <p class="admin-page-subtitle">A live overview of reports and repair activity.</p>
       </div>
@@ -939,7 +939,7 @@
   const pageAdminReports = () => adminLayout('reports', `
     <div class="admin-page-heading">
       <div>
-        <p class="admin-eyebrow">ROADWATCH OPERATIONS</p>
+        <p class="admin-eyebrow">ROADBLOCKS OPERATIONS</p>
         <h1 class="admin-page-title">Report management</h1>
         <p class="admin-page-subtitle">Search, review and manage submitted road reports.</p>
       </div>
@@ -986,7 +986,7 @@
   const pageAdminUsers = () => adminLayout('users', `
     <div class="admin-page-heading">
       <div>
-        <p class="admin-eyebrow">ROADWATCH OPERATIONS</p>
+        <p class="admin-eyebrow">ROADBLOCKS OPERATIONS</p>
         <h1 class="admin-page-title">Users</h1>
         <p class="admin-page-subtitle">Registered citizens, officers and administrators.</p>
       </div>
@@ -1768,12 +1768,12 @@
       && isAssignedOfficer;
     const canVerifyRepair = isAdmin && report.moderationStatus === 'APPROVED'
       && report.repairStatus === 'AWAITING_VERIFICATION';
-    const staffActions = (canModerate || canAssign || canMaintain) ? `
+    const staffActions = (canModerate || canAssign || canMaintain || canVerifyRepair) ? `
       <section class="brand-card rw-staff-actions mt-6">
         <div class="rw-staff-actions-heading">
           <div>
             <p class="rw-staff-eyebrow">${canModerate ? 'ADMIN REVIEW' : isAdmin ? 'ADMIN WORKSPACE' : 'MAINTENANCE WORKSPACE'}</p>
-            <h2>Staff actions</h2>
+            <h2>${isAdmin ? 'Admin actions' : 'Maintenance actions'}</h2>
             <p>${canModerate
               ? 'Review the report details and choose one moderation decision.'
               : isAdmin
