@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../admin/admin_users_screen.dart';
 import '../map/public_map_screen.dart';
 import '../profile/profile_screen.dart';
 import '../reports/my_reports_screen.dart';
+import '../reports/submit_report_screen.dart';
 import '../../models/enums.dart';
 import '../../state/auth_provider.dart';
 import 'home_screen.dart';
@@ -20,18 +22,41 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  void _goTo(int index) => setState(() => _index = index);
+  Future<void> _goTo(int index) async {
+    final user = context.read<AuthProvider>().user;
+    if (user?.isCitizen == true) {
+      if (index == 2) {
+        final created = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => const SubmitReportScreen()),
+        );
+        if (created == true && mounted) setState(() => _index = 0);
+        return;
+      }
+      setState(() => _index = index < 2 ? index : index - 1);
+      return;
+    }
+    setState(() => _index = index);
+  }
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
     final isStaff = user != null && user.role != UserRole.citizen;
+    final isAdmin = user?.isAdmin ?? false;
+    final isCitizen = user?.isCitizen ?? false;
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: isStaff
+        children: isAdmin
             ? [
-                StaffDashboardScreen(isAdmin: user.isAdmin),
+                const StaffDashboardScreen(isAdmin: true),
+                const PublicMapScreen(),
+                const AdminUsersScreen(),
+                const ProfileScreen(),
+              ]
+            : isStaff
+            ? [
+                StaffDashboardScreen(isAdmin: false),
                 const PublicMapScreen(),
                 const ProfileScreen(),
               ]
@@ -43,9 +68,32 @@ class _HomeShellState extends State<HomeShell> {
               ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
+        selectedIndex: isCitizen && _index >= 2 ? _index + 1 : _index,
         onDestinationSelected: _goTo,
-        destinations: isStaff
+        destinations: isAdmin
+            ? const [
+                NavigationDestination(
+                  icon: Icon(Icons.fact_check_outlined),
+                  selectedIcon: Icon(Icons.fact_check_rounded),
+                  label: 'Review',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.map_outlined),
+                  selectedIcon: Icon(Icons.map_rounded),
+                  label: 'Map',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.people_outline_rounded),
+                  selectedIcon: Icon(Icons.people_rounded),
+                  label: 'Users',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline_rounded),
+                  selectedIcon: Icon(Icons.person_rounded),
+                  label: 'Profile',
+                ),
+              ]
+            : isStaff
             ? [
                 NavigationDestination(
                   icon: Icon(
@@ -81,6 +129,11 @@ class _HomeShellState extends State<HomeShell> {
                   icon: Icon(Icons.map_outlined),
                   selectedIcon: Icon(Icons.map_rounded),
                   label: 'Map',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.add_circle_outline_rounded, size: 30),
+                  selectedIcon: Icon(Icons.add_circle_rounded, size: 32),
+                  label: 'Report',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.article_outlined),

@@ -38,11 +38,15 @@ class Auth
         if ($payload === null) {
             throw AppError::unauthenticated('Invalid or expired access token');
         }
+        $user = Db::one('SELECT `id`,`role`,`email`,`fullName`,`status` FROM `User` WHERE `id` = ?', [(string) ($payload['sub'] ?? '')]);
+        if ($user === null || $user['status'] !== 'ACTIVE') {
+            throw AppError::forbidden('This account is not active.');
+        }
         $auth = [
-            'id' => (string) ($payload['sub'] ?? ''),
-            'role' => (string) ($payload['role'] ?? 'CITIZEN'),
-            'email' => (string) ($payload['email'] ?? ''),
-            'fullName' => (string) ($payload['fullName'] ?? ''),
+            'id' => (string) $user['id'],
+            'role' => (string) $user['role'],
+            'email' => (string) $user['email'],
+            'fullName' => (string) $user['fullName'],
         ];
         Request::$auth = $auth;
         return $auth;
@@ -59,11 +63,15 @@ class Auth
         if ($payload === null || !isset($payload['sub'])) {
             return null;
         }
+        $user = Db::one('SELECT `id`,`role`,`email`,`fullName`,`status` FROM `User` WHERE `id` = ?', [(string) $payload['sub']]);
+        if ($user === null || $user['status'] !== 'ACTIVE') {
+            return null;
+        }
         $auth = [
-            'id' => (string) $payload['sub'],
-            'role' => (string) ($payload['role'] ?? 'CITIZEN'),
-            'email' => (string) ($payload['email'] ?? ''),
-            'fullName' => (string) ($payload['fullName'] ?? ''),
+            'id' => (string) $user['id'],
+            'role' => (string) $user['role'],
+            'email' => (string) $user['email'],
+            'fullName' => (string) $user['fullName'],
         ];
         Request::$auth = $auth;
         return $auth;

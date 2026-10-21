@@ -57,7 +57,9 @@ class AuthProvider extends ChangeNotifier {
   /// reached we restore the cached profile so a cold start without connectivity
   /// still shows their reports. A definitive auth failure clears the session.
   Future<AppUser?> _recoverOrClear(Object error) async {
-    final offline = error is ApiException && (error.isNetworkError || error.code == 'TIMEOUT');
+    final offline =
+        error is ApiException &&
+        (error.isNetworkError || error.code == 'TIMEOUT');
     if (offline) {
       final cached = await _api.client.tokens.readUserJson();
       if (cached != null) return AppUser.fromJson(cached);
@@ -91,6 +93,21 @@ class AuthProvider extends ChangeNotifier {
         phone: phone,
       );
       await _persist(session);
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  Future<void> updateProfile({required String fullName, String? phone}) async {
+    _setBusy(true);
+    try {
+      final updated = await _api.updateOwnProfile(
+        fullName: fullName,
+        phone: phone,
+      );
+      _user = updated;
+      await _api.client.tokens.saveUserJson(updated.toJson());
+      notifyListeners();
     } finally {
       _setBusy(false);
     }

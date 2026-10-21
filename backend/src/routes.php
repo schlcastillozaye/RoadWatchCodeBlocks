@@ -32,6 +32,7 @@ Router::post('/api/reports/{id}/photos', [ReportsController::class, 'addPhotos']
 Router::patch('/api/reports/{id}/moderation', [ReportsController::class, 'moderation']);
 Router::post('/api/reports/{id}/assign', [ReportsController::class, 'assign']);
 Router::patch('/api/reports/{id}/repair', [ReportsController::class, 'repair']);
+Router::post('/api/reports/{id}/repair-evidence', [ReportsController::class, 'repairEvidence']);
 Router::patch('/api/reports/{id}/verification', [ReportsController::class, 'verification']);
 Router::delete('/api/admin/reports/{id}', [ReportsController::class, 'destroyAsAdmin']);
 Router::delete('/api/reports/{id}', [ReportsController::class, 'destroy']);

@@ -232,15 +232,20 @@ class ApiClient {
     return this.json(`/api/reports/${id}/assign`, 'POST', input).then((r) => r.report);
   }
 
-  /**
-   * Uploads any attached photos first (multipart, dedicated endpoint), then
-   * applies the repair update as JSON — mirrors the React app and what
-   * maintenance staff do in the field.
-   */
+  /** Submits completion notes and after-photos atomically when verifying. */
   async updateRepair(id, input) {
     const { photos, ...fields } = input;
 
     if (photos && photos.length > 0) {
+      if (fields.repairStatus === 'AWAITING_VERIFICATION') {
+        const evidence = new FormData();
+        evidence.append('completionNotes', fields.completionNotes || '');
+        for (const file of photos) evidence.append('afterPhotos[]', file);
+        return this.request(`/api/reports/${id}/repair-evidence`, {
+          method: 'POST',
+          body: evidence,
+        }).then((r) => r.report);
+      }
       const kind = fields.repairStatus === 'COMPLETED' ? 'AFTER' : 'PROGRESS';
       const form = new FormData();
       form.set('kind', kind);

@@ -623,9 +623,9 @@
           <a href="/map" data-nav="/map" class="rw-nav-link${active('/map')}">Map</a>
           ${u ? `
             <a href="/reports" data-nav="/reports" class="rw-nav-link${active('/reports')}">My Reports</a>
-            <a href="/submit-report" data-nav="/submit-report" class="rw-nav-link rw-nav-primary${active('/submit-report')}">Report an issue</a>
+            <a href="/submit-report" data-nav="/submit-report" class="rw-nav-link rw-nav-primary${active('/submit-report')}" aria-label="Report an issue"><span class="rw-plus-mark" aria-hidden="true">+</span><span class="rw-plus-label">Report</span></a>
             ${roleLinks}
-            <span class="rw-nav-user">${firstName}</span>
+            <a href="/profile" data-nav="/profile" class="rw-nav-user${active('/profile')}" aria-label="Edit profile for ${firstName}">${firstName}</a>
             <button id="nav-logout" type="button" class="rw-nav-logout">Logout</button>
           ` : `
             <a href="/login" data-nav="/login" class="rw-nav-login">Sign in</a>
@@ -646,10 +646,7 @@
           <h1 class="admin-page-title">Welcome, ${firstName}</h1>
           <p class="admin-page-subtitle">Track your reports and the work happening in your community.</p>
         </div>
-        <div class="rw-dashboard-actions">
-          <button type="button" class="btn btn-secondary btn-sm" data-citizen-refresh>Refresh data</button>
-          <a href="/submit-report" data-nav="/submit-report" class="btn btn-primary btn-sm">Report an issue</a>
-        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-citizen-refresh>Refresh data</button>
       </div>
       <div class="admin-stat-grid" aria-label="Your report statistics">
         ${[
@@ -690,10 +687,41 @@
           </div>
         </div>
         <div class="rw-action-grid">
-          <a href="/submit-report" data-nav="/submit-report" class="rw-action-card"><strong>Report a road issue</strong><span>Share a location, details and photo.</span></a>
           <a href="/reports" data-nav="/reports" class="rw-action-card"><strong>Track my reports</strong><span>Review moderation and repair progress.</span></a>
           <a href="/map" data-nav="/map" class="rw-action-card"><strong>Explore the public map</strong><span>See approved reports near the community.</span></a>
         </div>
+      </section>
+    `);
+  };
+
+  const pageProfile = () => {
+    const account = getUser();
+    const role = account && account.role !== 'CITIZEN' ? account.role : 'CITIZEN';
+    return workspaceLayout(role, 'profile', `
+      <section class="workspace-page">
+        <div class="admin-page-heading">
+          <div>
+            <p class="admin-eyebrow">ACCOUNT SETTINGS</p>
+            <h1 class="admin-page-title">My profile</h1>
+            <p class="admin-page-subtitle">Update your name and contact phone. Account role and status cannot be changed here.</p>
+          </div>
+        </div>
+        <section class="admin-panel max-w-2xl">
+          <form id="profile-form" class="space-y-4">
+            <label class="block text-sm font-medium text-ink-2" for="profile-name">Full name
+              <input id="profile-name" name="fullName" type="text" minlength="2" maxlength="120" required class="brand-input mt-2" value="${escapeHtml(account?.fullName || '')}" />
+            </label>
+            <label class="block text-sm font-medium text-ink-2" for="profile-phone">Phone (optional)
+              <input id="profile-phone" name="phone" type="tel" maxlength="30" class="brand-input mt-2" value="${escapeHtml(account?.phone || '')}" />
+            </label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div><span class="block text-sm font-medium text-ink-2 mb-1">Email</span><p class="text-ink-2 break-all">${escapeHtml(account?.email || '')}</p></div>
+              <div><span class="block text-sm font-medium text-ink-2 mb-1">Role</span><p class="text-ink-2">${escapeHtml(account?.role === 'ADMIN' ? 'Administrator' : account?.role === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : 'Citizen')}</p></div>
+            </div>
+            <div id="profile-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+            <button type="submit" class="btn btn-primary">Save profile</button>
+          </form>
+        </section>
       </section>
     `);
   };
@@ -707,7 +735,6 @@
             <h1 class="admin-page-title">My reports</h1>
             <p class="admin-page-subtitle">Review each report’s status and follow its progress.</p>
           </div>
-          <button id="btn-new-report" data-nav="/submit-report" class="btn btn-primary">Report a road issue</button>
         </div>
         <div id="reports-list" class="admin-panel">
           <div class="loading-block"><span class="spinner"></span> Loading your reports…</div>
@@ -840,18 +867,21 @@
           ['reports', '/admin/reports', 'Reports'],
           ['map', '/map', 'Public map'],
           ['users', '/admin/users', 'Users'],
-        ]
+        ['profile', '/profile', 'Profile'],
+      ]
       : role === 'MAINTENANCE_OFFICER'
         ? [
             ['dashboard', '/assignments', 'My dashboard'],
             ['assignments', '#assignments-list', 'My assignments'],
             ['map', '/map', 'Public map'],
+            ['profile', '/profile', 'Profile'],
           ]
         : [
             ['dashboard', '/', 'Dashboard'],
             ['reports', '/reports', 'My reports'],
             ['submit-report', '/submit-report', 'Report an issue'],
             ['map', '/map', 'Public map'],
+            ['profile', '/profile', 'Profile'],
           ];
     const roleName = role === 'ADMIN' ? 'Admin' : role === 'MAINTENANCE_OFFICER' ? 'Maintenance' : 'Citizen';
     const navLabel = `${roleName} navigation`;
@@ -1007,6 +1037,14 @@
             <option value="ADMIN">Administrator</option>
           </select>
         </label>
+        <label>
+          <span class="sr-only">Filter users by status</span>
+          <select class="brand-input" name="status">
+            <option value="">All statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="SUSPENDED">Deactivated</option>
+          </select>
+        </label>
         <button class="btn btn-primary btn-sm" type="submit">Search users</button>
       </form>
       <div id="admin-users-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
@@ -1014,6 +1052,23 @@
         <div class="loading-block"><span class="spinner"></span> Loading users…</div>
       </div>
     </section>
+    <dialog id="admin-user-dialog" class="rw-dialog">
+      <form id="admin-user-edit-form" class="rw-dialog-content">
+        <h2 class="admin-panel-title">Edit user details</h2>
+        <input type="hidden" name="id" />
+        <label class="block text-sm font-medium text-ink-2 mb-3" for="admin-user-name">Full name
+          <input id="admin-user-name" name="fullName" required minlength="2" maxlength="120" class="brand-input mt-2" />
+        </label>
+        <label class="block text-sm font-medium text-ink-2 mb-3" for="admin-user-phone">Phone (optional)
+          <input id="admin-user-phone" name="phone" maxlength="30" class="brand-input mt-2" />
+        </label>
+        <p class="text-sm text-slate-tint mb-4">Email, role, and administrator accounts are protected.</p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn btn-secondary" data-user-dialog-cancel>Cancel</button>
+          <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+      </form>
+    </dialog>
   `);
 
   const pageAssignments = () => workspaceLayout('MAINTENANCE_OFFICER', 'dashboard', `
@@ -1081,6 +1136,7 @@
     { path: '/login', name: 'login', page: pageLogin },
     { path: '/register', name: 'register', page: pageRegister },
     { path: '/reports', name: 'reports', page: pageReports, requireAuth: true },
+    { path: '/profile', name: 'profile', page: pageProfile, requireAuth: true },
     { path: '/report/:id', name: 'report-detail', page: pageReportDetail, requireAuth: true },
     { path: '/submit-report', name: 'submit-report', page: pageSubmitReport, requireAuth: true },
     { path: '/map', name: 'map', page: pageMap, requireAuth: true },
@@ -1175,6 +1231,7 @@
       case 'login': initLoginPage(); break;
       case 'register': initRegisterPage(); break;
       case 'reports': await initReportsPage(); break;
+      case 'profile': initProfilePage(); break;
       case 'report-detail': await initReportDetailPage(params); break;
       case 'submit-report': initSubmitReportPage(); break;
       case 'map': await initMapPage(); break;
@@ -1735,18 +1792,25 @@
       setBusy(submit, true, 'Uploading and submitting…');
       try {
         const upload = new FormData();
-        upload.append('kind', 'AFTER');
+        upload.append('completionNotes', notes);
         files.forEach((file) => upload.append('afterPhotos[]', file));
-        await api(`/reports/${encodeURIComponent(report.id)}/photos`, { method: 'POST', body: upload });
-        await api(`/reports/${encodeURIComponent(report.id)}/repair`, {
-          method: 'PATCH',
-          body: JSON.stringify({ repairStatus: 'AWAITING_VERIFICATION', completionNotes: notes }),
-        });
+        await api(`/reports/${encodeURIComponent(report.id)}/repair-evidence`, { method: 'POST', body: upload });
         notify('Completion evidence submitted for admin verification.');
         await refresh();
       } catch (err) {
-        setActionFeedback(`Could not complete repair: ${err.message}`, 'error');
-        notify(`Could not complete repair: ${err.message}`);
+        try {
+          const current = await api(`/reports/${encodeURIComponent(report.id)}`);
+          if (current.report?.repairStatus === 'AWAITING_VERIFICATION') {
+            notify('Evidence was submitted for admin verification.');
+            await refresh();
+            return;
+          }
+        } catch (_) {
+          // Keep the original submission error when the follow-up status check is unavailable.
+        }
+        setActionFeedback(`Evidence was not confirmed as submitted: ${err.message}`, 'error');
+        notify(`Could not submit repair evidence: ${err.message}`);
+      } finally {
         setBusy(submit, false);
       }
     });
@@ -2441,35 +2505,55 @@
   };
 
   const initAdminUsersPage = async () => {
+    let loadedAccounts = [];
+    let currentPage = 1;
+    let totalPages = 1;
     const load = async () => {
       const host = q('#admin-users-list');
       const feedback = 'admin-users-feedback';
       if (!host) return;
       const form = q('#admin-user-filters');
       const values = form ? new FormData(form) : new FormData();
-      const params = new URLSearchParams({ page: '1', pageSize: '50' });
+      const params = new URLSearchParams({ page: String(currentPage), pageSize: '50' });
       const search = String(values.get('search') || '').trim();
       const role = String(values.get('role') || '');
+      const status = String(values.get('status') || '');
       if (search) params.set('search', search);
       if (role) params.set('role', role);
+      if (status) params.set('status', status);
       host.innerHTML = '<div class="loading-block"><span class="spinner"></span> Loading users…</div>';
       try {
         const data = await api(`/users?${params.toString()}`);
         const items = data.items || [];
+        loadedAccounts = items;
+        totalPages = Number(data.totalPages) || 1;
         if (items.length === 0) {
           html(host, '<div class="empty-state admin-empty"><h3 class="text-xl font-bold text-navy mb-2">No users found</h3><p>Try a different name, email or role filter.</p></div>');
           return;
         }
         html(host, `<div class="admin-table-wrap"><table class="admin-table admin-user-table">
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Account status</th><th>Joined</th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Account status</th><th>Joined</th><th>Actions</th></tr></thead>
           <tbody>${items.map((account) => `<tr>
             <td class="admin-user-name">${escapeHtml(account.fullName)}</td>
             <td>${escapeHtml(account.email)}</td>
+            <td>${escapeHtml(account.phone || '—')}</td>
             <td>${escapeHtml(account.role === 'ADMIN' ? 'Administrator' : account.role === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : 'Citizen')}</td>
-            <td>${escapeHtml(account.status || 'ACTIVE')}</td>
+            <td>${escapeHtml(account.status === 'SUSPENDED' ? 'Deactivated' : 'Active')}</td>
             <td>${escapeHtml(adminDate(account.createdAt))}</td>
+            <td>${account.role === 'ADMIN'
+              ? '<span class="text-slate-tint text-xs">Protected account</span>'
+              : `<div class="flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-secondary btn-sm" data-user-edit="${escapeHtml(account.id)}">Edit</button>
+                  <button type="button" class="btn ${account.status === 'SUSPENDED' ? 'btn-secondary' : 'btn-danger'} btn-sm" data-user-status="${escapeHtml(account.id)}" data-next-status="${account.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED'}">${account.status === 'SUSPENDED' ? 'Reactivate' : 'Deactivate'}</button>
+                </div>`}</td>
           </tr>`).join('')}</tbody></table></div>
-          <div class="admin-pagination"><span>${data.total || items.length} user${Number(data.total) === 1 ? '' : 's'}</span></div>`);
+          <div class="admin-pagination">
+            <span>${data.total || items.length} user${Number(data.total) === 1 ? '' : 's'} · Page ${currentPage} of ${totalPages}</span>
+            <div class="flex gap-2">
+              <button type="button" class="btn btn-secondary btn-sm" data-user-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''}>Previous</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-user-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''}>Next</button>
+            </div>
+          </div>`);
       } catch (err) {
         html(host, `<div class="admin-error-block">Could not load users. ${escapeHtml(err.message)}</div>`);
         setAdminFeedback(feedback, 'User data could not be loaded. Retry when the API is available.', 'error');
@@ -2478,12 +2562,101 @@
     await load();
     on(q('#admin-user-filters'), 'submit', (event) => {
       event.preventDefault();
+      currentPage = 1;
       setAdminFeedback('admin-users-feedback', '');
       void load();
     });
     on(q('[data-admin-refresh]'), 'click', () => {
       setAdminFeedback('admin-users-feedback', '');
       void load();
+    });
+
+    const host = q('#admin-users-list');
+    const dialog = q('#admin-user-dialog');
+    const editForm = q('#admin-user-edit-form');
+    on(host, 'click', (event) => {
+      const pageButton = event.target.closest('[data-user-page]');
+      const editButton = event.target.closest('[data-user-edit]');
+      const statusButton = event.target.closest('[data-user-status]');
+      if (pageButton && !pageButton.disabled) {
+        currentPage = Number(pageButton.dataset.userPage);
+        void load();
+      } else if (editButton) {
+        const account = loadedAccounts.find((item) => item.id === editButton.dataset.userEdit);
+        if (!account || account.role === 'ADMIN' || !dialog) return;
+        editForm.elements.id.value = account.id;
+        editForm.elements.fullName.value = account.fullName || '';
+        editForm.elements.phone.value = account.phone || '';
+        dialog.showModal();
+      } else if (statusButton) {
+        const account = loadedAccounts.find((item) => item.id === statusButton.dataset.userStatus);
+        if (!account || account.role === 'ADMIN') return;
+        const nextStatus = statusButton.dataset.nextStatus;
+        const action = nextStatus === 'SUSPENDED' ? 'deactivate' : 'reactivate';
+        if (!window.confirm(`Confirm you want to ${action} ${account.fullName}'s account? ${nextStatus === 'SUSPENDED' ? 'Their reports and history will be preserved.' : ''}`)) return;
+        statusButton.disabled = true;
+        api(`/users/${encodeURIComponent(account.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: nextStatus }),
+        }).then(async () => {
+          setAdminFeedback('admin-users-feedback', `Account ${action}d successfully.`, 'success');
+          await load();
+        }).catch((error) => {
+          setAdminFeedback('admin-users-feedback', `Could not ${action} account: ${error.message}`, 'error');
+          statusButton.disabled = false;
+        });
+      }
+    });
+    on(q('[data-user-dialog-cancel]'), 'click', () => dialog?.close());
+    on(editForm, 'submit', async (event) => {
+      event.preventDefault();
+      if (!editForm.reportValidity()) return;
+      const button = editForm.querySelector('[type="submit"]');
+      setBusy(button, true, 'Saving…');
+      try {
+        const values = new FormData(editForm);
+        await api(`/users/${encodeURIComponent(String(values.get('id') || ''))}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fullName: String(values.get('fullName') || '').trim(),
+            phone: String(values.get('phone') || '').trim(),
+          }),
+        });
+        dialog.close();
+        setAdminFeedback('admin-users-feedback', 'User details updated.', 'success');
+        await load();
+      } catch (error) {
+        setAdminFeedback('admin-users-feedback', `Could not update user: ${error.message}`, 'error');
+      } finally {
+        setBusy(button, false);
+      }
+    });
+  };
+
+  const initProfilePage = () => {
+    const form = q('#profile-form');
+    on(form, 'submit', async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const button = form.querySelector('[type="submit"]');
+      setBusy(button, true, 'Saving…');
+      try {
+        const values = new FormData(form);
+        const data = await api('/users/me', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fullName: String(values.get('fullName') || '').trim(),
+            phone: String(values.get('phone') || '').trim(),
+          }),
+        });
+        setUser(data.user);
+        q('.rw-nav-user').textContent = String(data.user.fullName || '').split(' ')[0] || 'Profile';
+        setAdminFeedback('profile-feedback', 'Your profile was updated.', 'success');
+      } catch (error) {
+        setAdminFeedback('profile-feedback', `Could not save your profile: ${error.message}`, 'error');
+      } finally {
+        setBusy(button, false);
+      }
     });
   };
 

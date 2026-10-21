@@ -12,6 +12,7 @@ import 'package:roadwatch/services/roadwatch_api.dart';
 import 'package:roadwatch/state/auth_provider.dart';
 import 'package:roadwatch/state/theme_provider.dart';
 import 'package:roadwatch/theme/app_theme.dart';
+import 'package:roadwatch/theme/roadwatch_palette.dart';
 import 'package:roadwatch/widgets/brand_logo.dart';
 
 /// Layout coverage for the sign-in screen: the lockup must match the web login
@@ -39,11 +40,13 @@ void main() {
   });
 
   Widget app(ThemeMode mode, {double keyboardInset = 0}) {
-    final api = RoadWatchApi(ApiClient(
-      tokenStore: TokenStore(),
-      httpClient: MockClient((_) async => http.Response('{}', 200)),
-      baseUrl: 'http://example.test',
-    ));
+    final api = RoadWatchApi(
+      ApiClient(
+        tokenStore: TokenStore(),
+        httpClient: MockClient((_) async => http.Response('{}', 200)),
+        baseUrl: 'http://example.test',
+      ),
+    );
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider(api)),
@@ -55,9 +58,8 @@ void main() {
         themeMode: mode,
         home: Builder(
           builder: (context) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              viewInsets: EdgeInsets.only(bottom: keyboardInset),
-            ),
+            data: MediaQuery.of(context)
+                .copyWith(viewInsets: EdgeInsets.only(bottom: keyboardInset)),
             child: const LoginScreen(),
           ),
         ),
@@ -65,28 +67,38 @@ void main() {
     );
   }
 
-  Future<void> pumpAt(WidgetTester tester, Size size, ThemeMode mode, {double keyboardInset = 0}) async {
+  Future<void> pumpAt(
+    WidgetTester tester,
+    Size size,
+    ThemeMode mode, {
+    double keyboardInset = 0,
+  }) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(app(mode, keyboardInset: keyboardInset));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the sign-in lockup is sized like the web login, not the splash', (tester) async {
-    await pumpAt(tester, phone, ThemeMode.light);
+  testWidgets(
+    'the sign-in lockup is sized like the web login, not the splash',
+    (tester) async {
+      await pumpAt(tester, phone, ThemeMode.light);
 
-    expect(find.byType(BrandLogo), findsOneWidget);
-    expect(find.text('RoadBlocks'), findsOneWidget);
-    expect(find.text('by Code Blocks Inc.'), findsOneWidget);
+      expect(find.byType(BrandLogo), findsOneWidget);
+      expect(find.text('RoadBlocks'), findsOneWidget);
+      expect(find.text('by Code Blocks Inc.'), findsOneWidget);
 
-    // The web `.rw-auth-brand` lockup is ~47px tall. The previous
-    // `LogoSize.large` lockup rendered ~113px and dominated the screen.
-    final size = tester.getSize(find.byType(BrandLogo));
-    expect(size.height, lessThan(60));
-    expect(size.height, greaterThan(30));
-  });
+      // The web `.rw-auth-brand` lockup is ~47px tall. The previous
+      // `LogoSize.large` lockup rendered ~113px and dominated the screen.
+      final size = tester.getSize(find.byType(BrandLogo));
+      expect(size.height, lessThan(60));
+      expect(size.height, greaterThan(30));
+    },
+  );
 
-  testWidgets('the whole form fits a 375x667 phone without scrolling', (tester) async {
+  testWidgets('the whole form fits a 375x667 phone without scrolling', (
+    tester,
+  ) async {
     await pumpAt(tester, phone, ThemeMode.light);
 
     expect(tester.takeException(), isNull);
@@ -97,19 +109,57 @@ void main() {
     expect(bottom, lessThanOrEqualTo(phone.height));
   });
 
-  testWidgets('a small screen with the keyboard open does not overflow', (tester) async {
-    await pumpAt(tester, const Size(320, 568), ThemeMode.light, keyboardInset: 280);
+  testWidgets('a small screen with the keyboard open does not overflow', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      const Size(320, 568),
+      ThemeMode.light,
+      keyboardInset: 280,
+    );
 
     expect(tester.takeException(), isNull);
     expect(find.byType(BrandLogo), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
   });
 
-  testWidgets('dark mode keeps the login form available without overflow', (tester) async {
+  testWidgets('dark mode keeps the login form available without overflow', (
+    tester,
+  ) async {
     await pumpAt(tester, phone, ThemeMode.dark);
 
     expect(find.text('Sign in to continue'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'theme changes the full login surface and preserves primary button ink',
+    (tester) async {
+      await pumpAt(tester, phone, ThemeMode.light);
+      final lightScaffold = tester.widget<Scaffold>(
+        find.byType(Scaffold).first,
+      );
+      expect(lightScaffold.backgroundColor, RoadWatchPalette.light.sheet);
+      final lightButtonStyle = AppTheme.light().elevatedButtonTheme.style!;
+      expect(
+        lightButtonStyle.foregroundColor!.resolve({WidgetState.pressed}),
+        RoadWatchPalette.light.onNavy,
+      );
+
+      await pumpAt(tester, phone, ThemeMode.dark);
+      final darkScaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
+      expect(darkScaffold.backgroundColor, RoadWatchPalette.dark.sheet);
+      final darkButtonStyle = AppTheme.dark().elevatedButtonTheme.style!;
+      expect(
+        darkButtonStyle.foregroundColor!.resolve({WidgetState.pressed}),
+        RoadWatchPalette.dark.navy,
+      );
+      expect(
+        darkButtonStyle.foregroundColor!.resolve({WidgetState.disabled}),
+        RoadWatchPalette.dark.ink,
+      );
+    },
+  );
 }

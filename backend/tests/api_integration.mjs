@@ -697,19 +697,33 @@ async function main() {
     });
     check('submit without after photo 422 (officer)', completeNoPhoto.status === 422, `status=${completeNoPhoto.status}`);
 
-    // Officer uploads evidence, then submits for admin review.
-    const addAfter = await api('POST', `/api/reports/${reportId}/photos`, {
+    const evidenceNoNotes = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
       token: officer1Token,
-      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+      form: pngForm({}, 'afterPhotos'),
     });
-    check('officer can add AFTER photo 201', addAfter.status === 201, `status=${addAfter.status}`);
+    check('atomic evidence submission requires completion notes', evidenceNoNotes.status === 422, `status=${evidenceNoNotes.status}`);
 
-    const submitted = await api('PATCH', `/api/reports/${reportId}/repair`, {
+    const evidenceNoPhotoForm = new FormData();
+    evidenceNoPhotoForm.append('completionNotes', 'Filled and levelled the pothole completely.');
+    const evidenceNoPhoto = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
       token: officer1Token,
-      json: { repairStatus: 'AWAITING_VERIFICATION', completionNotes: 'Filled and levelled the pothole completely.' },
+      form: evidenceNoPhotoForm,
     });
-    check('officer submits notes + after photo for verification', submitted.status === 200 && submitted.body?.report?.repairStatus === 'AWAITING_VERIFICATION', `status=${submitted.status}`);
+    check('atomic evidence submission requires a new after photo', evidenceNoPhoto.status === 422, `status=${evidenceNoPhoto.status}`);
+
+    const submitted = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
+      token: officer1Token,
+      form: pngForm({ completionNotes: 'Filled and levelled the pothole completely.' }, 'afterPhotos'),
+    });
+    check('officer submits notes + after photo atomically for verification', submitted.status === 200 && submitted.body?.report?.repairStatus === 'AWAITING_VERIFICATION', `status=${submitted.status}`);
+    check('atomic evidence response includes persisted after photo', submitted.body?.report?.photos?.some((photo) => photo.kind === 'AFTER'));
     check('officer submission does not mark verified completion', !submitted.body?.report?.completedAt);
+
+    const duplicateSubmission = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
+      token: officer1Token,
+      form: pngForm({ completionNotes: 'Duplicate repair submission attempt.' }, 'afterPhotos'),
+    });
+    check('duplicate evidence submission cannot transition an already pending report', duplicateSubmission.status === 409, `status=${duplicateSubmission.status}`);
 
     const adminNotifications = await api('GET', '/api/notifications', { token: adminToken });
     check(
@@ -821,6 +835,28 @@ async function main() {
     const officers = await api('GET', '/api/users/officers', { token: adminToken });
     check('admin lists officer picker 200', officers.status === 200 && Array.isArray(officers.body?.officers), `status=${officers.status}`);
 
+    const admins = await api('GET', '/api/users?role=ADMIN', { token: adminToken });
+    check('user DTOs do not expose password or token fields', admins.status === 200 &&
+      admins.body?.items?.every((account) => !('passwordHash' in account) && !('password' in account) && !('accessToken' in account)));
+    for (const adminAccount of admins.body?.items ?? []) {
+      const protectedUpdate = await api('PATCH', `/api/users/${adminAccount.id}`, {
+        token: adminToken,
+        json: { fullName: 'Should not change', status: 'SUSPENDED' },
+      });
+      check('admin account cannot be edited or deactivated through user management', protectedUpdate.status === 403);
+      const protectedReset = await api('POST', `/api/users/${adminAccount.id}/reset-password`, {
+        token: adminToken,
+        json: { newPassword: 'ResetPassw0rd!' },
+      });
+      check('admin password cannot be reset through user management', protectedReset.status === 403);
+    }
+
+    const createAdmin = await api('POST', '/api/users', {
+      token: adminToken,
+      json: { fullName: 'Another Admin', email: `admin.test.${stamp}@example.com`, password: PW, role: 'ADMIN' },
+    });
+    check('ordinary admin user creation cannot create administrator role', createAdmin.status === 422, `status=${createAdmin.status}`);
+
     const email = `it.officer.${stamp}@example.com`;
     const created = await api('POST', '/api/users', {
       token: adminToken,
@@ -841,13 +877,21 @@ async function main() {
     const selfSuspend = await api('PATCH', `/api/users/${citizenId}`, { token: adminToken, json: { status: 'SUSPENDED' } });
     check('admin can suspend a user 200', selfSuspend.status === 200 && selfSuspend.body?.user?.status === 'SUSPENDED', `status=${selfSuspend.status}`);
 
+    const suspendedAccess = await api('GET', '/api/users/me', { token: citizenToken });
+    check('suspension immediately invalidates existing access tokens', suspendedAccess.status === 403, `status=${suspendedAccess.status}`);
     const suspendedLogin = await login(citizenEmail, PW);
     check('suspended user cannot log in 403', suspendedLogin.status === 403, `status=${suspendedLogin.status}`);
     await api('PATCH', `/api/users/${citizenId}`, { token: adminToken, json: { status: 'ACTIVE' } });
 
     // self-service profile
-    const meUpdate = await api('PATCH', '/api/users/me', { token: citizen2Token, json: { fullName: 'IT Citizen Two Updated' } });
-    check('user updates own profile 200', meUpdate.status === 200 && meUpdate.body?.user?.fullName === 'IT Citizen Two Updated', `status=${meUpdate.status}`);
+    const meUpdate = await api('PATCH', '/api/users/me', {
+      token: citizen2Token,
+      json: { fullName: 'IT Citizen Two Updated', phone: '+63 912 345 6789', role: 'ADMIN', status: 'SUSPENDED' },
+    });
+    check('user updates only own profile fields', meUpdate.status === 200 &&
+      meUpdate.body?.user?.fullName === 'IT Citizen Two Updated' &&
+      meUpdate.body?.user?.phone === '+63 912 345 6789' &&
+      meUpdate.body?.user?.role === 'CITIZEN' && meUpdate.body?.user?.status === 'ACTIVE', `status=${meUpdate.status}`);
 
     const wrongCurrent = await api('POST', '/api/users/me/password', {
       token: citizen2Token,

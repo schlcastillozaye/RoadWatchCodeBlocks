@@ -254,11 +254,7 @@ class ApiClient {
     return this.json<{ report: Report }>(`/api/reports/${id}/assign`, 'POST', input).then((r) => r.report);
   }
 
-  /**
-   * Uploads any attached photos first (multipart, dedicated endpoint), then
-   * applies the repair update as JSON. Mirrors what maintenance staff do in the
-   * field: photograph the work, then record the status change.
-   */
+  /** Submits notes and after-photos atomically when requesting verification. */
   async updateRepair(
     id: string,
     input: {
@@ -271,11 +267,19 @@ class ApiClient {
     const { photos, ...fields } = input;
 
     if (photos && photos.length > 0) {
-      const kind = fields.repairStatus === 'AWAITING_VERIFICATION' ? 'AFTER' : 'PROGRESS';
+      if (fields.repairStatus === 'AWAITING_VERIFICATION') {
+        const evidence = new FormData();
+        evidence.set('completionNotes', fields.completionNotes ?? '');
+        for (const file of photos) evidence.append('afterPhotos[]', file);
+        return this.request<{ report: Report }>(`/api/reports/${id}/repair-evidence`, {
+          method: 'POST',
+          body: evidence,
+        }).then((r) => r.report);
+      }
+      const kind = 'PROGRESS';
       const form = new FormData();
       form.set('kind', kind);
-      const fieldName = kind === 'AFTER' ? 'afterPhotos' : 'progressPhotos';
-      for (const file of photos) form.append(fieldName, file);
+      for (const file of photos) form.append('progressPhotos', file);
       await this.request<{ report: Report }>(`/api/reports/${id}/photos`, { method: 'POST', body: form });
     }
 

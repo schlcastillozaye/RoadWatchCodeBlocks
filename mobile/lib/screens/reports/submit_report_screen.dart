@@ -74,14 +74,20 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       final bytes = await file.readAsBytes();
       if (!mounted) return;
       setState(() {
-        _photos.add(_PickedPhoto(
-          name: file.name.isNotEmpty ? file.name : 'photo_${_photos.length + 1}.jpg',
-          bytes: bytes,
-          size: bytes.length,
-        ));
+        _photos.add(
+          _PickedPhoto(
+            name: file.name.isNotEmpty
+                ? file.name
+                : 'photo_${_photos.length + 1}.jpg',
+            bytes: bytes,
+            size: bytes.length,
+          ),
+        );
       });
     } catch (_) {
-      if (mounted) _snack('Could not read the selected image. Please try another.');
+      if (mounted) {
+        _snack('Could not read the selected image. Please try another.');
+      }
     }
   }
 
@@ -130,24 +136,32 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
 
     try {
       final report = await context.read<MyReportsProvider>().submit(
-            title: _title.text.trim(),
-            description: _description.text.trim(),
-            category: _category,
-            categoryOther: _category == IssueCategory.other ? _categoryOther.text.trim() : null,
-            priority: _priority,
-            latitude: _location!.latitude,
-            longitude: _location!.longitude,
-            addressText: _address.text.trim().isEmpty ? _location!.address : _address.text.trim(),
-            areaLabel: _location!.areaLabel,
-            photos: [
-              for (final photo in _photos)
-                UploadFile(field: 'photos', bytes: photo.bytes, filename: photo.name),
-            ],
-            onProgress: (sent, total) {
-              if (!mounted || total <= 0) return;
-              setState(() => _progress = (sent / total).clamp(0.0, 1.0));
-            },
-          );
+        title: _title.text.trim(),
+        description: _description.text.trim(),
+        category: _category,
+        categoryOther: _category == IssueCategory.other
+            ? _categoryOther.text.trim()
+            : null,
+        priority: _priority,
+        latitude: _location!.latitude,
+        longitude: _location!.longitude,
+        addressText: _address.text.trim().isEmpty
+            ? _location!.address
+            : _address.text.trim(),
+        areaLabel: _location!.areaLabel,
+        photos: [
+          for (final photo in _photos)
+            UploadFile(
+              field: 'photos',
+              bytes: photo.bytes,
+              filename: photo.name,
+            ),
+        ],
+        onProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          setState(() => _progress = (sent / total).clamp(0.0, 1.0));
+        },
+      );
 
       if (!mounted) return;
       setState(() => _progress = 1);
@@ -155,7 +169,11 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     } on ApiException catch (e) {
       if (mounted) _snack(e.message);
     } catch (_) {
-      if (mounted) _snack('Could not submit your report. Please check your connection and try again.');
+      if (mounted) {
+        _snack(
+          'Could not submit your report. Please check your connection and try again.',
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -177,29 +195,58 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
             Container(
               width: 72,
               height: 72,
-              decoration: BoxDecoration(color: AppColors.tintGreen, borderRadius: BorderRadius.circular(24)),
-              child: Icon(Icons.check_rounded, size: 38, color: AppColors.statusGreenInk),
+              decoration: BoxDecoration(
+                color: AppColors.tintGreen,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: 38,
+                color: AppColors.statusGreenInk,
+              ),
             ),
             const SizedBox(height: 18),
-            Text('Report submitted', style: AppTypography.display(size: 22), textAlign: TextAlign.center),
+            Text(
+              'Report submitted',
+              style: AppTypography.display(size: 22),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(
               'Your report is now pending review by the administrator.',
               textAlign: TextAlign.center,
-              style: AppTypography.bodyStyle(size: 14, color: AppColors.textMuted),
+              style: AppTypography.bodyStyle(
+                size: 14,
+                color: AppColors.textMuted,
+              ),
             ),
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-              decoration: BoxDecoration(color: AppColors.lightYellow, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                color: AppColors.lightYellow,
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Column(
                 children: [
                   // The reference chip is cream in both themes, so its text stays
                   // navy rather than following the (dark-mode) page ink.
-                  Text('Reference number', style: AppTypography.caption(size: 11.5, color: AppColors.darkBlue)),
+                  Text(
+                    'Reference number',
+                    style: AppTypography.caption(
+                      size: 11.5,
+                      color: AppColors.darkBlue,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(report.referenceNo, style: AppTypography.headingStyle(size: 18, color: AppColors.darkBlue)),
+                  Text(
+                    report.referenceNo,
+                    style: AppTypography.headingStyle(
+                      size: 18,
+                      color: AppColors.darkBlue,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -244,7 +291,9 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                       ),
                       validator: (v) {
                         final value = v?.trim() ?? '';
-                        if (value.length < 5) return 'Give a short title (at least 5 characters).';
+                        if (value.length < 5) {
+                          return 'Give a short title (at least 5 characters).';
+                        }
                         return null;
                       },
                     ),
@@ -262,7 +311,9 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                       ),
                       validator: (v) {
                         final value = v?.trim() ?? '';
-                        if (value.length < 10) return 'Please describe the issue (at least 10 characters).';
+                        if (value.length < 10) {
+                          return 'Please describe the issue (at least 10 characters).';
+                        }
                         return null;
                       },
                     ),
@@ -275,22 +326,37 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final category in IssueCategory.selectable)
-                          ChoiceChip(
-                            selected: _category == category,
-                            onSelected: (_) => setState(() => _category = category),
-                            avatar: Icon(
-                              category.icon,
-                              size: 16,
-                              color: _category == category ? AppColors.onPrimary : AppColors.darkBlue,
+                    DropdownButtonFormField<IssueCategory>(
+                      key: const Key('report-category-dropdown'),
+                      initialValue: _category,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Issue category',
+                        prefixIcon: Icon(Icons.category_outlined),
+                      ),
+                      items: IssueCategory.selectable
+                          .map(
+                            (category) => DropdownMenuItem<IssueCategory>(
+                              value: category,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    category.icon,
+                                    size: 18,
+                                    color: AppColors.brandAccent,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: Text(category.label)),
+                                ],
+                              ),
                             ),
-                            label: Text(category.label),
-                          ),
-                      ],
+                          )
+                          .toList(),
+                      onChanged: (category) {
+                        if (category != null) {
+                          setState(() => _category = category);
+                        }
+                      },
                     ),
                     // "Other" is only meaningful with an explanation, so the
                     // field appears (and is required) only for that category.
@@ -308,7 +374,8 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                         validator: (v) {
                           if (_category != IssueCategory.other) return null;
                           final value = v?.trim() ?? '';
-                          if (value.length < IssueCategory.otherDescriptionMin) {
+                          if (value.length <
+                              IssueCategory.otherDescriptionMin) {
                             return 'Please describe the issue (at least ${IssueCategory.otherDescriptionMin} characters).';
                           }
                           return null;
@@ -336,7 +403,10 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
               const SizedBox(height: 14),
               SectionCard(
                 title: 'Photos',
-                trailing: Text('${_photos.length}/$_maxPhotos', style: AppTypography.caption(size: 12)),
+                trailing: Text(
+                  '${_photos.length}/$_maxPhotos',
+                  style: AppTypography.caption(size: 12),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -378,12 +448,22 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                     if (_location != null) ...[
                       Row(
                         children: [
-                          Icon(Icons.place_rounded, size: 18, color: AppColors.brandAccent),
+                          Icon(
+                            Icons.place_rounded,
+                            size: 18,
+                            color: AppColors.brandAccent,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              formatCoords(_location!.latitude, _location!.longitude),
-                              style: AppTypography.bodyStyle(size: 14, weight: FontWeight.w600),
+                              formatCoords(
+                                _location!.latitude,
+                                _location!.longitude,
+                              ),
+                              style: AppTypography.bodyStyle(
+                                size: 14,
+                                weight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -391,7 +471,9 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                     ],
                     const SizedBox(height: 12),
                     AppButton(
-                      label: _location == null ? 'Pick location on map' : 'Change location',
+                      label: _location == null
+                          ? 'Pick location on map'
+                          : 'Change location',
                       variant: AppButtonVariant.secondary,
                       icon: Icons.pin_drop_rounded,
                       onPressed: _pickLocation,
@@ -462,7 +544,12 @@ class _PhotoTile extends StatelessWidget {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          child: Image.memory(photo.bytes, width: 96, height: 96, fit: BoxFit.cover),
+          child: Image.memory(
+            photo.bytes,
+            width: 96,
+            height: 96,
+            fit: BoxFit.cover,
+          ),
         ),
         Positioned(
           top: -6,
@@ -471,7 +558,10 @@ class _PhotoTile extends StatelessWidget {
             onTap: onRemove,
             child: Container(
               padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(color: AppColors.statusRed, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: AppColors.statusRed,
+                shape: BoxShape.circle,
+              ),
               // `statusRed` is a light red in dark mode, so the glyph must darken
               // rather than stay white.
               child: Icon(
@@ -500,8 +590,20 @@ class _AddPhotoTile extends StatelessWidget {
       onSelected: (value) => value == 'camera' ? onCamera() : onGallery(),
       position: PopupMenuPosition.under,
       itemBuilder: (context) => const [
-        PopupMenuItem(value: 'camera', child: ListTile(leading: Icon(Icons.camera_alt_rounded), title: Text('Take a photo'))),
-        PopupMenuItem(value: 'gallery', child: ListTile(leading: Icon(Icons.photo_library_rounded), title: Text('Choose from gallery'))),
+        PopupMenuItem(
+          value: 'camera',
+          child: ListTile(
+            leading: Icon(Icons.camera_alt_rounded),
+            title: Text('Take a photo'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'gallery',
+          child: ListTile(
+            leading: Icon(Icons.photo_library_rounded),
+            title: Text('Choose from gallery'),
+          ),
+        ),
       ],
       child: Container(
         width: 96,
@@ -514,9 +616,20 @@ class _AddPhotoTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_a_photo_rounded, color: AppColors.brandAccent, size: 22),
+            Icon(
+              Icons.add_a_photo_rounded,
+              color: AppColors.brandAccent,
+              size: 22,
+            ),
             const SizedBox(height: 4),
-            Text('Add', style: AppTypography.caption(size: 11.5, weight: FontWeight.w600, color: AppColors.brandAccent)),
+            Text(
+              'Add',
+              style: AppTypography.caption(
+                size: 11.5,
+                weight: FontWeight.w600,
+                color: AppColors.brandAccent,
+              ),
+            ),
           ],
         ),
       ),

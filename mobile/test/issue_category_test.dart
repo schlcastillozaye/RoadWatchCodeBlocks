@@ -20,7 +20,8 @@ import 'package:roadwatch/theme/app_theme.dart';
 const _otherField = Key('category-other-field');
 const _otherError = 'Please describe the issue (at least 5 characters).';
 
-RoadReport _report(IssueCategory category, {String? categoryOther}) => RoadReport(
+RoadReport _report(IssueCategory category, {String? categoryOther}) =>
+    RoadReport(
       id: 'r1',
       referenceNo: 'RW-2026-000001',
       title: 'Test report',
@@ -46,37 +47,52 @@ Future<void> _pumpSubmitScreen(WidgetTester tester) async {
 
   // No request is issued by this screen unless a report is actually submitted,
   // so the mock transport never has to answer.
-  final api = RoadWatchApi(ApiClient(
-    tokenStore: TokenStore(),
-    httpClient: MockClient((req) async => http.Response('{}', 200)),
-    baseUrl: 'http://example.test',
-  ));
+  final api = RoadWatchApi(
+    ApiClient(
+      tokenStore: TokenStore(),
+      httpClient: MockClient((req) async => http.Response('{}', 200)),
+      baseUrl: 'http://example.test',
+    ),
+  );
   await tester.pumpWidget(
     ChangeNotifierProvider<MyReportsProvider>(
       create: (_) => MyReportsProvider(api),
-      child: MaterialApp(theme: AppTheme.light(), home: const SubmitReportScreen()),
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: const SubmitReportScreen(),
+      ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
 Future<void> _tapCategory(WidgetTester tester, String label) async {
-  await tester.tap(find.widgetWithText(ChoiceChip, label));
+  await tester.tap(find.byKey(const Key('report-category-dropdown')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
 }
 
 void main() {
   group('IssueCategory', () {
     test('offers the requested categories in the requested order', () {
-      expect(
-        IssueCategory.selectable.map((c) => c.api).toList(),
-        ['POTHOLE', 'ROAD_CRACK', 'DAMAGED_PAVEMENT', 'FLOODING', 'ROAD_OBSTRUCTION', 'DAMAGED_DRAINAGE', 'OTHER'],
-      );
+      expect(IssueCategory.selectable.map((c) => c.api).toList(), [
+        'POTHOLE',
+        'ROAD_CRACK',
+        'DAMAGED_PAVEMENT',
+        'FLOODING',
+        'ROAD_OBSTRUCTION',
+        'DAMAGED_DRAINAGE',
+        'OTHER',
+      ]);
       // Everything offered must be a real enum value, and nothing may repeat.
       for (final category in IssueCategory.selectable) {
         expect(IssueCategory.values, contains(category));
       }
-      expect(IssueCategory.selectable.toSet().length, IssueCategory.selectable.length);
+      expect(
+        IssueCategory.selectable.toSet().length,
+        IssueCategory.selectable.length,
+      );
     });
 
     test('uses the wording from the specification', () {
@@ -89,7 +105,10 @@ void main() {
     });
 
     test('maps the new road-obstruction value and still renders legacy values', () {
-      expect(IssueCategory.fromApi('ROAD_OBSTRUCTION'), IssueCategory.roadObstruction);
+      expect(
+        IssueCategory.fromApi('ROAD_OBSTRUCTION'),
+        IssueCategory.roadObstruction,
+      );
       // A category missing from an older record must not crash the UI.
       expect(IssueCategory.fromApi(null), IssueCategory.other);
       expect(IssueCategory.fromApi('SOMETHING_RETIRED'), IssueCategory.other);
@@ -101,18 +120,27 @@ void main() {
   group('RoadReport.categoryLabel', () {
     test('shows the reporter\'s own words for "Other"', () {
       expect(
-        _report(IssueCategory.other, categoryOther: 'Overgrown hedge blocking the sidewalk').categoryLabel,
+        _report(
+          IssueCategory.other,
+          categoryOther: 'Overgrown hedge blocking the sidewalk',
+        ).categoryLabel,
         'Other — Overgrown hedge blocking the sidewalk',
       );
     });
 
     test('falls back to the plain label without a description', () {
       expect(_report(IssueCategory.other).categoryLabel, 'Other');
-      expect(_report(IssueCategory.other, categoryOther: '   ').categoryLabel, 'Other');
+      expect(
+        _report(IssueCategory.other, categoryOther: '   ').categoryLabel,
+        'Other',
+      );
     });
 
     test('ignores a stray description on another category', () {
-      expect(_report(IssueCategory.pothole, categoryOther: 'stray').categoryLabel, 'Pothole');
+      expect(
+        _report(IssueCategory.pothole, categoryOther: 'stray').categoryLabel,
+        'Pothole',
+      );
     });
 
     test('reads the description from the API payload', () {
@@ -154,31 +182,53 @@ void main() {
   });
 
   group('Submit report form', () {
-    testWidgets('reveals the description field only for "Other", and requires it', (tester) async {
-      await _pumpSubmitScreen(tester);
-      expect(find.byKey(_otherField), findsNothing, reason: 'hidden for the default category');
+    testWidgets(
+      'reveals the description field only for "Other", and requires it',
+      (tester) async {
+        await _pumpSubmitScreen(tester);
+        expect(
+          find.byKey(const Key('report-category-dropdown')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(_otherField),
+          findsNothing,
+          reason: 'hidden for the default category',
+        );
 
-      await _tapCategory(tester, 'Road obstruction');
-      expect(find.byKey(_otherField), findsNothing, reason: 'still hidden for a normal category');
+        await _tapCategory(tester, 'Road obstruction');
+        expect(
+          find.byKey(_otherField),
+          findsNothing,
+          reason: 'still hidden for a normal category',
+        );
 
-      await _tapCategory(tester, 'Other');
-      expect(find.byKey(_otherField), findsOneWidget, reason: 'revealed for Other');
+        await _tapCategory(tester, 'Other');
+        expect(
+          find.byKey(_otherField),
+          findsOneWidget,
+          reason: 'revealed for Other',
+        );
 
-      // Submitting without a description is rejected before any request.
-      final submit = find.widgetWithText(ElevatedButton, 'Submit report');
-      await tester.tap(submit);
-      await tester.pumpAndSettle();
-      expect(find.text(_otherError), findsOneWidget);
+        // Submitting without a description is rejected before any request.
+        final submit = find.widgetWithText(ElevatedButton, 'Submit report');
+        await tester.tap(submit);
+        await tester.pumpAndSettle();
+        expect(find.text(_otherError), findsOneWidget);
 
-      // Supplying one clears that error.
-      await tester.enterText(find.byKey(_otherField), 'Fallen tree blocking the whole lane');
-      await tester.tap(submit);
-      await tester.pumpAndSettle();
-      expect(find.text(_otherError), findsNothing);
+        // Supplying one clears that error.
+        await tester.enterText(
+          find.byKey(_otherField),
+          'Fallen tree blocking the whole lane',
+        );
+        await tester.tap(submit);
+        await tester.pumpAndSettle();
+        expect(find.text(_otherError), findsNothing);
 
-      // Choosing an ordinary category hides (and stops requiring) the field.
-      await _tapCategory(tester, 'Pothole');
-      expect(find.byKey(_otherField), findsNothing);
-    });
+        // Choosing an ordinary category hides (and stops requiring) the field.
+        await _tapCategory(tester, 'Pothole');
+        expect(find.byKey(_otherField), findsNothing);
+      },
+    );
   });
 }

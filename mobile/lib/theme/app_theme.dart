@@ -85,10 +85,17 @@ class AppTheme {
         filled: true,
         fillColor: p.inputSurface,
         isDense: false,
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.lg),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.lg,
+        ),
         hintStyle: AppTypography.bodyStyle(size: 15, color: p.ink3),
         labelStyle: AppTypography.bodyStyle(size: 15, color: p.ink2),
-        floatingLabelStyle: AppTypography.bodyStyle(size: 14, weight: FontWeight.w600, color: p.isDark ? p.sky : p.navy),
+        floatingLabelStyle: AppTypography.bodyStyle(
+          size: 14,
+          weight: FontWeight.w600,
+          color: p.isDark ? p.sky : p.navy,
+        ),
         border: OutlineInputBorder(
           borderRadius: AppRadii.smAll,
           borderSide: BorderSide(color: p.line),
@@ -114,6 +121,7 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBg,
           foregroundColor: primaryFg,
+          overlayColor: primaryFg.withValues(alpha: 0.12),
           disabledBackgroundColor: disabledBg,
           disabledForegroundColor: p.isDark ? p.ink : p.ink3,
           elevation: 0,
@@ -137,18 +145,32 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: p.isDark ? p.sky : p.navy,
-          textStyle: AppTypography.button(size: 14, color: p.isDark ? p.sky : p.navy),
+          textStyle: AppTypography.button(
+            size: 14,
+            color: p.isDark ? p.sky : p.navy,
+          ),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: p.sky,
         selectedColor: p.navy,
         secondarySelectedColor: p.navy,
-        labelStyle: AppTypography.bodyStyle(size: 13, weight: FontWeight.w600, color: p.navy),
-        secondaryLabelStyle: AppTypography.bodyStyle(size: 13, weight: FontWeight.w600, color: p.onNavy),
+        labelStyle: AppTypography.bodyStyle(
+          size: 13,
+          weight: FontWeight.w600,
+          color: p.navy,
+        ),
+        secondaryLabelStyle: AppTypography.bodyStyle(
+          size: 13,
+          weight: FontWeight.w600,
+          color: p.onNavy,
+        ),
         side: BorderSide.none,
         shape: const RoundedRectangleBorder(borderRadius: AppRadii.pillAll),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xs,
+        ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: p.navy,
@@ -182,7 +204,9 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         shape: const RoundedRectangleBorder(borderRadius: AppRadii.smAll),
       ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(color: p.isDark ? p.sky : p.navy),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: p.isDark ? p.sky : p.navy,
+      ),
       listTileTheme: ListTileThemeData(
         iconColor: p.isDark ? p.sky : p.navy,
         textColor: p.ink,

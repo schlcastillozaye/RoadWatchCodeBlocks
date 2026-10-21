@@ -85,6 +85,9 @@ class UserService
 
     public static function create(array $actor, array $input): array
     {
+        if (($input['role'] ?? 'MAINTENANCE_OFFICER') === 'ADMIN') {
+            throw AppError::forbidden('Administrator accounts cannot be created through user management.');
+        }
         $existing = Db::one('SELECT `id` FROM `User` WHERE `email` = ?', [$input['email']]);
         if ($existing !== null) {
             throw AppError::conflict('A user with this email already exists.');
@@ -129,6 +132,12 @@ class UserService
         if ($user === null) {
             throw AppError::notFound('User not found.');
         }
+        if ($user['role'] === 'ADMIN') {
+            throw AppError::forbidden('Administrator accounts cannot be changed through user management.');
+        }
+        if (($input['role'] ?? null) === 'ADMIN') {
+            throw AppError::forbidden('Users cannot be promoted to administrator through user management.');
+        }
         if ($userId === $actor['id'] && ($input['status'] ?? null) === 'SUSPENDED') {
             throw AppError::badRequest('You cannot suspend your own account.');
         }
@@ -139,9 +148,9 @@ class UserService
             $sets[] = '`fullName` = ?';
             $params[] = $input['fullName'];
         }
-        if (isset($input['phone']) && $input['phone'] !== '') {
+        if (array_key_exists('phone', $input)) {
             $sets[] = '`phone` = ?';
-            $params[] = $input['phone'];
+            $params[] = $input['phone'] === '' ? null : $input['phone'];
         }
         if (!empty($input['role'])) {
             $sets[] = '`role` = ?';
@@ -153,6 +162,12 @@ class UserService
         }
         $params[] = $userId;
         Db::execute('UPDATE `User` SET ' . implode(', ', $sets) . ' WHERE `id` = ?', $params);
+        if (($input['status'] ?? null) === 'SUSPENDED') {
+            Db::execute('UPDATE `RefreshToken` SET `revokedAt` = ? WHERE `userId` = ? AND `revokedAt` IS NULL', [
+                Dates::toDb(Dates::now()),
+                $userId,
+            ]);
+        }
 
         Audit::record(array_merge([
             'actorId' => $actor['id'],
@@ -168,9 +183,12 @@ class UserService
 
     public static function adminResetPassword(array $actor, string $userId, string $newPassword): array
     {
-        $user = Db::one('SELECT `id` FROM `User` WHERE `id` = ?', [$userId]);
+        $user = Db::one('SELECT `id`,`role` FROM `User` WHERE `id` = ?', [$userId]);
         if ($user === null) {
             throw AppError::notFound('User not found.');
+        }
+        if ($user['role'] === 'ADMIN') {
+            throw AppError::forbidden('Administrator passwords cannot be changed through user management.');
         }
         Db::execute('UPDATE `User` SET `passwordHash` = ?, `updatedAt` = ? WHERE `id` = ?', [
             AccountService::hashPassword($newPassword),
@@ -201,9 +219,9 @@ class UserService
             $sets[] = '`fullName` = ?';
             $params[] = $input['fullName'];
         }
-        if (isset($input['phone']) && $input['phone'] !== '') {
+        if (array_key_exists('phone', $input)) {
             $sets[] = '`phone` = ?';
-            $params[] = $input['phone'];
+            $params[] = $input['phone'] === '' ? null : $input['phone'];
         }
         $params[] = $userId;
         Db::execute('UPDATE `User` SET ' . implode(', ', $sets) . ' WHERE `id` = ?', $params);

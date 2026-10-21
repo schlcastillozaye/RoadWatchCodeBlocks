@@ -846,6 +846,115 @@ class ReportService
         return Dto::report(self::getOrThrow($reportId));
     }
 
+    public static function submitRepairEvidence(
+        string $reportId,
+        array $actor,
+        string $completionNotes,
+        array $files
+    ): array {
+        if (mb_strlen(trim($completionNotes)) < 5) {
+            throw AppError::unprocessable('Completion notes of at least 5 characters are required.');
+        }
+        if (empty($files)) {
+            throw AppError::unprocessable('At least one after-repair photo is required.');
+        }
+
+        $stored = [];
+        $now = Dates::now();
+        try {
+            Db::transaction(function () use ($reportId, $actor, $completionNotes, $files, &$stored, $now): void {
+                $report = Db::one('SELECT * FROM `Report` WHERE `id` = ? FOR UPDATE', [$reportId]);
+                if ($report === null) {
+                    throw AppError::notFound('Report not found.');
+                }
+                if ($report['moderationStatus'] !== 'APPROVED') {
+                    throw AppError::conflict('Only approved reports can receive maintenance evidence.');
+                }
+                if (!self::actorMayMaintain($report, $actor)) {
+                    throw AppError::forbidden('This report is not assigned to you.');
+                }
+                if ($report['repairStatus'] !== 'IN_PROGRESS') {
+                    throw AppError::conflict('Only an in-progress repair can be submitted for verification.');
+                }
+
+                $stored = self::storeBuffers($files, 'reports');
+                $createdAt = Dates::toDb($now);
+                foreach ($stored as $photo) {
+                    Db::execute(
+                        'INSERT INTO `ReportPhoto` (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`blurData`,`caption`,`uploadedById`,`createdAt`,`imageData`)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                        [
+                            Ids::cuid(),
+                            $reportId,
+                            'AFTER',
+                            $photo['stored']['key'],
+                            $photo['stored']['mimeType'],
+                            $photo['stored']['sizeBytes'],
+                            $photo['width'],
+                            $photo['height'],
+                            null,
+                            null,
+                            $actor['id'],
+                            $createdAt,
+                            $photo['stored']['data'] ?? null,
+                        ]
+                    );
+                }
+
+                $changed = Db::execute(
+                    "UPDATE `Report` SET `repairStatus` = 'AWAITING_VERIFICATION', `completionNotes` = ?, `updatedAt` = ?
+                     WHERE `id` = ? AND `repairStatus` = 'IN_PROGRESS'",
+                    [trim($completionNotes), $createdAt, $reportId]
+                );
+                if ($changed !== 1) {
+                    throw AppError::conflict('This repair was updated by another user. Refresh and try again.');
+                }
+
+                Audit::history([
+                    'reportId' => $reportId,
+                    'type' => 'REPAIR',
+                    'fromValue' => 'IN_PROGRESS',
+                    'toValue' => 'AWAITING_VERIFICATION',
+                    'note' => 'Completion evidence submitted: ' . trim($completionNotes),
+                    'actorId' => $actor['id'],
+                    'actorRole' => $actor['role'],
+                ]);
+
+                Db::execute(
+                    "UPDATE `Assignment` SET `status` = 'IN_PROGRESS', `completedAt` = NULL
+                     WHERE `reportId` = ? AND `officerId` = ? AND `status` IN ('ASSIGNED','IN_PROGRESS')",
+                    [$reportId, $actor['id']]
+                );
+                $admins = Db::all("SELECT `id` FROM `User` WHERE `role` = 'ADMIN' AND `status` = 'ACTIVE'");
+                foreach ($admins as $admin) {
+                    NotificationService::createWorkflow(
+                        $admin['id'],
+                        $report,
+                        'Repair submitted for verification',
+                        $report['referenceNo'] . ' has completion notes and after-repair evidence ready for review.',
+                        'AWAITING_VERIFICATION'
+                    );
+                }
+            });
+        } catch (\Throwable $error) {
+            foreach ($stored as $photo) {
+                Storage::remove($photo['stored']['key']);
+            }
+            throw $error;
+        }
+
+        Audit::record(array_merge([
+            'actorId' => $actor['id'],
+            'actorRole' => $actor['role'],
+            'action' => 'REPAIR_SUBMITTED_FOR_VERIFICATION',
+            'entityType' => 'Report',
+            'entityId' => $reportId,
+            'metadata' => ['to' => 'AWAITING_VERIFICATION'],
+        ], Audit::actorContext()));
+
+        return Dto::report(self::getOrThrow($reportId));
+    }
+
     public static function verifyRepair(string $reportId, array $actor, array $input): array
     {
         $decision = $input['decision'];

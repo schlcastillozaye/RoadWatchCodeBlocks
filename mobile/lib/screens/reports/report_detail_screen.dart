@@ -402,6 +402,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   }
 
   Future<void> _completeRepair() async {
+    if (_actionBusy) return;
     final notesController = TextEditingController();
     final notes = await showDialog<String>(
       context: context,
@@ -451,9 +452,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     setState(() => _actionBusy = true);
     try {
       final api = context.read<RoadWatchApi>();
-      await api.addReportPhotos(
+      final updated = await api.submitRepairEvidence(
         widget.reportId,
-        kind: PhotoKind.after,
+        completionNotes: notes,
         photos: [
           UploadFile(
             field: 'afterPhotos',
@@ -462,11 +463,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ),
         ],
       );
-      final updated = await api.updateRepair(
-        widget.reportId,
-        status: RepairStatus.awaitingVerification,
-        completionNotes: notes,
-      );
       if (!mounted) return;
       setState(() => _report = updated);
       await _load();
@@ -474,11 +470,41 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         _snack('Completion evidence submitted for admin verification.');
       }
     } on ApiException catch (error) {
-      if (mounted) _snack(error.message);
+      final report = await _recoverEvidenceSubmission();
+      if (!mounted) return;
+      if (report?.repairStatus == RepairStatus.awaitingVerification) {
+        setState(() => _report = report);
+        await _load();
+        if (mounted) {
+          _snack('Evidence was submitted for admin verification.');
+        }
+      } else {
+        _snack(error.message);
+      }
     } catch (_) {
-      if (mounted) _snack('The repair could not be completed.');
+      final report = await _recoverEvidenceSubmission();
+      if (!mounted) return;
+      if (report?.repairStatus == RepairStatus.awaitingVerification) {
+        setState(() => _report = report);
+        await _load();
+        if (mounted) {
+          _snack('Evidence was submitted for admin verification.');
+        }
+      } else {
+        _snack(
+          'The repair could not be submitted. Your report was not marked complete.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
+  Future<RoadReport?> _recoverEvidenceSubmission() async {
+    try {
+      return await context.read<RoadWatchApi>().getReport(widget.reportId);
+    } on ApiException {
+      return null;
     }
   }
 

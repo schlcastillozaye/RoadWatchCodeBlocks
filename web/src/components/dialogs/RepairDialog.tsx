@@ -50,14 +50,12 @@ export function RepairDialog({
 
   const isSubmission = status === 'AWAITING_VERIFICATION';
   const existingAfter = report.photos.filter((photo) => photo.kind === 'AFTER').length;
-  const willHaveAfter = existingAfter + files.length;
-
   const blockedReason = useMemo(() => {
     if (!isSubmission) return null;
     if (completionNotes.trim().length < 5) return 'Completion notes are required (at least 5 characters).';
-    if (willHaveAfter < 1) return 'Add at least one completion (after) photo.';
+    if (files.length < 1) return 'Add at least one completion (after) photo.';
     return null;
-  }, [isSubmission, completionNotes, willHaveAfter]);
+  }, [isSubmission, completionNotes, files.length]);
 
   const submit = async () => {
     setError(null);

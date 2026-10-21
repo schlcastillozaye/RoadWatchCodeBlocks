@@ -160,8 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: AppSpacing.xl),
-                    _PrimaryCta(onTap: _openSubmit),
-                    const SizedBox(height: AppSpacing.xl),
                     DashboardStatGrid(
                       metrics: [
                         DashboardMetric(
@@ -236,7 +234,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                     const SizedBox(height: AppSpacing.xxl),
                     _QuickActions(
-                      onReport: _openSubmit,
                       onMap: () => widget.onNavigate(1),
                       onReports: () => widget.onNavigate(2),
                     ),
@@ -370,98 +367,9 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _PrimaryCta extends StatelessWidget {
-  const _PrimaryCta({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    AppColors.syncTo(context);
-    // The card is a soft brand-blue wash in light mode. In dark mode the same
-    // idea is drawn from the dark palette: the old fixed light gradient left
-    // the (now near-white) heading and caption invisible on a near-white card.
-    final isDark = AppColors.isDark;
-    final gradient = isDark
-        ? [AppColors.tintBlue, AppColors.cardSurface]
-        : <Color>[AppColors.lightBlue, const Color(0xFFE3F1FF)];
-    final titleColor = isDark ? AppColors.textPrimary : AppColors.darkBlue;
-    final arrowColor = isDark ? AppColors.lightBlue : AppColors.darkBlue;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: gradient,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: isDark ? AppColors.border : AppColors.lightAzure,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: AppColors.darkBlue,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(
-                  Icons.add_a_photo_rounded,
-                  color: AppColors.lightBlue,
-                  size: 26,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Report a road issue',
-                      style: AppTypography.headingStyle(
-                        size: 17,
-                        color: titleColor,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Photo • description • GPS location',
-                      style: AppTypography.caption(
-                        size: 12.5,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Icon(Icons.arrow_forward_rounded, color: arrowColor),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _QuickActions extends StatelessWidget {
-  const _QuickActions({
-    required this.onReport,
-    required this.onMap,
-    required this.onReports,
-  });
+  const _QuickActions({required this.onMap, required this.onReports});
 
-  final VoidCallback onReport;
   final VoidCallback onMap;
   final VoidCallback onReports;
 
@@ -469,12 +377,6 @@ class _QuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _QuickAction(
-          icon: Icons.camera_alt_rounded,
-          label: 'Report',
-          onTap: onReport,
-        ),
-        const SizedBox(width: 12),
         _QuickAction(
           icon: Icons.map_rounded,
           label: 'Public map',

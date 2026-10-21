@@ -171,6 +171,31 @@ class ReportsController
         ])];
     }
 
+    public static function repairEvidence(array $params): array
+    {
+        $actor = Auth::requireRole('MAINTENANCE_OFFICER');
+        $body = Request::body();
+        $completionNotes = Validate::string(
+            $body['completionNotes'] ?? null,
+            'completionNotes',
+            true,
+            5,
+            4000,
+            'Completion notes of at least 5 characters are required.'
+        );
+        $files = self::filesForKind('AFTER');
+        if (empty($files)) {
+            Validate::fail('afterPhotos', 'At least one after-repair photo is required.');
+        }
+
+        return ['report' => ReportService::submitRepairEvidence(
+            $params['id'],
+            $actor,
+            $completionNotes,
+            $files
+        )];
+    }
+
     public static function verification(array $params): array
     {
         $actor = Auth::requireAdmin();

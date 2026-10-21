@@ -152,6 +152,54 @@ class RoadWatchApi {
     return AppUser.fromJson(asMap(asMap(json)['user']));
   }
 
+  Future<AppUser> updateOwnProfile({
+    required String fullName,
+    String? phone,
+  }) async {
+    final json = await client.patchJson(
+      '/api/users/me',
+      body: {'fullName': fullName.trim(), 'phone': phone?.trim() ?? ''},
+    );
+    return AppUser.fromJson(asMap(asMap(json)['user']));
+  }
+
+  Future<Paginated<AppUser>> users({
+    int page = 1,
+    int pageSize = 20,
+    String? search,
+    String? role,
+    String? status,
+  }) async {
+    final json = await client.getJson(
+      '/api/users',
+      query: {
+        'page': page,
+        'pageSize': pageSize,
+        if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+        if (role != null && role.isNotEmpty) 'role': role,
+        if (status != null && status.isNotEmpty) 'status': status,
+      },
+    );
+    return Paginated<AppUser>.fromJson(asMap(json), AppUser.fromJson);
+  }
+
+  Future<AppUser> updateManagedUser(
+    String id, {
+    required String fullName,
+    String? phone,
+    String? status,
+  }) async {
+    final json = await client.patchJson(
+      '/api/users/${Uri.encodeComponent(id)}',
+      body: {
+        'fullName': fullName.trim(),
+        'phone': phone?.trim() ?? '',
+        ?status: status,
+      },
+    );
+    return AppUser.fromJson(asMap(asMap(json)['user']));
+  }
+
   // --------------------------------------------------------------- reports
 
   Future<RoadReport> createReport({
@@ -385,6 +433,28 @@ class RoadWatchApi {
           .map(
             (photo) => UploadFile(
               field: kind == PhotoKind.after ? 'afterPhotos' : 'progressPhotos',
+              path: photo.path,
+              bytes: photo.bytes,
+              filename: photo.filename,
+            ),
+          )
+          .toList(),
+    );
+    return RoadReport.fromJson(asMap(asMap(json)['report']));
+  }
+
+  Future<RoadReport> submitRepairEvidence(
+    String id, {
+    required String completionNotes,
+    required List<UploadFile> photos,
+  }) async {
+    final json = await client.postMultipart(
+      '/api/reports/$id/repair-evidence',
+      fields: {'completionNotes': completionNotes.trim()},
+      files: photos
+          .map(
+            (photo) => UploadFile(
+              field: 'afterPhotos',
               path: photo.path,
               bytes: photo.bytes,
               filename: photo.filename,

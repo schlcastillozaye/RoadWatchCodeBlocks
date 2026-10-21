@@ -65,7 +65,12 @@ class UsersController
         }
         $phone = Validate::string($body['phone'] ?? null, 'phone', false, 0, 30);
         $password = AuthController::validatePassword($body['password'] ?? null, 'password', 'Password must be at least 8 characters');
-        $role = Validate::enum($body['role'] ?? null, 'role', \RoadWatch\Modules\Schema::ROLES, false) ?? 'MAINTENANCE_OFFICER';
+        $role = Validate::enum(
+            $body['role'] ?? null,
+            'role',
+            ['CITIZEN', 'MAINTENANCE_OFFICER'],
+            false
+        ) ?? 'MAINTENANCE_OFFICER';
 
         Response::status(201);
         return ['user' => UserService::create($actor, [
