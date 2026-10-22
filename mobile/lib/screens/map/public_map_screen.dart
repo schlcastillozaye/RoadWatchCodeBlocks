@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -409,7 +407,6 @@ class _SearchPanel extends StatefulWidget {
 class _SearchPanelState extends State<_SearchPanel> {
   final FocusNode _focusNode = FocusNode();
   late final TextEditingController _localController;
-  Timer? _debounceTimer;
   List<String> _recentSearches = [];
   bool _showRecent = false;
 
@@ -423,7 +420,6 @@ class _SearchPanelState extends State<_SearchPanel> {
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     super.dispose();
@@ -445,16 +441,10 @@ class _SearchPanelState extends State<_SearchPanel> {
   }
 
   void _onTextChanged(String value) {
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
-      if (value.trim().length >= 2) {
-        widget.onSubmit();
-      }
-    });
+    widget.provider.invalidatePlaceSearch();
   }
 
   void _onSubmitted(String value) {
-    _debounceTimer?.cancel();
     if (value.trim().length >= 2) {
       widget.onSubmit();
     }
@@ -519,29 +509,29 @@ class _SearchPanelState extends State<_SearchPanel> {
                               ),
                             )
                           : (showClear
-                              ? IconButton(
-                                  icon: const Icon(Icons.close_rounded),
-                                  color: AppColors.textMuted,
-                                  tooltip: 'Clear search',
-                                  onPressed: () {
-                                    _localController.clear();
-                                    widget.provider.clearSearch();
-                                  },
-                                )
+                                ? IconButton(
+                                    icon: const Icon(Icons.close_rounded),
+                                    color: AppColors.textMuted,
+                                    tooltip: 'Clear search',
+                                    onPressed: () {
+                                      _localController.clear();
+                                      widget.provider.clearSearch();
+                                    },
+                                  )
                                 : (_recentSearches.isNotEmpty &&
                                           _showRecent &&
                                           !hasInput
-                                  ? IconButton(
+                                      ? IconButton(
                                           icon: const Icon(
                                             Icons.history_rounded,
                                           ),
-                                      color: AppColors.textMuted,
-                                      tooltip: 'Recent searches',
+                                          color: AppColors.textMuted,
+                                          tooltip: 'Recent searches',
                                           onPressed: () => setState(
                                             () => _showRecent = true,
                                           ),
-                                    )
-                                  : null)),
+                                        )
+                                      : null)),
                       filled: true,
                       fillColor: AppColors.cardSurface,
                       contentPadding: const EdgeInsets.symmetric(
@@ -609,8 +599,8 @@ class _SearchPanelState extends State<_SearchPanel> {
                 style: AppTypography.caption(
                   size: 11.5,
                   color: AppColors.textSecondary,
+                ),
               ),
-            ),
             ),
           if (widget.provider.searchReason != null &&
               !widget.provider.isSearching)
@@ -953,14 +943,14 @@ class _FilterChip extends StatelessWidget {
 
 class _Legend extends StatelessWidget {
   Widget dot(Color color, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    mainAxisSize: MainAxisSize.min,
+    children: [
       Container(
         width: 10,
         height: 10,
         decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
-          const SizedBox(width: 5),
+      const SizedBox(width: 5),
       Text(
         label,
         style: AppTypography.caption(
@@ -968,8 +958,8 @@ class _Legend extends StatelessWidget {
           color: AppColors.textSecondary,
         ),
       ),
-        ],
-      );
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1118,8 +1108,8 @@ class _MapReportTile extends StatelessWidget {
                     Wrap(
                       spacing: 6,
                       children: [
-                      StatusChip(repair: report.repairStatus, compact: true),
-                      PriorityPill(priority: report.priority),
+                        StatusChip(repair: report.repairStatus, compact: true),
+                        PriorityPill(priority: report.priority),
                       ],
                     ),
                   ],
@@ -1212,9 +1202,9 @@ class _PublicReportSheet extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                    StatusChip(moderation: detail.moderationStatus),
-                    StatusChip(repair: detail.repairStatus),
-                    PriorityPill(priority: detail.priority),
+                      StatusChip(moderation: detail.moderationStatus),
+                      StatusChip(repair: detail.repairStatus),
+                      PriorityPill(priority: detail.priority),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -1252,6 +1242,40 @@ class _PublicReportSheet extends StatelessWidget {
                       color: AppColors.textSecondary,
                     ),
                   ),
+                  if (detail.relatedCategories.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Other observed issues: ${detail.relatedCategories.map((value) => IssueCategory.fromApi(value).label).join(', ')}',
+                      style: AppTypography.bodyStyle(
+                        size: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                  if (detail.surfaceCondition != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Flooded road surface: ${switch (detail.surfaceCondition) {
+                        'VISIBLE_DAMAGE' => 'Visible road damage',
+                        'NO_VISIBLE_DAMAGE' => 'Inspected; no damage visible',
+                        _ => 'Unknown / not visible',
+                      }}',
+                      style: AppTypography.bodyStyle(
+                        size: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                  if (detail.damageCause?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Reported possible cause: ${detail.damageCause}',
+                      style: AppTypography.bodyStyle(
+                        size: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -1260,6 +1284,16 @@ class _PublicReportSheet extends StatelessWidget {
                         size: 17,
                         color: AppColors.brandAccent,
                       ),
+                      if (detail.destination?.trim().isNotEmpty == true) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Destination / road segment: ${detail.destination}',
+                          style: AppTypography.bodyStyle(
+                            size: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(

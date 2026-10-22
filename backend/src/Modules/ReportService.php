@@ -334,10 +334,11 @@ class ReportService
                 Db::execute(
                     'INSERT INTO `Report`
                         (`id`,`referenceNo`,`title`,`description`,`category`,`categoryOther`,`priority`,`latitude`,`longitude`,
-                         `addressText`,`areaLabel`,`moderationStatus`,`rejectionReason`,`moderatedById`,`moderatedAt`,
+                         `addressText`,`areaLabel`,`destination`,`damageCause`,`relatedCategories`,`surfaceCondition`,
+                         `moderationStatus`,`rejectionReason`,`moderatedById`,`moderatedAt`,
                          `repairStatus`,`assignedOfficerId`,`assignedAt`,`completedAt`,`completionNotes`,`completionOverride`,
                          `citizenId`,`createdAt`,`updatedAt`)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     [
                         $id,
                         $referenceNo,
@@ -350,6 +351,10 @@ class ReportService
                         $input['longitude'],
                         $input['addressText'] ?? null,
                         $input['areaLabel'] ?? null,
+                        $input['destination'] ?? null,
+                        $input['damageCause'] ?? null,
+                        json_encode($input['relatedCategories'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                        $input['surfaceCondition'] ?? null,
                         'PENDING_REVIEW',
                         null,
                         null,

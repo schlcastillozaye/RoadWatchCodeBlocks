@@ -35,10 +35,13 @@ RoadReport _report(IssueCategory category, {String? categoryOther}) =>
       repairStatus: RepairStatus.notAssigned,
     );
 
-Future<void> _pumpSubmitScreen(WidgetTester tester) async {
+Future<void> _pumpSubmitScreen(
+  WidgetTester tester, {
+  Size size = const Size(1200, 4000),
+}) async {
   // The form is a ListView, so give the test a tall viewport: every child is
   // then laid out and no scrolling is needed to reach or assert on a field.
-  tester.view.physicalSize = const Size(1200, 4000);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -159,8 +162,37 @@ void main() {
       });
       expect(report.categoryOther, 'Fallen tree across the road');
       expect(report.categoryLabel, 'Other — Fallen tree across the road');
+      expect(report.destination, isNull);
+      expect(report.relatedCategories, isEmpty);
       // The value survives the offline cache round-trip too.
       expect(report.toJson()['categoryOther'], 'Fallen tree across the road');
+    });
+
+    test('new optional observations survive API and cache round-trips', () {
+      final report = RoadReport.fromJson({
+        'id': 'r11',
+        'referenceNo': 'RW-2026-000011',
+        'title': 'Flooded road',
+        'description': 'Water covers the road surface.',
+        'category': 'FLOODING',
+        'priority': 'MEDIUM',
+        'latitude': 14.6,
+        'longitude': 121.0,
+        'moderationStatus': 'PENDING_REVIEW',
+        'repairStatus': 'NOT_ASSIGNED',
+        'destination': 'Road leading to San Isidro market',
+        'damageCause': 'Possible poor drainage',
+        'relatedCategories': ['ROAD_CRACK'],
+        'surfaceCondition': 'UNKNOWN',
+      });
+      expect(report.destination, 'Road leading to San Isidro market');
+      expect(report.damageCause, 'Possible poor drainage');
+      expect(report.relatedCategories, ['ROAD_CRACK']);
+      expect(report.surfaceCondition, 'UNKNOWN');
+      expect(report.toJson()['destination'], report.destination);
+      expect(report.toJson()['damageCause'], report.damageCause);
+      expect(report.toJson()['relatedCategories'], ['ROAD_CRACK']);
+      expect(report.toJson()['surfaceCondition'], 'UNKNOWN');
     });
 
     test('handles a payload with no categoryOther (older records)', () {
@@ -182,6 +214,90 @@ void main() {
   });
 
   group('Submit report form', () {
+    testWidgets('description hint and multiline field remain usable on a phone', (
+      tester,
+    ) async {
+      const hint =
+          'Please describe the issue, its location, size, and any safety risks.';
+      await _pumpSubmitScreen(tester, size: const Size(375, 667));
+
+      final formField = tester.widget<TextFormField>(
+        find.byKey(const Key('report-description-field')),
+      );
+      final field = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(const Key('report-description-field')),
+          matching: find.byType(TextField),
+        ),
+      );
+      expect(field.minLines, 4);
+      expect(field.maxLines, 8);
+      expect(field.maxLength, 1000);
+      expect(field.decoration?.hintText, hint);
+      expect(
+        formField.validator?.call('A sufficiently detailed issue.'),
+        isNull,
+      );
+      expect(
+        formField.validator?.call('short'),
+        contains('Please describe the issue'),
+      );
+      expect(
+        find.byType(ListView),
+        findsWidgets,
+        reason: 'the form remains vertically scrollable on a phone',
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.ensureVisible(
+        find.byKey(const Key('report-description-field')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(hint), findsOneWidget);
+    });
+
+    testWidgets('destination and suspected cause remain optional', (
+      tester,
+    ) async {
+      await _pumpSubmitScreen(tester);
+      final destination = tester.widget<TextFormField>(
+        find.byKey(const Key('report-destination-field')),
+      );
+      final cause = tester.widget<TextFormField>(
+        find.byKey(const Key('report-damage-cause-field')),
+      );
+      expect(destination.validator, isNull);
+      expect(cause.validator, isNull);
+      expect(
+        find.textContaining('map pin remains the issue location'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('flood can be added as an explicit related observation', (
+      tester,
+    ) async {
+      await _pumpSubmitScreen(tester);
+      await tester.tap(find.text('Flooding or water accumulation').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('report-surface-condition')), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Floodwater does not imply hidden cracks or potholes.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('flood reporting shows an unknown surface condition', (
+      tester,
+    ) async {
+      await _pumpSubmitScreen(tester);
+      await _tapCategory(tester, 'Flooding or water accumulation');
+      expect(find.byKey(const Key('report-surface-condition')), findsOneWidget);
+      expect(find.text('Unknown / not visible'), findsOneWidget);
+    });
+
     testWidgets(
       'reveals the description field only for "Other", and requires it',
       (tester) async {

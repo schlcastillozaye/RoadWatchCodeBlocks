@@ -50,6 +50,7 @@ class _HomeShellState extends State<HomeShell> {
         children: isAdmin
             ? [
                 const StaffDashboardScreen(isAdmin: true),
+                const StaffDashboardScreen(isAdmin: true, showAllReports: true),
                 const PublicMapScreen(),
                 const AdminUsersScreen(),
                 const ProfileScreen(),
@@ -58,6 +59,7 @@ class _HomeShellState extends State<HomeShell> {
             ? [
                 StaffDashboardScreen(isAdmin: false),
                 const PublicMapScreen(),
+                const StaffDashboardScreen(isAdmin: false, showHistory: true),
                 const ProfileScreen(),
               ]
             : [
@@ -75,7 +77,12 @@ class _HomeShellState extends State<HomeShell> {
                 NavigationDestination(
                   icon: Icon(Icons.fact_check_outlined),
                   selectedIcon: Icon(Icons.fact_check_rounded),
-                  label: 'Review',
+                  label: 'Dashboard',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.assignment_outlined),
+                  selectedIcon: Icon(Icons.assignment_rounded),
+                  label: 'Reports',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.map_outlined),
@@ -106,24 +113,30 @@ class _HomeShellState extends State<HomeShell> {
                         ? Icons.fact_check_rounded
                         : Icons.engineering_rounded,
                   ),
-                  label: user.isAdmin ? 'Review' : 'Work',
+                  label: user.isAdmin ? 'Dashboard' : 'My assignments',
                 ),
                 const NavigationDestination(
                   icon: Icon(Icons.map_outlined),
                   selectedIcon: Icon(Icons.map_rounded),
                   label: 'Map',
                 ),
+                if (!user.isAdmin)
+                  const NavigationDestination(
+                    icon: Icon(Icons.history_rounded),
+                    selectedIcon: Icon(Icons.history_rounded),
+                    label: 'Repair history',
+                  ),
                 const NavigationDestination(
                   icon: Icon(Icons.person_outline_rounded),
                   selectedIcon: Icon(Icons.person_rounded),
-                  label: 'Profile',
+                  label: 'My profile',
                 ),
               ]
             : const [
                 NavigationDestination(
                   icon: Icon(Icons.home_outlined),
                   selectedIcon: Icon(Icons.home_rounded),
-                  label: 'Home',
+                  label: 'Dashboard',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.map_outlined),
@@ -131,19 +144,25 @@ class _HomeShellState extends State<HomeShell> {
                   label: 'Map',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.add_circle_outline_rounded, size: 30),
-                  selectedIcon: Icon(Icons.add_circle_rounded, size: 32),
+                  icon: Tooltip(
+                    message: 'Report a road issue',
+                    child: Icon(Icons.add_circle_outline_rounded, size: 30),
+                  ),
+                  selectedIcon: Tooltip(
+                    message: 'Report a road issue',
+                    child: Icon(Icons.add_circle_rounded, size: 32),
+                  ),
                   label: 'Report',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.article_outlined),
                   selectedIcon: Icon(Icons.article_rounded),
-                  label: 'Reports',
+                  label: 'My reports',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_outline_rounded),
                   selectedIcon: Icon(Icons.person_rounded),
-                  label: 'Profile',
+                  label: 'My profile',
                 ),
               ],
       ),

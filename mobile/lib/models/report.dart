@@ -17,6 +17,10 @@ class RoadReport {
     required this.repairStatus,
     this.addressText,
     this.areaLabel,
+    this.destination,
+    this.damageCause,
+    this.relatedCategories = const [],
+    this.surfaceCondition,
     this.rejectionReason,
     this.moderationNotes,
     this.moderatedAt,
@@ -45,6 +49,10 @@ class RoadReport {
   final double longitude;
   final String? addressText;
   final String? areaLabel;
+  final String? destination;
+  final String? damageCause;
+  final List<String> relatedCategories;
+  final String? surfaceCondition;
   final ModerationStatus moderationStatus;
   final RepairStatus repairStatus;
   final String? rejectionReason;
@@ -109,6 +117,12 @@ class RoadReport {
     longitude: asDouble(json['longitude']),
     addressText: asStringOrNull(json['addressText']),
     areaLabel: asStringOrNull(json['areaLabel']),
+    destination: asStringOrNull(json['destination']),
+    damageCause: asStringOrNull(json['damageCause']),
+    relatedCategories: asList(json['relatedCategories'])
+        .map((value) => value.toString())
+        .toList(),
+    surfaceCondition: asStringOrNull(json['surfaceCondition']),
     moderationStatus: ModerationStatus.fromApi(
       asStringOrNull(json['moderationStatus']),
     ),
@@ -148,6 +162,10 @@ class RoadReport {
     'longitude': longitude,
     'addressText': addressText,
     'areaLabel': areaLabel,
+    'destination': destination,
+    'damageCause': damageCause,
+    'relatedCategories': relatedCategories,
+    'surfaceCondition': surfaceCondition,
     'moderationStatus': moderationStatus.api,
     'repairStatus': repairStatus.api,
     'rejectionReason': rejectionReason,

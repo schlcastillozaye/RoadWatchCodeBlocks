@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -21,12 +23,14 @@ class MyReportsScreen extends StatefulWidget {
 class _MyReportsScreenState extends State<MyReportsScreen> {
   final _search = TextEditingController();
   final _scrollController = ScrollController();
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300) {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 300) {
         context.read<MyReportsProvider>().loadMore();
       }
     });
@@ -40,13 +44,14 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
   void dispose() {
     _search.dispose();
     _scrollController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
   Future<void> _openSubmit() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const SubmitReportScreen()),
-    );
+    final created = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const SubmitReportScreen()));
     if (created == true && mounted) {
       context.read<MyReportsProvider>().load(refresh: true);
     }
@@ -63,8 +68,20 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
         children: [
           _Header(
             search: _search,
-            onSearch: (value) => provider.setSearch(value),
+            isLoading: provider.isLoading,
+            onSearchChanged: (value) {
+              provider.cancelPendingSearch();
+              _searchDebounce?.cancel();
+              _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+                if (mounted) context.read<MyReportsProvider>().setSearch(value);
+              });
+            },
+            onSearch: (value) {
+              _searchDebounce?.cancel();
+              provider.setSearch(value);
+            },
             onClear: () {
+              _searchDebounce?.cancel();
               _search.clear();
               provider.setSearch('');
             },
@@ -77,14 +94,21 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  Icon(Icons.cloud_off_rounded, size: 15, color: AppColors.darkBlue),
+                  Icon(
+                    Icons.cloud_off_rounded,
+                    size: 15,
+                    color: AppColors.darkBlue,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Showing saved reports — you appear to be offline.',
                       // The banner is cream in both themes, so its text stays
                       // navy rather than following the (dark-mode) page ink.
-                      style: AppTypography.caption(size: 11.5, color: AppColors.darkBlue),
+                      style: AppTypography.caption(
+                        size: 11.5,
+                        color: AppColors.darkBlue,
+                      ),
                     ),
                   ),
                 ],
@@ -96,7 +120,9 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openSubmit,
         backgroundColor: AppColors.brandAccent,
-        foregroundColor: AppColors.isDark ? AppColors.darkBlue : AppColors.onPrimary,
+        foregroundColor: AppColors.isDark
+            ? AppColors.darkBlue
+            : AppColors.onPrimary,
         icon: const Icon(Icons.add_rounded),
         label: const Text('New report'),
       ),
@@ -105,10 +131,15 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
 
   Widget _buildBody(MyReportsProvider provider) {
     if (provider.isLoading && provider.reports.isEmpty) {
-      return Center(child: CircularProgressIndicator(color: AppColors.brandAccent));
+      return Center(
+        child: CircularProgressIndicator(color: AppColors.brandAccent),
+      );
     }
     if (provider.error != null && provider.reports.isEmpty) {
-      return ErrorView(message: provider.error!, onRetry: () => provider.load(refresh: true));
+      return ErrorView(
+        message: provider.error!,
+        onRetry: () => provider.load(refresh: true),
+      );
     }
     if (provider.reports.isEmpty) {
       return EmptyState(
@@ -135,7 +166,9 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
           if (index >= provider.reports.length) {
             return Padding(
               padding: EdgeInsets.symmetric(vertical: 18),
-              child: Center(child: CircularProgressIndicator(color: AppColors.brandAccent)),
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.brandAccent),
+              ),
             );
           }
           final report = provider.reports[index];
@@ -143,7 +176,10 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
             report: report,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => ReportDetailScreen(reportId: report.id, initialReport: report),
+                builder: (_) => ReportDetailScreen(
+                  reportId: report.id,
+                  initialReport: report,
+                ),
               ),
             ),
           );
@@ -154,9 +190,17 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.search, required this.onSearch, required this.onClear});
+  const _Header({
+    required this.search,
+    required this.isLoading,
+    required this.onSearchChanged,
+    required this.onSearch,
+    required this.onClear,
+  });
 
   final TextEditingController search;
+  final bool isLoading;
+  final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onSearch;
   final VoidCallback onClear;
 
@@ -166,7 +210,10 @@ class _Header extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.darkBlue,
-        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
       child: SafeArea(
@@ -176,22 +223,48 @@ class _Header extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 14, bottom: 14),
-              child: Text('My reports', style: AppTypography.display(size: 24, color: AppColors.onPrimary)),
+              child: Text(
+                'My reports',
+                style: AppTypography.display(
+                  size: 24,
+                  color: AppColors.onPrimary,
+                ),
+              ),
             ),
             TextField(
+              key: const Key('my-reports-search-field'),
               controller: search,
               textInputAction: TextInputAction.search,
+              onChanged: onSearchChanged,
               onSubmitted: onSearch,
               style: AppTypography.bodyStyle(size: 14),
               decoration: InputDecoration(
                 hintText: 'Search by title or reference no.',
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                suffixIcon: search.text.isEmpty
+                suffixIcon: isLoading
+                    ? Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.brandAccent,
+                          ),
+                        ),
+                      )
+                    : search.text.isEmpty
                     ? null
-                    : IconButton(icon: const Icon(Icons.close_rounded, size: 18), onPressed: onClear),
+                    : IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: onClear,
+                      ),
                 isDense: true,
                 fillColor: AppColors.cardSurface,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
               ),
             ),
           ],
@@ -215,17 +288,29 @@ class _Filters extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         children: [
-          _chip('All', provider.filterModeration == null && provider.filterRepair == null, () {
-            provider.setModerationFilter(null);
-            provider.setRepairFilter(null);
-          }),
+          _chip(
+            'All',
+            provider.filterModeration == null && provider.filterRepair == null,
+            () {
+              provider.setModerationFilter(null);
+              provider.setRepairFilter(null);
+            },
+          ),
           for (final status in ModerationStatus.values) ...[
             const SizedBox(width: 8),
-            _chip(status.label, provider.filterModeration == status, () => provider.setModerationFilter(status)),
+            _chip(
+              status.label,
+              provider.filterModeration == status,
+              () => provider.setModerationFilter(status),
+            ),
           ],
           for (final status in RepairStatus.values) ...[
             const SizedBox(width: 8),
-            _chip(status.label, provider.filterRepair == status, () => provider.setRepairFilter(status)),
+            _chip(
+              status.label,
+              provider.filterRepair == status,
+              () => provider.setRepairFilter(status),
+            ),
           ],
         ],
       ),
@@ -240,7 +325,9 @@ class _Filters extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? AppColors.darkBlue : AppColors.cardSurface,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? AppColors.darkBlue : AppColors.border),
+          border: Border.all(
+            color: selected ? AppColors.darkBlue : AppColors.border,
+          ),
         ),
         child: Text(
           label,

@@ -36,10 +36,14 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
   final _description = TextEditingController();
   final _categoryOther = TextEditingController();
   final _address = TextEditingController();
+  final _destination = TextEditingController();
+  final _damageCause = TextEditingController();
   final _picker = ImagePicker();
 
   IssueCategory _category = IssueCategory.pothole;
   Priority _priority = Priority.medium;
+  final Set<IssueCategory> _relatedCategories = {};
+  String _surfaceCondition = 'UNKNOWN';
   final List<_PickedPhoto> _photos = [];
 
   PickedLocation? _location;
@@ -55,6 +59,8 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     _description.dispose();
     _categoryOther.dispose();
     _address.dispose();
+    _destination.dispose();
+    _damageCause.dispose();
     super.dispose();
   }
 
@@ -142,6 +148,12 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
         categoryOther: _category == IssueCategory.other
             ? _categoryOther.text.trim()
             : null,
+        destination: _destination.text.trim(),
+        damageCause: _damageCause.text.trim(),
+        relatedCategories: _relatedCategories
+            .map((category) => category.api)
+            .toList(),
+        surfaceCondition: _hasFlooding ? _surfaceCondition : null,
         priority: _priority,
         latitude: _location!.latitude,
         longitude: _location!.longitude,
@@ -299,14 +311,34 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
+                      key: const Key('report-damage-cause-field'),
+                      controller: _damageCause,
+                      textCapitalization: TextCapitalization.sentences,
+                      maxLength: 500,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Possible cause of damage (optional)',
+                        hintText: 'e.g. heavy vehicles, flooding, erosion, or poor drainage',
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    Text(
+                      'This is a reported suspicion, not a verified engineering conclusion. Leave blank or enter “Unknown” if unsure.',
+                      style: AppTypography.caption(size: 11.5),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('report-description-field'),
                       controller: _description,
                       textCapitalization: TextCapitalization.sentences,
-                      minLines: 3,
-                      maxLines: 6,
+                      minLines: 4,
+                      maxLines: 8,
                       maxLength: 1000,
                       decoration: const InputDecoration(
                         labelText: 'Description',
-                        hintText: 'Describe the issue, how big it is and any safety risk.',
+                        hintText: 'Please describe the issue, its location, size, and any safety risks.',
+                        hintMaxLines: 3,
                         alignLabelWithHint: true,
                       ),
                       validator: (v) {
@@ -354,7 +386,10 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                           .toList(),
                       onChanged: (category) {
                         if (category != null) {
-                          setState(() => _category = category);
+                          setState(() {
+                            _category = category;
+                            _relatedCategories.remove(category);
+                          });
                         }
                       },
                     ),
@@ -380,6 +415,74 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                           }
                           return null;
                         },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              SectionCard(
+                title: 'Other visible issues (optional)',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Select only issues you can observe. Floodwater does not imply hidden cracks or potholes.',
+                      style: AppTypography.caption(size: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (final category
+                            in IssueCategory.relatedObservationOptions)
+                          if (category != _category)
+                            FilterChip(
+                              label: Text(category.label),
+                              selected: _relatedCategories.contains(category),
+                              onSelected: (selected) => setState(() {
+                                if (selected) {
+                                  _relatedCategories.add(category);
+                                } else {
+                                  _relatedCategories.remove(category);
+                                }
+                              }),
+                            ),
+                      ],
+                    ),
+                    if (_hasFlooding) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        key: const Key('report-surface-condition'),
+                        initialValue: _surfaceCondition,
+                        decoration: const InputDecoration(
+                          labelText: 'Road surface under/near floodwater',
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'UNKNOWN',
+                            child: Text('Unknown / not visible'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'VISIBLE_DAMAGE',
+                            child: Text('Visible road damage'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'NO_VISIBLE_DAMAGE',
+                            child: Text('Inspected; no damage visible'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _surfaceCondition = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Choose “Unknown” if water prevents you from inspecting the road.',
+                        style: AppTypography.caption(size: 11.5),
                       ),
                     ],
                   ],
@@ -470,6 +573,19 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                       ),
                     ],
                     const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('report-destination-field'),
+                      controller: _destination,
+                      textCapitalization: TextCapitalization.sentences,
+                      maxLength: 300,
+                      decoration: const InputDecoration(
+                        labelText:
+                            'Destination or affected road segment (optional)',
+                        hintText: 'e.g. Road leading to San Isidro market',
+                        helperText: 'Describes where the road leads; the map pin remains the issue location.',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     AppButton(
                       label: _location == null
                           ? 'Pick location on map'
@@ -528,6 +644,10 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       ),
     );
   }
+
+  bool get _hasFlooding =>
+      _category == IssueCategory.flooding ||
+      _relatedCategories.contains(IssueCategory.flooding);
 }
 
 class _PhotoTile extends StatelessWidget {

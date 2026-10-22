@@ -25,6 +25,7 @@ class MyReportsProvider extends ChangeNotifier {
   int _totalPages = 1;
   int _total = 0;
   bool _fromCache = false;
+  int _loadGeneration = 0;
 
   ModerationStatus? _filterModeration;
   RepairStatus? _filterRepair;
@@ -42,8 +43,9 @@ class MyReportsProvider extends ChangeNotifier {
   String get search => _search;
 
   Future<void> load({bool refresh = false}) async {
-    if (_loading) return;
+    final generation = ++_loadGeneration;
     _loading = true;
+    _loadingMore = false;
     _error = null;
     if (refresh) {
       _page = 1;
@@ -59,6 +61,7 @@ class MyReportsProvider extends ChangeNotifier {
         repairStatus: _filterRepair,
         search: _search.isEmpty ? null : _search,
       );
+      if (generation != _loadGeneration) return;
       _reports
         ..clear()
         ..addAll(result.items);
@@ -68,19 +71,24 @@ class MyReportsProvider extends ChangeNotifier {
       _fromCache = false;
       await _writeCache();
     } on ApiException catch (e) {
+      if (generation != _loadGeneration) return;
       _error = e.message;
       if (_reports.isEmpty) await _readCache();
     } catch (_) {
+      if (generation != _loadGeneration) return;
       _error = 'Something went wrong loading your reports.';
       if (_reports.isEmpty) await _readCache();
     } finally {
-      _loading = false;
-      notifyListeners();
+      if (generation == _loadGeneration) {
+        _loading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> loadMore() async {
-    if (_loadingMore || !hasMore || _fromCache) return;
+    if (_loading || _loadingMore || !hasMore || _fromCache) return;
+    final generation = _loadGeneration;
     _loadingMore = true;
     notifyListeners();
     try {
@@ -91,6 +99,7 @@ class MyReportsProvider extends ChangeNotifier {
         repairStatus: _filterRepair,
         search: _search.isEmpty ? null : _search,
       );
+      if (generation != _loadGeneration) return;
       _reports.addAll(result.items);
       _page = result.page;
       _totalPages = result.totalPages;
@@ -98,8 +107,10 @@ class MyReportsProvider extends ChangeNotifier {
     } catch (_) {
       // Silent: pull-to-refresh can retry.
     } finally {
-      _loadingMore = false;
-      notifyListeners();
+      if (generation == _loadGeneration) {
+        _loadingMore = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -114,8 +125,17 @@ class MyReportsProvider extends ChangeNotifier {
   }
 
   void setSearch(String value) {
-    _search = value.trim();
+    final query = value.trim();
+    _search = query;
     load(refresh: true);
+  }
+
+  void cancelPendingSearch() {
+    if (!_loading && !_loadingMore) return;
+    _loadGeneration++;
+    _loading = false;
+    _loadingMore = false;
+    notifyListeners();
   }
 
   Future<RoadReport> submit({
@@ -127,6 +147,10 @@ class MyReportsProvider extends ChangeNotifier {
     required double longitude,
     String? addressText,
     String? areaLabel,
+    String? destination,
+    String? damageCause,
+    List<String> relatedCategories = const [],
+    String? surfaceCondition,
     Priority? priority,
     required List<UploadFile> photos,
     void Function(int sent, int total)? onProgress,
@@ -140,6 +164,10 @@ class MyReportsProvider extends ChangeNotifier {
       longitude: longitude,
       addressText: addressText,
       areaLabel: areaLabel,
+      destination: destination,
+      damageCause: damageCause,
+      relatedCategories: relatedCategories,
+      surfaceCondition: surfaceCondition,
       priority: priority,
       photos: photos,
       onProgress: onProgress,
@@ -170,7 +198,10 @@ class MyReportsProvider extends ChangeNotifier {
   Future<void> _writeCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_cacheKey, jsonEncode(_reports.map((r) => r.toJson()).toList()));
+      await prefs.setString(
+        _cacheKey,
+        jsonEncode(_reports.map((r) => r.toJson()).toList()),
+      );
     } catch (_) {}
   }
 
@@ -183,7 +214,11 @@ class MyReportsProvider extends ChangeNotifier {
       if (decoded is! List) return;
       _reports
         ..clear()
-        ..addAll(decoded.whereType<Map>().map((e) => RoadReport.fromJson(e.cast<String, dynamic>())));
+        ..addAll(
+          decoded.whereType<Map>().map(
+            (e) => RoadReport.fromJson(e.cast<String, dynamic>()),
+          ),
+        );
       _fromCache = _reports.isNotEmpty;
     } catch (_) {}
   }

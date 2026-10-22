@@ -91,6 +91,23 @@ function rw_apply_patches(PDO $pdo): void
         echo "  + added Report.categoryOther\n";
     }
 
+    if (rw_column_type($pdo, 'Report', 'destination') === '') {
+        $pdo->exec('ALTER TABLE `Report` ADD COLUMN `destination` VARCHAR(300) NULL AFTER `areaLabel`');
+        echo "  + added Report.destination\n";
+    }
+    if (rw_column_type($pdo, 'Report', 'damageCause') === '') {
+        $pdo->exec('ALTER TABLE `Report` ADD COLUMN `damageCause` VARCHAR(500) NULL AFTER `destination`');
+        echo "  + added Report.damageCause\n";
+    }
+    if (rw_column_type($pdo, 'Report', 'relatedCategories') === '') {
+        $pdo->exec('ALTER TABLE `Report` ADD COLUMN `relatedCategories` TEXT NULL AFTER `damageCause`');
+        echo "  + added Report.relatedCategories\n";
+    }
+    if (rw_column_type($pdo, 'Report', 'surfaceCondition') === '') {
+        $pdo->exec('ALTER TABLE `Report` ADD COLUMN `surfaceCondition` VARCHAR(24) NULL AFTER `relatedCategories`');
+        echo "  + added Report.surfaceCondition\n";
+    }
+
     if (rw_column_type($pdo, 'ReportPhoto', 'imageData') === '') {
         $pdo->exec('ALTER TABLE `ReportPhoto` ADD COLUMN `imageData` MEDIUMBLOB NULL');
         echo "  + added ReportPhoto.imageData\n";

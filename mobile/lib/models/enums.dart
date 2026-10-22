@@ -51,6 +51,14 @@ enum IssueCategory {
     IssueCategory.damagedDrainage,
     IssueCategory.other,
   ];
+  static const List<IssueCategory> relatedObservationOptions = [
+    IssueCategory.pothole,
+    IssueCategory.roadCrack,
+    IssueCategory.damagedPavement,
+    IssueCategory.flooding,
+    IssueCategory.roadObstruction,
+    IssueCategory.damagedDrainage,
+  ];
 
   /// Bounds for the free text required when [other] is selected. Mirrored by
   /// the API (`Schema::CATEGORY_OTHER_MIN`/`MAX`) and the web form.

@@ -433,6 +433,12 @@
     DAMAGED_DRAINAGE: { icon: '🚿', label: 'Damaged drainage' },
     OTHER: { icon: 'ℹ️', label: 'Other' },
   };
+  const PRIORITY_TONES = {
+    LOW: 'low',
+    MEDIUM: 'medium',
+    HIGH: 'high',
+    URGENT: 'urgent',
+  };
   // Order offered when submitting a report.
   const CATEGORY_OPTIONS = ['POTHOLE', 'ROAD_CRACK', 'DAMAGED_PAVEMENT', 'FLOODING', 'ROAD_OBSTRUCTION', 'DAMAGED_DRAINAGE', 'OTHER'];
   // "Other" must be explained; bounds are mirrored by the API and the mobile form.
@@ -442,6 +448,17 @@
 
   const categoryIcon = (cat) => (CATEGORY_META[String(cat || '').toUpperCase()] || CATEGORY_META.OTHER).icon;
   const categoryLabel = (cat) => (CATEGORY_META[String(cat || '').toUpperCase()] || CATEGORY_META.OTHER).label;
+  const priorityIndicator = (priority) => {
+    const value = String(priority || '').toUpperCase();
+    const tone = PRIORITY_TONES[value];
+    if (!tone) return '';
+    return `<span class="rw-priority-indicator rw-priority-${tone}" aria-label="Priority: ${escapeHtml(value)}">
+      <svg aria-hidden="true" viewBox="0 0 16 16" focusable="false">
+        <path d="M3 1.5a.75.75 0 0 1 .75.75v.32c2.12-1.24 4.04.61 6.06.14 1.25-.29 2.18-.1 3.08.42v6.26c-1.03-.59-1.9-.82-3.08-.54-2.03.47-3.94-1.37-6.06-.14v6.54H2.25V2.25A.75.75 0 0 1 3 1.5Z" />
+      </svg>
+      <span>${escapeHtml(value)}</span>
+    </span>`;
+  };
   // A report's category as shown to users: "Other — <the reporter's own words>"
   // when they supplied a description, plain label otherwise.
   const categoryText = (report) => {
@@ -450,6 +467,16 @@
     const other = report && typeof report.categoryOther === 'string' ? report.categoryOther.trim() : '';
     return value === CATEGORY_OTHER && other ? `${typical} — ${other}` : typical;
   };
+
+  const relatedCategoryText = (report) => {
+    if (!Array.isArray(report && report.relatedCategories)) return '';
+    return report.relatedCategories.map((value) => categoryLabel(value)).join(', ');
+  };
+  const surfaceConditionText = (value) => ({
+    UNKNOWN: 'Unknown / not visible',
+    VISIBLE_DAMAGE: 'Visible road damage',
+    NO_VISIBLE_DAMAGE: 'Inspected; no damage visible',
+  }[value] || '');
 
   const reportLocation = (r) => r.areaLabel || r.addressText || 'Location not specified';
 
@@ -595,43 +622,20 @@
     </section>
   `;
 
-  // The global header is rendered by the router for every non-auth route, so
-  // navigation is available on /reports, /map, /admin … and not only the home
-  // page. The role-gated links only point at routes the signed-in user may open
-  // (the router would otherwise bounce them straight back).
   const headerHtml = () => {
     const u = getUser();
     const firstName = u ? escapeHtml((u.fullName || '').split(' ')[0] || 'there') : '';
-    const active = (path) => window.location.pathname === path ? ' is-active' : '';
-    const roleLinks = !u
-      ? ''
-      : u.role === 'ADMIN'
-        ? `<a href="/admin" data-nav="/admin" class="rw-nav-link${active('/admin')}">Admin</a>`
-          + `<a href="/audit" data-nav="/audit" class="rw-nav-link${active('/audit')}">Audit log</a>`
-        : u.role === 'MAINTENANCE_OFFICER'
-          ? `<a href="/assignments" data-nav="/assignments" class="rw-nav-link${active('/assignments')}">Assignments</a>`
-          : '';
     return `
     <header class="rw-header">
       <div class="rw-header-inner">
         <a href="/" id="nav-home" data-nav="/" class="rw-brand-home" aria-label="RoadBlocks by Code Blocks Inc.">${brandLogoHtml('dark')}</a>
-        <button type="button" class="rw-mobile-menu-toggle" data-mobile-menu-toggle aria-expanded="false" aria-controls="rw-primary-nav">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
-          <span>Menu</span>
-        </button>
-        <nav id="rw-primary-nav" class="rw-primary-nav" aria-label="Primary navigation">
-          <a href="/map" data-nav="/map" class="rw-nav-link${active('/map')}">Map</a>
-          ${u ? `
-            <a href="/reports" data-nav="/reports" class="rw-nav-link${active('/reports')}">My Reports</a>
-            <a href="/submit-report" data-nav="/submit-report" class="rw-nav-link rw-nav-primary${active('/submit-report')}" aria-label="Report an issue"><span class="rw-plus-mark" aria-hidden="true">+</span><span class="rw-plus-label">Report</span></a>
-            ${roleLinks}
-            <a href="/profile" data-nav="/profile" class="rw-nav-user${active('/profile')}" aria-label="Edit profile for ${firstName}">${firstName}</a>
-            <button id="nav-logout" type="button" class="rw-nav-logout">Logout</button>
-          ` : `
-            <a href="/login" data-nav="/login" class="rw-nav-login">Sign in</a>
-          `}
-          ${themeToggleHtml()}
-        </nav>
+        ${u ? `
+          <div class="rw-header-account">
+            <span class="rw-role-chip">${escapeHtml(u.role === 'ADMIN' ? 'Administrator' : u.role === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : 'Citizen')}</span>
+            <span class="rw-nav-user" aria-label="Signed in as ${firstName}">${firstName}</span>
+            ${themeToggleHtml()}
+          </div>
+        ` : `<a href="/login" data-nav="/login" class="rw-nav-login">Sign in</a>`}
       </div>
     </header>`;
   };
@@ -726,12 +730,16 @@
     `);
   };
 
-  const pageReports = () => workspaceLayout('CITIZEN', 'reports', `
+  const pageReports = () => {
+    const user = getUser();
+    const role = user?.role === 'ADMIN' || user?.role === 'MAINTENANCE_OFFICER' ? user.role : 'CITIZEN';
+    const workspaceName = role === 'ADMIN' ? 'ROADBLOCKS OPERATIONS' : role === 'MAINTENANCE_OFFICER' ? 'MAINTENANCE WORKSPACE' : 'CITIZEN WORKSPACE';
+    return workspaceLayout(role, role === 'ADMIN' ? 'reports' : role === 'MAINTENANCE_OFFICER' ? 'assignments' : 'reports', `
     <section class="workspace-page">
       <div class="max-w-7xl mx-auto px-6">
         <div class="admin-page-heading">
           <div>
-            <p class="admin-eyebrow">CITIZEN WORKSPACE</p>
+            <p class="admin-eyebrow">${workspaceName}</p>
             <h1 class="admin-page-title">My reports</h1>
             <p class="admin-page-subtitle">Review each report’s status and follow its progress.</p>
           </div>
@@ -742,6 +750,7 @@
       </div>
     </section>
   `);
+  };
 
   const pageReportDetail = () => {
     const user = getUser();
@@ -756,12 +765,16 @@
   `);
   };
 
-  const pageSubmitReport = () => workspaceLayout('CITIZEN', 'submit-report', `
+  const pageSubmitReport = () => {
+    const user = getUser();
+    const role = user?.role === 'ADMIN' || user?.role === 'MAINTENANCE_OFFICER' ? user.role : 'CITIZEN';
+    const workspaceName = role === 'ADMIN' ? 'ROADBLOCKS OPERATIONS' : role === 'MAINTENANCE_OFFICER' ? 'MAINTENANCE WORKSPACE' : 'CITIZEN WORKSPACE';
+    return workspaceLayout(role, 'submit-report', `
     <section class="workspace-page max-w-2xl mx-auto px-6">
       <div class="rw-report-form-card admin-panel">
         <div class="admin-page-heading">
           <div>
-            <p class="admin-eyebrow">CITIZEN WORKSPACE</p>
+            <p class="admin-eyebrow">${workspaceName}</p>
             <h1 class="admin-page-title">Report a road issue</h1>
             <p class="admin-page-subtitle">Add the details, location and a photo so your report can be reviewed.</p>
           </div>
@@ -785,7 +798,13 @@
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2">Description</label>
-            <textarea name="description" rows="3" required minlength="10" class="w-full brand-input" placeholder="Describe the issue (at least 10 characters)…"></textarea>
+            <textarea name="description" rows="4" required minlength="10" class="w-full brand-input rw-report-description" placeholder="Please describe the issue, its location, size, and any safety risks."></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="report-damage-cause">Possible cause of damage (optional)</label>
+            <textarea name="damageCause" id="report-damage-cause" rows="2" maxlength="500" class="w-full brand-input"
+              placeholder="e.g. flooding, heavy vehicles, erosion, or poor drainage"></textarea>
+            <p class="text-xs text-slate-tint mt-1">This is your observation, not a verified engineering conclusion. Leave blank or enter “Unknown” if unsure.</p>
           </div>
           <div class="space-y-4">
             <div>
@@ -807,9 +826,35 @@
               <p id="address-lookup-status" class="text-xs text-slate-tint mt-1" aria-live="polite">A coordinate label will be used if address lookup is unavailable.</p>
             </div>
             <div>
+              <label class="block text-sm font-medium text-ink-2 mb-2" for="report-destination">Destination or affected road segment (optional)</label>
+              <input type="text" name="destination" id="report-destination" maxlength="300" class="w-full brand-input"
+                placeholder="e.g. Road leading to San Isidro market or Mabini Street" />
+              <p class="text-xs text-slate-tint mt-1">This describes where the road leads; the map pin and coordinates remain the issue location.</p>
+            </div>
+            <div>
               <label class="block text-sm font-medium text-ink-2 mb-2">Area/Barangay (optional)</label>
               <input type="text" name="areaLabel" class="w-full brand-input" placeholder="e.g. San Isidro" />
             </div>
+          </div>
+          <fieldset class="space-y-2">
+            <legend class="block text-sm font-medium text-ink-2 mb-1">Other visible issues at this location (optional)</legend>
+            <p class="text-xs text-slate-tint">Select only issues you can actually observe. Floodwater does not imply hidden cracks or potholes.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              ${CATEGORY_OPTIONS.filter((value) => value !== 'OTHER').map((value) => `
+                <label class="flex items-start gap-2 text-sm text-ink-2">
+                  <input type="checkbox" class="report-related-category mt-1" value="${value}" />
+                  <span>${escapeHtml(categoryLabel(value))}</span>
+                </label>`).join('')}
+            </div>
+          </fieldset>
+          <div id="report-surface-condition-wrap" hidden>
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="report-surface-condition">Road surface condition under/near floodwater</label>
+            <select name="surfaceCondition" id="report-surface-condition" class="w-full brand-input">
+              <option value="UNKNOWN" selected>Unknown / not visible</option>
+              <option value="VISIBLE_DAMAGE">Visible road damage</option>
+              <option value="NO_VISIBLE_DAMAGE">Inspected; no damage visible</option>
+            </select>
+            <p class="text-xs text-slate-tint mt-1">Choose “Unknown” if water prevents you from inspecting the road.</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2">Issue Photo (1–8 images)</label>
@@ -821,6 +866,7 @@
       </div>
     </section>
   `);
+  };
 
   const pageMap = () => {
     const role = getUser()?.role;
@@ -864,24 +910,29 @@
     const links = role === 'ADMIN'
       ? [
           ['dashboard', '/admin', 'Dashboard'],
-          ['reports', '/admin/reports', 'Reports'],
-          ['map', '/map', 'Public map'],
-          ['users', '/admin/users', 'Users'],
-        ['profile', '/profile', 'Profile'],
+          ['reports', '/admin/reports', 'Manage reports'],
+          ['assignments', '/admin/reports?view=assignments', 'Maintenance assignments'],
+          ['repairs', '/admin/reports?view=repair-monitoring', 'Repair monitoring'],
+          ['users', '/admin/users', 'User management'],
+          ['map', '/map', 'Road issue map'],
+          ['statistics', '/admin?view=statistics', 'Reports & statistics'],
+          ['profile', '/profile', 'My profile'],
+          ['audit', '/audit', 'Audit log'],
       ]
       : role === 'MAINTENANCE_OFFICER'
         ? [
-            ['dashboard', '/assignments', 'My dashboard'],
-            ['assignments', '#assignments-list', 'My assignments'],
-            ['map', '/map', 'Public map'],
-            ['profile', '/profile', 'Profile'],
+            ['dashboard', '/assignments', 'Dashboard'],
+            ['assignments', '/assignments#assigned-work', 'My assignments'],
+            ['map', '/map', 'Road issue map'],
+            ['repair-history', '/assignments?view=history', 'Repair history'],
+            ['profile', '/profile', 'My profile'],
           ]
         : [
             ['dashboard', '/', 'Dashboard'],
+            ['submit-report', '/submit-report', 'Report a road issue'],
             ['reports', '/reports', 'My reports'],
-            ['submit-report', '/submit-report', 'Report an issue'],
-            ['map', '/map', 'Public map'],
-            ['profile', '/profile', 'Profile'],
+            ['map', '/map', 'Road issue map'],
+            ['profile', '/profile', 'My profile'],
           ];
     const roleName = role === 'ADMIN' ? 'Admin' : role === 'MAINTENANCE_OFFICER' ? 'Maintenance' : 'Citizen';
     const navLabel = `${roleName} navigation`;
@@ -897,10 +948,7 @@
         </div>
         <nav id="admin-sidebar-nav" class="admin-sidebar-nav">
           ${links.map(([key, href, label]) => {
-            const hash = href.indexOf('#');
-            const path = hash < 0 ? href : href.slice(0, hash);
-            const nav = hash < 0 ? `data-nav="${path}"` : '';
-            return `<a href="${href}" ${nav} class="${active === key ? 'is-active' : ''}">${label}</a>`;
+            return `<a href="${href}" data-nav="${href}" class="${active === key ? 'is-active' : ''}">${label}</a>`;
           }).join('')}
         </nav>
         <button type="button" class="admin-sidebar-logout" data-admin-logout>Sign out</button>
@@ -911,11 +959,13 @@
 
   const adminLayout = (active, content) => workspaceLayout('ADMIN', active, content);
 
-  const pageAdminDashboard = () => adminLayout('dashboard', `
+  const pageAdminDashboard = () => {
+    const statisticsView = new URLSearchParams(window.location.search).get('view') === 'statistics';
+    return adminLayout(statisticsView ? 'statistics' : 'dashboard', `
     <div class="admin-page-heading">
       <div>
         <p class="admin-eyebrow">ROADBLOCKS OPERATIONS</p>
-        <h1 id="admin-dashboard-title" class="admin-page-title">Dashboard</h1>
+        <h1 id="admin-dashboard-title" class="admin-page-title">${statisticsView ? 'Reports & statistics' : 'Dashboard'}</h1>
         <p class="admin-page-subtitle">A live overview of reports and repair activity.</p>
       </div>
       <button type="button" class="btn btn-secondary btn-sm" data-admin-refresh>Refresh data</button>
@@ -965,13 +1015,28 @@
       <div id="admin-notifications"><div class="loading-block"><span class="spinner"></span> Loading notifications…</div></div>
     </section>
   `);
+  };
 
-  const pageAdminReports = () => adminLayout('reports', `
+  const pageAdminReports = () => {
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get('view') || 'all';
+    const assignmentsView = view === 'assignments';
+    const monitoringView = view === 'repair-monitoring';
+    const active = assignmentsView ? 'assignments' : monitoringView ? 'repairs' : 'reports';
+    const defaultStatus = assignmentsView ? 'repairStatus:AWAITING_MAINTENANCE' : '';
+    const selectedStatus = params.get('status') || defaultStatus;
+    const title = assignmentsView ? 'Maintenance assignments' : monitoringView ? 'Repair monitoring' : 'Report management';
+    const subtitle = assignmentsView
+      ? 'Review approved issues that are waiting to be assigned to maintenance staff.'
+      : monitoringView
+        ? 'Track assigned repairs, submitted evidence and verified completion.'
+        : 'Search, review and manage submitted road reports.';
+    return adminLayout(active, `
     <div class="admin-page-heading">
       <div>
         <p class="admin-eyebrow">ROADBLOCKS OPERATIONS</p>
-        <h1 class="admin-page-title">Report management</h1>
-        <p class="admin-page-subtitle">Search, review and manage submitted road reports.</p>
+        <h1 class="admin-page-title">${title}</h1>
+        <p class="admin-page-subtitle">${subtitle}</p>
       </div>
       <button type="button" class="btn btn-secondary btn-sm" data-admin-refresh>Refresh data</button>
     </div>
@@ -984,16 +1049,16 @@
         <label>
           <span class="sr-only">Filter reports by status</span>
           <select class="brand-input" name="status">
-            <option value="">All statuses</option>
-            <option value="moderationStatus:PENDING_REVIEW">Pending review</option>
-            <option value="moderationStatus:APPROVED">Approved</option>
-            <option value="moderationStatus:REJECTED">Rejected</option>
-            <option value="repairStatus:AWAITING_MAINTENANCE">Awaiting maintenance</option>
-            <option value="repairStatus:IN_PROGRESS">In progress</option>
-            <option value="repairStatus:AWAITING_VERIFICATION">Awaiting admin verification</option>
-            <option value="repairStatus:RETURNED_FOR_WORK">Returned for further work</option>
-            <option value="repairStatus:COMPLETED">Completed (legacy)</option>
-            <option value="repairStatus:VERIFIED_COMPLETED">Verified completed (admin approved)</option>
+            <option value="" ${selectedStatus === '' ? 'selected' : ''}>All statuses</option>
+            <option value="moderationStatus:PENDING_REVIEW" ${selectedStatus === 'moderationStatus:PENDING_REVIEW' ? 'selected' : ''}>Pending review</option>
+            <option value="moderationStatus:APPROVED" ${selectedStatus === 'moderationStatus:APPROVED' ? 'selected' : ''}>Approved</option>
+            <option value="moderationStatus:REJECTED" ${selectedStatus === 'moderationStatus:REJECTED' ? 'selected' : ''}>Rejected</option>
+            <option value="repairStatus:AWAITING_MAINTENANCE" ${selectedStatus === 'repairStatus:AWAITING_MAINTENANCE' ? 'selected' : ''}>Awaiting maintenance</option>
+            <option value="repairStatus:IN_PROGRESS" ${selectedStatus === 'repairStatus:IN_PROGRESS' ? 'selected' : ''}>In progress</option>
+            <option value="repairStatus:AWAITING_VERIFICATION" ${selectedStatus === 'repairStatus:AWAITING_VERIFICATION' ? 'selected' : ''}>Awaiting admin verification</option>
+            <option value="repairStatus:RETURNED_FOR_WORK" ${selectedStatus === 'repairStatus:RETURNED_FOR_WORK' ? 'selected' : ''}>Returned for further work</option>
+            <option value="repairStatus:COMPLETED" ${selectedStatus === 'repairStatus:COMPLETED' ? 'selected' : ''}>Completed (legacy)</option>
+            <option value="repairStatus:VERIFIED_COMPLETED" ${selectedStatus === 'repairStatus:VERIFIED_COMPLETED' ? 'selected' : ''}>Verified completed (admin approved)</option>
           </select>
         </label>
         <label>
@@ -1012,6 +1077,7 @@
       </div>
     </section>
   `);
+  };
 
   const pageAdminUsers = () => adminLayout('users', `
     <div class="admin-page-heading">
@@ -1071,15 +1137,17 @@
     </dialog>
   `);
 
-  const pageAssignments = () => workspaceLayout('MAINTENANCE_OFFICER', 'dashboard', `
+  const pageAssignments = () => {
+    const historyView = new URLSearchParams(window.location.search).get('view') === 'history';
+    return workspaceLayout('MAINTENANCE_OFFICER', historyView ? 'repair-history' : 'dashboard', `
     <section class="workspace-page">
       <div class="admin-page-heading">
         <div>
           <p class="admin-eyebrow">MAINTENANCE WORKSPACE</p>
-          <h1 class="admin-page-title">My dashboard</h1>
-          <p class="admin-page-subtitle">Assignments, repair progress and notifications for your work.</p>
+          <h1 class="admin-page-title">${historyView ? 'Repair history' : 'My dashboard'}</h1>
+          <p class="admin-page-subtitle">${historyView ? 'Previously verified repairs assigned to your account.' : 'Assignments, repair progress and notifications for your work.'}</p>
         </div>
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-assignments">Refresh dashboard</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-assignments">${historyView ? 'Refresh history' : 'Refresh dashboard'}</button>
       </div>
       <div id="officer-summary" class="admin-stat-grid" aria-label="Maintenance summary">
         <div class="loading-block"><span class="spinner"></span> Loading your summary…</div>
@@ -1098,8 +1166,8 @@
       <section class="admin-panel" id="assigned-work">
         <div class="admin-panel-heading">
           <div>
-            <h2>My assignments</h2>
-            <p>Open a report to review its location, photos and repair history.</p>
+            <h2>${historyView ? 'Verified repairs' : 'My assignments'}</h2>
+            <p>${historyView ? 'Repairs accepted by an administrator as fully verified.' : 'Open a report to review its location, photos and repair history.'}</p>
           </div>
         </div>
         <div id="assignments-list" class="space-y-3">
@@ -1108,8 +1176,9 @@
       </section>
     </section>
   `);
+  };
 
-  const pageAudit = () => `
+  const pageAudit = () => adminLayout('audit', `
     <section class="py-8 max-w-3xl mx-auto px-6">
       <div class="brand-card p-8 rounded-xl shadow-lg">
         <h2 class="text-2xl font-bold text-navy mb-4">Audit Log</h2>
@@ -1118,7 +1187,7 @@
         </div>
       </div>
     </section>
-  `;
+  `);
 
   const pageNotFound = () => `
     <section class="flex-1 flex items-center justify-center p-4 bg-sheet">
@@ -1169,7 +1238,7 @@
   };
 
   const navigateTo = (path, replace = false) => {
-    const current = window.location.pathname + window.location.search;
+    const current = window.location.pathname + window.location.search + window.location.hash;
     if (current === path) return render();
     history[replace ? 'replaceState' : 'pushState']({}, '', path);
     return render();
@@ -1223,6 +1292,10 @@
     bindPasswordToggles(root);
     window.scrollTo(0, 0);
     await afterRender(route.name, params);
+    if (window.location.hash) {
+      const target = document.getElementById(window.location.hash.slice(1));
+      if (target) target.scrollIntoView({ block: 'start' });
+    }
   };
 
   const afterRender = async (name, params) => {
@@ -1958,12 +2031,16 @@
         <div class="mt-6 pt-6 border-t border-azure">
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
             <div><span class="font-medium text-ink-2">Location:</span> ${escapeHtml(reportLocation(report))}</div>
+            ${report.destination ? `<div><span class="font-medium text-ink-2">Destination / road segment:</span> ${escapeHtml(report.destination)}</div>` : ''}
             <div><span class="font-medium text-ink-2">Reference:</span> ${escapeHtml(report.referenceNo)}</div>
             <div><span class="font-medium text-ink-2">Reported:</span> ${escapeHtml(relativeDate(report.createdAt))}</div>
             <div><span class="font-medium text-ink-2">Assigned to:</span> ${report.assignedOfficer ? escapeHtml(report.assignedOfficer.fullName || 'Officer') : 'Unassigned'}</div>
             <div><span class="font-medium text-ink-2">Repair status:</span> ${escapeHtml(adminRepairLabel(report.repairStatus))}</div>
             <div><span class="font-medium text-ink-2">Last updated:</span> ${escapeHtml(relativeDate(report.updatedAt))}</div>
             <div><span class="font-medium text-ink-2">Coordinates:</span> ${escapeHtml(Number(report.latitude).toFixed(6))}, ${escapeHtml(Number(report.longitude).toFixed(6))}</div>
+            ${report.damageCause ? `<div><span class="font-medium text-ink-2">Reported possible cause:</span> ${escapeHtml(report.damageCause)}</div>` : ''}
+            ${relatedCategoryText(report) ? `<div><span class="font-medium text-ink-2">Other observed issues:</span> ${escapeHtml(relatedCategoryText(report))}</div>` : ''}
+            ${report.surfaceCondition ? `<div><span class="font-medium text-ink-2">Flooded road surface:</span> ${escapeHtml(surfaceConditionText(report.surfaceCondition))}</div>` : ''}
           </div>
           ${report.rejectionReason ? `<p class="mt-4 text-sm text-red-400">Rejected: ${escapeHtml(report.rejectionReason)}</p>` : ''}
         </div>
@@ -2140,6 +2217,25 @@
     const categorySelect = form ? form.querySelector('select[name="category"]') : null;
     const otherWrap = q('#report-category-other-wrap');
     const otherInput = q('#report-category-other');
+    const relatedInputs = form ? Array.from(form.querySelectorAll('.report-related-category')) : [];
+    const surfaceWrap = q('#report-surface-condition-wrap');
+    const surfaceSelect = q('#report-surface-condition');
+    const syncRelatedCategories = () => {
+      const primary = String((categorySelect && categorySelect.value) || '').toUpperCase();
+      relatedInputs.forEach((input) => {
+        input.disabled = input.value === primary;
+        if (input.disabled) input.checked = false;
+      });
+      const flooding = primary === 'FLOODING' || relatedInputs.some((input) => input.checked && input.value === 'FLOODING');
+      if (surfaceWrap) surfaceWrap.hidden = !flooding;
+      if (surfaceSelect) {
+        if (!flooding) surfaceSelect.value = '';
+        else if (!surfaceSelect.value) surfaceSelect.value = 'UNKNOWN';
+      }
+    };
+    relatedInputs.forEach((input) => on(input, 'change', syncRelatedCategories));
+    on(categorySelect, 'change', syncRelatedCategories);
+    syncRelatedCategories();
     const syncCategoryOther = () => {
       const isOther = String((categorySelect && categorySelect.value) || '').toUpperCase() === CATEGORY_OTHER;
       if (otherWrap) otherWrap.hidden = !isOther;
@@ -2187,6 +2283,11 @@
       // The explanation is sent only for "Other"; every other category drops it
       // so the stored value always matches the category.
       if (category === CATEGORY_OTHER) fd.set('categoryOther', otherText); else fd.delete('categoryOther');
+      fd.set('relatedCategories', JSON.stringify(
+        relatedInputs.filter((input) => input.checked && !input.disabled).map((input) => input.value)
+      ));
+      const hasFlooding = category === 'FLOODING' || relatedInputs.some((input) => input.checked && input.value === 'FLOODING');
+      if (!hasFlooding) fd.delete('surfaceCondition');
 
       const btn = q('button[type="submit"]', form);
       if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
@@ -2389,13 +2490,17 @@
     return params;
   };
 
+  const adminReportRequests = new Map();
   const loadAdminReportList = async (hostId, feedbackId, params, page = 1) => {
     const host = document.getElementById(hostId);
     if (!host) return;
+    const requestId = (adminReportRequests.get(hostId) || 0) + 1;
+    adminReportRequests.set(hostId, requestId);
     params.set('page', String(page));
     host.innerHTML = '<div class="loading-block"><span class="spinner"></span> Loading reports…</div>';
     try {
       const data = await api(`/reports?${params.toString()}`);
+      if (adminReportRequests.get(hostId) !== requestId) return null;
       html(host, adminReportTableHtml(data.items || [], {
         total: Number(data.total) || 0,
         page: Number(data.page) || page,
@@ -2405,6 +2510,7 @@
       bindAdminReportActions(host, hostId, feedbackId, params);
       return data;
     } catch (err) {
+      if (adminReportRequests.get(hostId) !== requestId) return null;
       html(host, `<div class="admin-error-block">Could not load reports. ${escapeHtml(err.message)}</div>`);
       setAdminFeedback(feedbackId, 'Report data could not be loaded. Retry when the API is available.', 'error');
       return null;
@@ -2508,10 +2614,12 @@
     let loadedAccounts = [];
     let currentPage = 1;
     let totalPages = 1;
+    let loadRequest = 0;
     const load = async () => {
       const host = q('#admin-users-list');
       const feedback = 'admin-users-feedback';
       if (!host) return;
+      const requestId = ++loadRequest;
       const form = q('#admin-user-filters');
       const values = form ? new FormData(form) : new FormData();
       const params = new URLSearchParams({ page: String(currentPage), pageSize: '50' });
@@ -2524,6 +2632,7 @@
       host.innerHTML = '<div class="loading-block"><span class="spinner"></span> Loading users…</div>';
       try {
         const data = await api(`/users?${params.toString()}`);
+        if (requestId !== loadRequest) return;
         const items = data.items || [];
         loadedAccounts = items;
         totalPages = Number(data.totalPages) || 1;
@@ -2555,6 +2664,7 @@
             </div>
           </div>`);
       } catch (err) {
+        if (requestId !== loadRequest) return;
         html(host, `<div class="admin-error-block">Could not load users. ${escapeHtml(err.message)}</div>`);
         setAdminFeedback(feedback, 'User data could not be loaded. Retry when the API is available.', 'error');
       }
@@ -2669,6 +2779,9 @@
     const unreadCountHost = q('#officer-unread-count');
     let expiryRefreshTimer = null;
     const refresh = async () => {
+      const assignmentsUrl = new URLSearchParams(window.location.search).get('view') === 'history'
+        ? '/maintenance/assignments?repairStatus=VERIFIED_COMPLETED'
+        : '/maintenance/assignments';
       const refreshButton = q('#btn-refresh-assignments');
       if (refreshButton) {
         refreshButton.disabled = true;
@@ -2676,7 +2789,7 @@
       }
       const results = await Promise.allSettled([
         api('/maintenance/summary'),
-        api('/maintenance/assignments'),
+        api(assignmentsUrl),
         api('/maintenance/notifications?limit=50'),
       ]);
       const [summaryResult, assignmentsResult, notificationsResult] = results;
@@ -2720,7 +2833,7 @@
                 <p class="text-slate-tint text-sm mt-1">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
                 <div class="text-slate-tint text-xs mt-2 flex flex-wrap gap-x-4 gap-y-1">
                   <span>Reported ${escapeHtml(relativeDate(r.createdAt))}</span>
-                  ${r.priority ? `<span>Priority: ${escapeHtml(r.priority)}</span>` : ''}
+                  ${priorityIndicator(r.priority)}
                 </div>
                 <p class="text-xs text-ink-2 mt-2 line-clamp-2">${escapeHtml(r.description || '')}</p>
               </div>
@@ -2784,7 +2897,9 @@
       const refreshButtonAfter = q('#btn-refresh-assignments');
       if (refreshButtonAfter) {
         refreshButtonAfter.disabled = false;
-        refreshButtonAfter.textContent = 'Refresh dashboard';
+        refreshButtonAfter.textContent = new URLSearchParams(window.location.search).get('view') === 'history'
+          ? 'Refresh history'
+          : 'Refresh dashboard';
       }
     };
 
@@ -2935,10 +3050,8 @@
       });
     });
 
-    // Logout lives in the global header, which the router re-renders for every
-    // route, so bind it once here instead of per-page.
     document.addEventListener('click', (e) => {
-      const btn = e.target && e.target.closest ? e.target.closest('#nav-logout, [data-admin-logout]') : null;
+      const btn = e.target && e.target.closest ? e.target.closest('[data-admin-logout]') : null;
       if (!btn) return;
       e.preventDefault();
       clearToken();

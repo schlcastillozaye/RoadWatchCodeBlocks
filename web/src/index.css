@@ -97,12 +97,27 @@
     box-shadow: 0 0 0 3px rgb(7 22 51 / 0.08);
   }
 
+  textarea.brand-input {
+    min-height: 7.5rem;
+    line-height: 1.5;
+    resize: vertical;
+    overflow-wrap: anywhere;
+  }
+
   .brand-label {
     display: block;
     font-size: 0.8125rem;
     font-weight: 600;
     color: var(--color-ink-2);
     margin-bottom: 0.375rem;
+  }
+
+  .priority-badge-icon {
+    display: block;
+    width: 0.95rem;
+    height: 0.95rem;
+    flex: 0 0 auto;
+    fill: currentColor;
   }
 
   .btn {

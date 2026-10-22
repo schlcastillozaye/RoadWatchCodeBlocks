@@ -64,6 +64,10 @@ class Dto
             'longitude' => (float) $report['longitude'],
             'addressText' => $report['addressText'] ?? null,
             'areaLabel' => $report['areaLabel'] ?? null,
+            'destination' => $report['destination'] ?? null,
+            'damageCause' => $report['damageCause'] ?? null,
+            'relatedCategories' => self::relatedCategories($report['relatedCategories'] ?? null),
+            'surfaceCondition' => $report['surfaceCondition'] ?? null,
             'moderationStatus' => $moderation,
             'repairStatus' => $report['repairStatus'],
             'photos' => $photos,
@@ -108,6 +112,10 @@ class Dto
             'longitude' => (float) $report['longitude'],
             'addressText' => $report['addressText'] ?? null,
             'areaLabel' => $report['areaLabel'] ?? null,
+            'destination' => $report['destination'] ?? null,
+            'damageCause' => $report['damageCause'] ?? null,
+            'relatedCategories' => self::relatedCategories($report['relatedCategories'] ?? null),
+            'surfaceCondition' => $report['surfaceCondition'] ?? null,
             'repairStatus' => $report['repairStatus'],
             'moderationStatus' => $report['moderationStatus'],
             'createdAt' => Dates::iso($report['createdAt']),
@@ -178,5 +186,18 @@ class Dto
             return null;
         }
         return ['id' => $user['id'], 'fullName' => $user['fullName'] ?? null];
+    }
+
+    /** Return an empty list for old rows or malformed legacy data. */
+    private static function relatedCategories($value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter($value, 'is_string'));
+        }
+        if (!is_string($value) || $value === '') {
+            return [];
+        }
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? array_values(array_filter($decoded, 'is_string')) : [];
     }
 }

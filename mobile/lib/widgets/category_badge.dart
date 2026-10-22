@@ -63,13 +63,33 @@ class PriorityPill extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.flag_rounded, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(priority.label, style: AppTypography.bodyStyle(size: 11.5, weight: FontWeight.w600, color: color, height: 1.0)),
+          Container(
+            width: 19,
+            height: 19,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.55)),
+            ),
+            child: Icon(Icons.flag_rounded, size: 14, color: color),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            priority.label,
+            style: AppTypography.bodyStyle(
+              size: 11.5,
+              weight: FontWeight.w600,
+              color: color,
+              height: 1.0,
+            ),
+          ),
         ],
       ),
     );

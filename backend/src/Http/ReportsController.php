@@ -52,6 +52,39 @@ class ReportsController
         $longitude = Validate::number($body['longitude'] ?? null, 'longitude', -180, 180);
         $addressText = Validate::string($body['addressText'] ?? null, 'addressText', false, 0, 500);
         $areaLabel = Validate::string($body['areaLabel'] ?? null, 'areaLabel', false, 0, 160);
+        $destination = Validate::string($body['destination'] ?? null, 'destination', false, 0, Schema::DESTINATION_MAX);
+        $damageCause = Validate::string($body['damageCause'] ?? null, 'damageCause', false, 0, Schema::DAMAGE_CAUSE_MAX);
+        $relatedCategories = $body['relatedCategories'] ?? [];
+        if (is_string($relatedCategories)) {
+            $decoded = json_decode($relatedCategories, true);
+            if (!is_array($decoded) || json_last_error() !== JSON_ERROR_NONE) {
+                Validate::fail('relatedCategories', 'Additional issue types must be a JSON array.');
+            }
+            $relatedCategories = $decoded;
+        }
+        if (!is_array($relatedCategories) || count($relatedCategories) > count(Schema::RELATED_CATEGORIES)) {
+            Validate::fail('relatedCategories', 'Select valid additional issue types.');
+        }
+        foreach ($relatedCategories as $relatedCategory) {
+            if (!is_string($relatedCategory)
+                || !in_array($relatedCategory, Schema::RELATED_CATEGORIES, true)
+                || $relatedCategory === $category) {
+                Validate::fail('relatedCategories', 'Additional issue types must be valid and different from the main issue type.');
+            }
+        }
+        $relatedCategories = array_values(array_unique($relatedCategories));
+        $hasFlooding = $category === 'FLOODING' || in_array('FLOODING', $relatedCategories, true);
+        $surfaceCondition = Validate::enum(
+            $body['surfaceCondition'] ?? null,
+            'surfaceCondition',
+            Schema::SURFACE_CONDITIONS,
+            false
+        );
+        if ($hasFlooding) {
+            $surfaceCondition = $surfaceCondition ?? 'UNKNOWN';
+        } else {
+            $surfaceCondition = null;
+        }
         $priority = Validate::enum($body['priority'] ?? null, 'priority', Schema::PRIORITIES, false);
 
         $report = ReportService::create($actor, [
@@ -63,6 +96,10 @@ class ReportsController
             'longitude' => $longitude,
             'addressText' => $addressText,
             'areaLabel' => $areaLabel,
+            'destination' => $destination,
+            'damageCause' => $damageCause,
+            'relatedCategories' => $relatedCategories,
+            'surfaceCondition' => $surfaceCondition,
             'priority' => $priority,
         ], Request::allPhotoFiles());
 

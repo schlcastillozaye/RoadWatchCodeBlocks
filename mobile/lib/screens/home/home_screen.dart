@@ -19,7 +19,6 @@ import '../../widgets/report_card.dart';
 import '../../widgets/section_card.dart';
 import '../../widgets/theme_toggle.dart';
 import '../reports/report_detail_screen.dart';
-import '../reports/submit_report_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.onNavigate});
@@ -127,15 +126,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _openSubmit() async {
-    final created = await Navigator.of(
-      context,
-    ).push<bool>(MaterialPageRoute(builder: (_) => const SubmitReportScreen()));
-    if (created == true && mounted) {
-      await _refresh();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     AppColors.syncTo(context);
@@ -235,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: AppSpacing.xxl),
                     _QuickActions(
                       onMap: () => widget.onNavigate(1),
-                      onReports: () => widget.onNavigate(2),
+                      onReports: () => widget.onNavigate(3),
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                     Row(
@@ -275,11 +265,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icons.add_road_rounded,
                   title: 'No reports yet',
                   message: 'Spotted a pothole, crack or flooding? Report it and help your community.',
-                  action: ElevatedButton.icon(
-                    onPressed: _openSubmit,
-                    icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                    label: const Text('Report an issue'),
-                  ),
                 ),
               )
             else

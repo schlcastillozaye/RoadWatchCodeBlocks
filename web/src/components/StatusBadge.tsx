@@ -74,7 +74,19 @@ export function RepairBadge({ status }: { status: RepairStatus }) {
 }
 
 export function PriorityBadge({ priority }: { priority: Priority }) {
-  return <Badge tone={PRIORITY_TONES[priority]}>⚑ {PRIORITY_LABELS[priority]}</Badge>;
+  return (
+    <Badge tone={PRIORITY_TONES[priority]} className="priority-badge">
+      <svg
+        aria-hidden="true"
+        className="priority-badge-icon"
+        viewBox="0 0 16 16"
+        focusable="false"
+      >
+        <path d="M3 1.5a.75.75 0 0 1 .75.75v.32c2.12-1.24 4.04.61 6.06.14 1.25-.29 2.18-.1 3.08.42v6.26c-1.03-.59-1.9-.82-3.08-.54-2.03.47-3.94-1.37-6.06-.14v6.54H2.25V2.25A.75.75 0 0 1 3 1.5Z" />
+      </svg>
+      {PRIORITY_LABELS[priority]}
+    </Badge>
+  );
 }
 
 export function CategoryChip({ category }: { category: IssueCategory }) {

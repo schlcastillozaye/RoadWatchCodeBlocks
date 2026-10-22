@@ -229,13 +229,40 @@ async function main() {
     });
     check('out-of-range latitude returns 422', badLat.status === 422, `status=${badLat.status}`);
 
-    const created = await api('POST', '/api/reports', { token: citizenToken, form: pngForm(goodReport) });
+    const created = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({
+        ...goodReport,
+        destination: 'Road leading to San Isidro market',
+        damageCause: 'Possible poor drainage after heavy rain',
+        relatedCategories: JSON.stringify(['FLOODING', 'ROAD_CRACK']),
+        surfaceCondition: 'UNKNOWN',
+      }),
+    });
     check('valid create returns 201', created.status === 201, `status=${created.status} ${JSON.stringify(created.body)}`);
     reportId = created.body?.report?.id;
     referenceNo = created.body?.report?.referenceNo;
     check('new report is PENDING_REVIEW / NOT_ASSIGNED', created.body?.report?.moderationStatus === 'PENDING_REVIEW' && created.body?.report?.repairStatus === 'NOT_ASSIGNED');
     check('reference number format RW-YYYY-NNNNNN', /^RW-\d{4}-\d{6}$/.test(referenceNo || ''), referenceNo);
     check('report has a BEFORE photo with url', created.body?.report?.photos?.length === 1 && !!created.body.report.photos[0].url);
+    check(
+      'optional destination and suspected cause are persisted',
+      created.body?.report?.destination === 'Road leading to San Isidro market'
+        && created.body?.report?.damageCause === 'Possible poor drainage after heavy rain',
+      JSON.stringify({ destination: created.body?.report?.destination, damageCause: created.body?.report?.damageCause })
+    );
+    check(
+      'related observations and unknown flood-surface condition are persisted',
+      JSON.stringify(created.body?.report?.relatedCategories) === JSON.stringify(['FLOODING', 'ROAD_CRACK'])
+        && created.body?.report?.surfaceCondition === 'UNKNOWN',
+      JSON.stringify({ relatedCategories: created.body?.report?.relatedCategories, surfaceCondition: created.body?.report?.surfaceCondition })
+    );
+
+    const oversizedCause = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({ ...goodReport, damageCause: 'x'.repeat(501) }),
+    });
+    check('damage cause exceeding the optional field limit returns 422', oversizedCause.status === 422, `status=${oversizedCause.status}`);
 
     const badPhoto = await api('POST', '/api/reports', {
       token: citizenToken,
@@ -263,6 +290,21 @@ async function main() {
       });
       check(`category ${cat} accepted`, r.status === 201, `status=${r.status} ${JSON.stringify(r.body)}`);
       check(`category ${cat} echoed in response`, r.body?.report?.category === cat, `got=${r.body?.report?.category}`);
+      if (cat === 'POTHOLE') {
+        check(
+          'new optional fields default safely for legacy-style submissions',
+          r.body?.report?.destination === null
+            && r.body?.report?.damageCause === null
+            && JSON.stringify(r.body?.report?.relatedCategories) === '[]'
+            && r.body?.report?.surfaceCondition === null,
+          JSON.stringify({
+            destination: r.body?.report?.destination,
+            damageCause: r.body?.report?.damageCause,
+            relatedCategories: r.body?.report?.relatedCategories,
+            surfaceCondition: r.body?.report?.surfaceCondition,
+          })
+        );
+      }
       await api('DELETE', `/api/reports/${r.body?.report?.id}`, { token: citizenToken });
     }
 
@@ -307,6 +349,45 @@ async function main() {
       `status=${strayText.status} got=${JSON.stringify(strayText.body?.report?.categoryOther)}`
     );
     await api('DELETE', `/api/reports/${strayText.body?.report?.id}`, { token: citizenToken });
+
+    const duplicateObservation = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({
+        ...goodReport,
+        title: 'IT duplicated main observation',
+        relatedCategories: JSON.stringify(['POTHOLE']),
+      }),
+    });
+    check('duplicate primary/related category is rejected (422)', duplicateObservation.status === 422, `status=${duplicateObservation.status}`);
+
+    const invalidSurfaceCondition = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({
+        ...goodReport,
+        title: 'IT invalid surface condition',
+        surfaceCondition: 'CRACKED',
+      }),
+    });
+    check('invalid surface condition is rejected (422)', invalidSurfaceCondition.status === 422, `status=${invalidSurfaceCondition.status}`);
+
+    const flooded = await api('POST', '/api/reports', {
+      token: citizenToken,
+      form: pngForm({
+        ...goodReport,
+        title: 'IT flooded road with visible pothole',
+        category: 'FLOODING',
+        relatedCategories: JSON.stringify(['POTHOLE']),
+      }),
+    });
+    check(
+      'flooding and separately observed damage are recorded without inferring hidden damage',
+      flooded.status === 201
+        && flooded.body?.report?.category === 'FLOODING'
+        && flooded.body?.report?.relatedCategories?.[0] === 'POTHOLE'
+        && flooded.body?.report?.surfaceCondition === 'UNKNOWN',
+      `status=${flooded.status} ${JSON.stringify(flooded.body?.report)}`
+    );
+    await api('DELETE', `/api/reports/${flooded.body?.report?.id}`, { token: citizenToken });
   }
 
   // ---------------------------------------------------------------------
@@ -710,6 +791,17 @@ async function main() {
       form: evidenceNoPhotoForm,
     });
     check('atomic evidence submission requires a new after photo', evidenceNoPhoto.status === 422, `status=${evidenceNoPhoto.status}`);
+    const otherOfficerEvidence = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
+      token: officer2Token,
+      form: pngForm({ completionNotes: 'Unauthorized officer evidence attempt.' }, 'afterPhotos'),
+    });
+    check('unassigned officer cannot submit atomic repair evidence', otherOfficerEvidence.status === 403, `status=${otherOfficerEvidence.status}`);
+    const inProgressAfterRejectedEvidence = await api('GET', `/api/reports/${reportId}`, { token: officer1Token });
+    check(
+      'invalid and unauthorized evidence attempts do not change report status',
+      inProgressAfterRejectedEvidence.status === 200 && inProgressAfterRejectedEvidence.body?.report?.repairStatus === 'IN_PROGRESS',
+      `status=${inProgressAfterRejectedEvidence.status}`
+    );
 
     const submitted = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
       token: officer1Token,
@@ -717,6 +809,7 @@ async function main() {
     });
     check('officer submits notes + after photo atomically for verification', submitted.status === 200 && submitted.body?.report?.repairStatus === 'AWAITING_VERIFICATION', `status=${submitted.status}`);
     check('atomic evidence response includes persisted after photo', submitted.body?.report?.photos?.some((photo) => photo.kind === 'AFTER'));
+    check('atomic evidence response returns the saved completion notes', submitted.body?.report?.completionNotes === 'Filled and levelled the pothole completely.');
     check('officer submission does not mark verified completion', !submitted.body?.report?.completedAt);
 
     const duplicateSubmission = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
@@ -772,17 +865,15 @@ async function main() {
     });
     check('assigned officer resumes returned repair', resume.status === 200 && resume.body?.report?.repairStatus === 'IN_PROGRESS', `status=${resume.status}`);
 
-    const revisedPhoto = await api('POST', `/api/reports/${reportId}/photos`, {
+    const resubmitted = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
       token: officer1Token,
-      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+      form: pngForm({ completionNotes: 'Releveled the edge and compacted the surface.' }, 'afterPhotos'),
     });
-    check('assigned officer can add revised evidence after return', revisedPhoto.status === 201, `status=${revisedPhoto.status}`);
-
-    const resubmitted = await api('PATCH', `/api/reports/${reportId}/repair`, {
-      token: officer1Token,
-      json: { repairStatus: 'AWAITING_VERIFICATION', completionNotes: 'Releveled the edge and compacted the surface.' },
-    });
-    check('officer resubmits repaired evidence', resubmitted.status === 200 && resubmitted.body?.report?.repairStatus === 'AWAITING_VERIFICATION', `status=${resubmitted.status}`);
+    check('officer resubmits notes and new after-photo through the atomic endpoint', resubmitted.status === 200 &&
+      resubmitted.body?.report?.repairStatus === 'AWAITING_VERIFICATION' &&
+      resubmitted.body?.report?.completionNotes === 'Releveled the edge and compacted the surface.' &&
+      resubmitted.body?.report?.photos?.filter((photo) => photo.kind === 'AFTER').length >= 2,
+      `status=${resubmitted.status}`);
 
     const verified = await api('PATCH', `/api/reports/${reportId}/verification`, {
       token: adminToken,

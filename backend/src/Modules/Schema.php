@@ -22,6 +22,10 @@ class Schema
     /** Length bounds for `categoryOther` — mirrored by the web and mobile forms. */
     public const CATEGORY_OTHER_MIN = 5;
     public const CATEGORY_OTHER_MAX = 300;
+    public const DAMAGE_CAUSE_MAX = 500;
+    public const DESTINATION_MAX = 300;
+    public const SURFACE_CONDITIONS = ['UNKNOWN', 'VISIBLE_DAMAGE', 'NO_VISIBLE_DAMAGE'];
+    public const RELATED_CATEGORIES = ['POTHOLE', 'DAMAGED_PAVEMENT', 'ROAD_CRACK', 'FLOODING', 'DAMAGED_DRAINAGE', 'ROAD_OBSTRUCTION'];
     public const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
     public const MODERATION_STATUSES = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'];
     public const REPAIR_STATUSES = ['NOT_ASSIGNED', 'AWAITING_MAINTENANCE', 'IN_PROGRESS', 'AWAITING_VERIFICATION', 'RETURNED_FOR_WORK', 'COMPLETED', 'VERIFIED_COMPLETED'];

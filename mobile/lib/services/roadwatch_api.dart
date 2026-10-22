@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../core/api_client.dart';
 import '../core/json.dart';
 import '../models/models.dart';
@@ -211,6 +213,10 @@ class RoadWatchApi {
     required double longitude,
     String? addressText,
     String? areaLabel,
+    String? destination,
+    String? damageCause,
+    List<String> relatedCategories = const [],
+    String? surfaceCondition,
     Priority? priority,
     required List<UploadFile> photos,
     ProgressCallback? onProgress,
@@ -232,6 +238,13 @@ class RoadWatchApi {
         if (addressText != null && addressText.isNotEmpty)
           'addressText': addressText,
         if (areaLabel != null && areaLabel.isNotEmpty) 'areaLabel': areaLabel,
+        if (destination != null && destination.isNotEmpty)
+          'destination': destination,
+        if (damageCause != null && damageCause.isNotEmpty)
+          'damageCause': damageCause,
+        'relatedCategories': jsonEncode(relatedCategories),
+        if (surfaceCondition != null && surfaceCondition.isNotEmpty)
+          'surfaceCondition': surfaceCondition,
         if (priority != null) 'priority': priority.api,
       },
       files: photos,
@@ -317,13 +330,34 @@ class RoadWatchApi {
     return Paginated<RoadReport>.fromJson(asMap(json), RoadReport.fromJson);
   }
 
+  Future<Map<String, int>> adminReportStatistics() async {
+    final json = asMap(await client.getJson('/api/reports/stats'));
+    final totals = asMap(json['totals']);
+    return {
+      'total': asInt(totals['total']),
+      'pending': asInt(totals['pending']),
+      'approved': asInt(totals['approved']),
+      'rejected': asInt(totals['rejected']),
+      'awaiting': asInt(totals['awaiting']),
+      'inProgress': asInt(totals['inProgress']),
+      'awaitingVerification': asInt(totals['awaitingVerification']),
+      'returnedForWork': asInt(totals['returnedForWork']),
+      'completed': asInt(totals['completed']),
+    };
+  }
+
   Future<Paginated<RoadReport>> maintenanceAssignments({
     int page = 1,
     int pageSize = 50,
+    RepairStatus? repairStatus,
   }) async {
     final json = await client.getJson(
       '/api/maintenance/assignments',
-      query: {'page': page, 'pageSize': pageSize},
+      query: {
+        'page': page,
+        'pageSize': pageSize,
+        if (repairStatus != null) 'repairStatus': repairStatus.api,
+      },
     );
     return Paginated<RoadReport>.fromJson(asMap(json), RoadReport.fromJson);
   }

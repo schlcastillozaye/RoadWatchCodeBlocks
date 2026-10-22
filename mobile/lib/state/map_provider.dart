@@ -43,6 +43,10 @@ class MapProvider extends ChangeNotifier {
   bool _searching = false;
   String? _searchReason;
   String _textQuery = '';
+  int _searchGeneration = 0;
+  int _loadGeneration = 0;
+  String? _activeSearchQuery;
+  String? _lastCompletedSearch;
 
   /// The chosen search origin (address the reports are sorted around).
   PlaceResult? get origin => _origin;
@@ -59,7 +63,10 @@ class MapProvider extends ChangeNotifier {
   String get textQuery => _textQuery;
 
   bool get hasSearch =>
-      _origin != null || _textQuery.isNotEmpty || _placeResults.isNotEmpty || _searchReason != null;
+      _origin != null ||
+      _textQuery.isNotEmpty ||
+      _placeResults.isNotEmpty ||
+      _searchReason != null;
 
   /// Reports in display order: nearest-first when an address was chosen,
   /// otherwise the backend's default order.
@@ -69,8 +76,19 @@ class MapProvider extends ChangeNotifier {
     final sorted = [..._reports];
     sorted.sort(
       (a, b) =>
-          distanceKm(origin.latitude, origin.longitude, a.latitude, a.longitude)
-              .compareTo(distanceKm(origin.latitude, origin.longitude, b.latitude, b.longitude)),
+          distanceKm(
+            origin.latitude,
+            origin.longitude,
+            a.latitude,
+            a.longitude,
+          ).compareTo(
+            distanceKm(
+              origin.latitude,
+              origin.longitude,
+              b.latitude,
+              b.longitude,
+            ),
+          ),
     );
     return sorted;
   }
@@ -79,7 +97,12 @@ class MapProvider extends ChangeNotifier {
   double? distanceFor(MapReport report) {
     final origin = _origin;
     if (origin == null) return null;
-    return distanceKm(origin.latitude, origin.longitude, report.latitude, report.longitude);
+    return distanceKm(
+      origin.latitude,
+      origin.longitude,
+      report.latitude,
+      report.longitude,
+    );
   }
 
   /// Looks up a place by address/landmark. Falls back to filtering reports by
@@ -87,46 +110,87 @@ class MapProvider extends ChangeNotifier {
   Future<void> searchPlace(String query) async {
     final q = query.trim();
     if (q.length < 2) {
+      invalidatePlaceSearch();
       _searchReason = 'Type at least 2 characters to search.';
       notifyListeners();
       return;
     }
+    if (_activeSearchQuery == q ||
+        (_lastCompletedSearch == q &&
+            (_placeResults.isNotEmpty || _textQuery == q || _origin != null))) {
+      return;
+    }
 
+    final generation = ++_searchGeneration;
+    _activeSearchQuery = q;
     _searching = true;
+    _textQuery = '';
     _searchReason = null;
     _placeResults = const [];
     notifyListeners();
 
     try {
       final result = await _api.searchPlace(q);
+      if (generation != _searchGeneration) return;
       if (result.available && result.results.isNotEmpty) {
         _placeResults = result.results;
+        _lastCompletedSearch = q;
         // Save successful search to recent searches
         await RecentSearchesService.add(q);
       } else {
         _searchReason = result.reason ?? 'No matching place was found.';
         _origin = null;
         _textQuery = q;
+        _lastCompletedSearch = q;
         await load(refresh: true);
       }
     } catch (_) {
+      if (generation != _searchGeneration) return;
       _searchReason = 'Address search is unavailable right now.';
       _origin = null;
       _textQuery = q;
+      _lastCompletedSearch = q;
       await load(refresh: true);
     } finally {
-      _searching = false;
-      notifyListeners();
+      if (generation == _searchGeneration) {
+        _activeSearchQuery = null;
+        _searching = false;
+        notifyListeners();
+      }
     }
+  }
+
+  /// Invalidates an in-flight geocode/feed request as soon as the user edits
+  /// the query, so an older response cannot replace newer search state.
+  void invalidatePlaceSearch() {
+    final shouldInvalidateFeed = _textQuery.isNotEmpty;
+    final shouldNotify =
+        shouldInvalidateFeed ||
+        _searching ||
+        _placeResults.isNotEmpty ||
+        _searchReason != null;
+    _searchGeneration++;
+    if (shouldInvalidateFeed) {
+      _loadGeneration++;
+      _loading = false;
+    }
+    _activeSearchQuery = null;
+    _lastCompletedSearch = null;
+    _searching = false;
+    _placeResults = const [];
+    _searchReason = null;
+    if (shouldNotify) notifyListeners();
   }
 
   /// Chooses one of the [placeResults] as the origin to sort reports around.
   void selectPlace(PlaceResult place) {
+    final hadTextQuery = _textQuery.isNotEmpty;
     _origin = place;
     _placeResults = const [];
     _searchReason = null;
     _textQuery = '';
     notifyListeners();
+    if (hadTextQuery) load(refresh: true);
   }
 
   void dismissPlaceResults() {
@@ -136,6 +200,7 @@ class MapProvider extends ChangeNotifier {
 
   void clearSearch() {
     final hadTextQuery = _textQuery.isNotEmpty;
+    invalidatePlaceSearch();
     _origin = null;
     _placeResults = const [];
     _searchReason = null;
@@ -145,7 +210,7 @@ class MapProvider extends ChangeNotifier {
   }
 
   Future<void> load({bool refresh = false}) async {
-    if (_loading) return;
+    final generation = ++_loadGeneration;
     _loading = true;
     _error = null;
     notifyListeners();
@@ -157,20 +222,25 @@ class MapProvider extends ChangeNotifier {
         repairStatus: _repairStatus,
         search: _textQuery.isEmpty ? null : _textQuery,
       );
+      if (generation != _loadGeneration) return;
       _reports
         ..clear()
         ..addAll(result.items);
       _fromCache = false;
       if (_textQuery.isEmpty) await _writeCache();
     } on ApiException catch (e) {
+      if (generation != _loadGeneration) return;
       _error = e.message;
       if (_reports.isEmpty) await _readCache();
     } catch (_) {
+      if (generation != _loadGeneration) return;
       _error = 'Could not load the map. Pull to retry.';
       if (_reports.isEmpty) await _readCache();
     } finally {
-      _loading = false;
-      notifyListeners();
+      if (generation == _loadGeneration) {
+        _loading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -207,21 +277,23 @@ class MapProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final data = _reports
-          .map((r) => {
-                'id': r.id,
-                'referenceNo': r.referenceNo,
-                'title': r.title,
-                'category': r.category.api,
-                'priority': r.priority.api,
-                'latitude': r.latitude,
-                'longitude': r.longitude,
-                'repairStatus': r.repairStatus.api,
-                'addressText': r.addressText,
-                'areaLabel': r.areaLabel,
-                'thumbnailUrl': r.thumbnailUrl,
-                'createdAt': r.createdAt?.toIso8601String(),
-                'updatedAt': r.updatedAt?.toIso8601String(),
-              })
+          .map(
+            (r) => {
+              'id': r.id,
+              'referenceNo': r.referenceNo,
+              'title': r.title,
+              'category': r.category.api,
+              'priority': r.priority.api,
+              'latitude': r.latitude,
+              'longitude': r.longitude,
+              'repairStatus': r.repairStatus.api,
+              'addressText': r.addressText,
+              'areaLabel': r.areaLabel,
+              'thumbnailUrl': r.thumbnailUrl,
+              'createdAt': r.createdAt?.toIso8601String(),
+              'updatedAt': r.updatedAt?.toIso8601String(),
+            },
+          )
           .toList();
       await prefs.setString(_cacheKey, jsonEncode(data));
     } catch (_) {}
@@ -236,7 +308,11 @@ class MapProvider extends ChangeNotifier {
       if (decoded is! List) return;
       _reports
         ..clear()
-        ..addAll(decoded.whereType<Map>().map((e) => MapReport.fromJson(e.cast<String, dynamic>())));
+        ..addAll(
+          decoded.whereType<Map>().map(
+            (e) => MapReport.fromJson(e.cast<String, dynamic>()),
+          ),
+        );
       _fromCache = _reports.isNotEmpty;
     } catch (_) {}
   }

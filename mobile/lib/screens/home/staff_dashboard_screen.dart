@@ -16,9 +16,16 @@ import '../../widgets/section_card.dart';
 import '../reports/report_detail_screen.dart';
 
 class StaffDashboardScreen extends StatefulWidget {
-  const StaffDashboardScreen({super.key, required this.isAdmin});
+  const StaffDashboardScreen({
+    super.key,
+    required this.isAdmin,
+    this.showAllReports = false,
+    this.showHistory = false,
+  });
 
   final bool isAdmin;
+  final bool showAllReports;
+  final bool showHistory;
 
   @override
   State<StaffDashboardScreen> createState() => _StaffDashboardScreenState();
@@ -32,6 +39,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
   List<RoadReport> _reports = [];
   List<MaintenanceNotification> _notifications = [];
   Map<String, int> _summary = const {};
+  Map<String, int> _adminSummary = const {};
+  String? _adminSummaryError;
   int _reportPage = 1;
   int _reportTotal = 0;
   int _reportTotalPages = 1;
@@ -83,7 +92,9 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
         final page = await api.staffReports(
           page: _reportPage,
           pageSize: 100,
-          moderationStatus: ModerationStatus.pendingReview,
+          moderationStatus: widget.showAllReports
+              ? null
+              : ModerationStatus.pendingReview,
         );
         if (mounted) {
           setState(() {
@@ -92,10 +103,32 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
             _reportTotalPages = page.totalPages;
           });
         }
+        if (!widget.showAllReports) {
+          try {
+            final summary = await api.adminReportStatistics();
+            if (mounted) {
+              setState(() {
+                _adminSummary = summary;
+                _adminSummaryError = null;
+              });
+            }
+          } on ApiException catch (error) {
+            if (mounted) setState(() => _adminSummaryError = error.message);
+          } catch (_) {
+            if (mounted) {
+              setState(
+                () => _adminSummaryError = 'Could not load report statistics.',
+              );
+            }
+          }
+        }
       } else {
         final page = await api.maintenanceAssignments(
           page: _reportPage,
           pageSize: 100,
+          repairStatus: widget.showHistory
+              ? RepairStatus.verifiedCompleted
+              : null,
         );
         final summary = await api.maintenanceSummary();
         if (mounted) {
@@ -280,7 +313,15 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     return Scaffold(
       backgroundColor: AppColors.sheetBackground,
       appBar: AppBar(
-        title: Text(widget.isAdmin ? 'Review reports' : 'My dashboard'),
+        title: Text(
+          widget.isAdmin
+              ? widget.showAllReports
+                    ? 'Manage reports'
+                    : 'Dashboard'
+              : widget.showHistory
+              ? 'Repair history'
+              : 'My assignments',
+        ),
         actions: [
           IconButton(
             onPressed: _load,
@@ -303,6 +344,16 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                       child: Center(child: CircularProgressIndicator()),
                     )
                   else if (widget.isAdmin) ...[
+                    if (!widget.showAllReports) ...[
+                      if (_adminSummaryError == null)
+                        _AdminSummary(summary: _adminSummary)
+                      else
+                        Text(
+                          'Report statistics unavailable: $_adminSummaryError',
+                          style: TextStyle(color: AppColors.statusRedInk),
+                        ),
+                      const SizedBox(height: 16),
+                    ],
                     _notificationsSection(unreadCount),
                     const SizedBox(height: 16),
                     _ReviewQueue(
@@ -310,9 +361,28 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                       page: _reportPage,
                       totalPages: _reportTotalPages,
                       reports: _reports,
+                      title: widget.showAllReports
+                          ? 'All reports'
+                          : 'Pending review',
                       onOpen: _openReport,
                       onPage: _changeReportPage,
                     ),
+                  ] else if (widget.showHistory) ...[
+                    _ReportSection(
+                      title: 'Verified repairs',
+                      subtitle:
+                          'Repairs approved as complete by an administrator',
+                      reports: completedReports,
+                      emptyMessage: 'No verified repairs yet.',
+                      onOpen: _openReport,
+                    ),
+                    if (_reportTotalPages > 1)
+                      _DashboardPagination(
+                        page: _reportPage,
+                        totalPages: _reportTotalPages,
+                        total: _reportTotal,
+                        onPage: _changeReportPage,
+                      ),
                   ] else ...[
                     _OfficerSummary(summary: _summary),
                     const SizedBox(height: 16),
@@ -363,6 +433,7 @@ class _ReviewQueue extends StatelessWidget {
     required this.page,
     required this.totalPages,
     required this.reports,
+    required this.title,
     required this.onOpen,
     required this.onPage,
   });
@@ -371,21 +442,26 @@ class _ReviewQueue extends StatelessWidget {
   final int page;
   final int totalPages;
   final List<RoadReport> reports;
+  final String title;
   final ValueChanged<RoadReport> onOpen;
   final ValueChanged<int> onPage;
 
   @override
   Widget build(BuildContext context) => SectionCard(
-    title: 'Pending review',
+    title: title,
     trailing: Text(
       '$count',
       style: AppTypography.headingStyle(size: 18, color: AppColors.brandAccent),
     ),
     child: reports.isEmpty
-        ? const EmptyState(
+        ? EmptyState(
             icon: Icons.fact_check_outlined,
-            title: 'Queue is clear',
-            message: 'New citizen reports will appear here for review.',
+            title: title == 'All reports'
+                ? 'No reports found'
+                : 'Queue is clear',
+            message: title == 'All reports'
+                ? 'New reports will appear here when submitted.'
+                : 'New citizen reports will appear here for review.',
           )
         : Column(
             children: [
@@ -445,6 +521,44 @@ class _DashboardPagination extends StatelessWidget {
         ),
       ],
     ),
+  );
+}
+
+class _AdminSummary extends StatelessWidget {
+  const _AdminSummary({required this.summary});
+
+  final Map<String, int> summary;
+
+  @override
+  Widget build(BuildContext context) => DashboardStatGrid(
+    metrics: [
+      DashboardMetric(
+        label: 'Total reports',
+        value: '${summary['total'] ?? 0}',
+        color: AppColors.textPrimary,
+      ),
+      DashboardMetric(
+        label: 'Pending review',
+        value: '${summary['pending'] ?? 0}',
+        color: AppColors.statusAmberInk,
+      ),
+      DashboardMetric(
+        label: 'Approved',
+        value: '${summary['approved'] ?? 0}',
+        color: AppColors.statusGreenInk,
+      ),
+      DashboardMetric(
+        label: 'Rejected',
+        value: '${summary['rejected'] ?? 0}',
+        color: AppColors.statusRedInk,
+      ),
+      DashboardMetric(
+        label: 'Under repair',
+        value:
+            '${(summary['awaiting'] ?? 0) + (summary['inProgress'] ?? 0) + (summary['awaitingVerification'] ?? 0) + (summary['returnedForWork'] ?? 0)}',
+        color: AppColors.statusBlueInk,
+      ),
+    ],
   );
 }
 

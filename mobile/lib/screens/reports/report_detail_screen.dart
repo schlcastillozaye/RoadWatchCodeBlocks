@@ -478,6 +478,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         if (mounted) {
           _snack('Evidence was submitted for admin verification.');
         }
+      } else if (error.code == 'NETWORK' || error.code == 'TIMEOUT') {
+        _snack(
+          'Submission status could not be confirmed. Refresh this report before trying again.',
+        );
       } else {
         _snack(error.message);
       }
@@ -492,7 +496,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         }
       } else {
         _snack(
-          'The repair could not be submitted. Your report was not marked complete.',
+          'Submission status could not be confirmed. Refresh this report before trying again.',
         );
       }
     } finally {
@@ -765,6 +769,36 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   value: report.categoryLabel,
                   icon: report.category.icon,
                 ),
+                if (report.relatedCategories.isNotEmpty)
+                  _KeyValue(
+                    label: 'Other observed issues',
+                    value: report.relatedCategories
+                        .map((value) => IssueCategory.fromApi(value).label)
+                        .join(', '),
+                    icon: Icons.visibility_outlined,
+                  ),
+                if (report.surfaceCondition != null)
+                  _KeyValue(
+                    label: 'Flooded road surface',
+                    value: switch (report.surfaceCondition) {
+                      'VISIBLE_DAMAGE' => 'Visible road damage',
+                      'NO_VISIBLE_DAMAGE' => 'Inspected; no damage visible',
+                      _ => 'Unknown / not visible',
+                    },
+                    icon: Icons.water_rounded,
+                  ),
+                if (report.damageCause?.trim().isNotEmpty == true)
+                  _KeyValue(
+                    label: 'Reported possible cause',
+                    value: report.damageCause!,
+                    icon: Icons.help_outline_rounded,
+                  ),
+                if (report.destination?.trim().isNotEmpty == true)
+                  _KeyValue(
+                    label: 'Destination / road segment',
+                    value: report.destination!,
+                    icon: Icons.alt_route_rounded,
+                  ),
                 _KeyValue(
                   label: 'Priority',
                   value: report.priority.label,
