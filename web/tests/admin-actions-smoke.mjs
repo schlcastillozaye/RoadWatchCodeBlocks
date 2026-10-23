@@ -152,29 +152,69 @@ try {
         const wrap = document.querySelector('#admin-dashboard-reports .admin-table-wrap');
         const table = wrap?.querySelector('.admin-table');
         const cell = document.querySelector('#admin-dashboard-reports .admin-actions-cell');
-        const header = document.querySelector('#admin-dashboard-reports .admin-actions-heading');
-        if (!wrap || !table || !cell || !header) return { visible: false, buttonsVisible: false, noPageOverflow: false };
+        const row = cell?.closest('tr');
+        const header = table?.querySelector('thead tr');
+        if (!wrap || !table || !cell || !row || !header) {
+          return { visible: false, buttonsVisible: false, alignedColumns: false, noPageOverflow: false };
+        }
         const wrapRect = wrap.getBoundingClientRect();
-        const cellRect = cell.getBoundingClientRect();
-        const headerRect = header.getBoundingClientRect();
-        const buttons = [...cell.querySelectorAll('.admin-report-actions .btn')];
-        const buttonRects = buttons.map((button) => button.getBoundingClientRect());
+        const rowRect = row.getBoundingClientRect();
+        const actionRect = cell.getBoundingClientRect();
+        const actionHeading = header.cells[header.cells.length - 1];
+        const actionHeadingRect = actionHeading.getBoundingClientRect();
+        const buttons = [...cell.querySelectorAll('.admin-report-actions .btn')].map((button) => ({
+          rect: button.getBoundingClientRect(),
+          display: getComputedStyle(button).display,
+        }));
+        const responsiveCards = wrap.clientWidth < 900;
+        const cells = [...row.cells];
+        const headings = [...header.cells];
+        const alignedColumns = responsiveCards
+          ? getComputedStyle(table).display === 'block'
+            && getComputedStyle(row).display === 'grid'
+            && cells.length === headings.length
+            && cells.every((item) => Boolean(item.dataset.label))
+            && getComputedStyle(cells[2]).display !== 'table-cell'
+          : getComputedStyle(table).display === 'table'
+            && cells.length === headings.length
+            && cells.every((item, index) => getComputedStyle(item).display === 'table-cell'
+              && Math.abs(item.getBoundingClientRect().left - headings[index].getBoundingClientRect().left) <= 1
+              && Math.abs(item.getBoundingClientRect().right - headings[index].getBoundingClientRect().right) <= 1);
+        const actionCellVisible = responsiveCards
+          ? actionRect.left >= rowRect.left - 1 && actionRect.right <= rowRect.right + 1
+          : getComputedStyle(cell).position !== 'sticky'
+            && Math.abs(actionRect.left - actionHeadingRect.left) <= 1
+            && Math.abs(actionRect.right - actionHeadingRect.right) <= 1;
         return {
-          visible: getComputedStyle(cell).position === 'sticky'
-            && cellRect.left >= wrapRect.left - 1
-            && cellRect.right <= wrapRect.right + 1,
-          headerVisible: getComputedStyle(header).position === 'sticky'
-            && headerRect.left >= wrapRect.left - 1
-            && headerRect.right <= wrapRect.right + 1,
-          buttonsVisible: buttonRects.length === 2 && buttonRects.every((rect) =>
-            rect.width > 0
-            && rect.height > 0
-            && rect.left >= wrapRect.left - 1
-            && rect.right <= wrapRect.right + 1),
+          visible: responsiveCards
+            ? actionCellVisible
+            : actionRect.left >= wrapRect.left - 1 && actionRect.right <= wrapRect.right + 1,
+          buttonsVisible: buttons.length === 2 && buttons.every(({ rect }) =>
+            rect.width > 0 && rect.height > 0
+            && rect.left >= (responsiveCards ? rowRect.left : wrapRect.left) - 1
+            && rect.right <= (responsiveCards ? rowRect.right : wrapRect.right) + 1)
+            && buttons.every(({ rect }) => Math.abs(rect.top - buttons[0].rect.top) <= 1),
+          alignedColumns,
           noPageOverflow: document.documentElement.scrollWidth <= window.innerWidth + 2,
         };
       });
       actionLayoutChecks.push({ theme, ...viewport, ...layout });
+    }
+  }
+  if (process.env.RW_LAYOUT_SCREENSHOT_DIR) {
+    fs.mkdirSync(process.env.RW_LAYOUT_SCREENSHOT_DIR, { recursive: true });
+    for (const theme of ['light', 'dark']) {
+      const currentTheme = await page.locator('html').getAttribute('data-theme');
+      if (currentTheme !== theme) {
+        await page.locator('[data-theme-toggle]').first().click();
+        await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, theme);
+      }
+      for (const width of [375, 1440]) {
+        await page.setViewportSize({ width, height: width === 375 ? 667 : 900 });
+        await page.locator('#admin-dashboard-reports .admin-table-wrap').screenshot({
+          path: path.join(process.env.RW_LAYOUT_SCREENSHOT_DIR, `admin-table-${theme}-${width}.png`),
+        });
+      }
     }
   }
 
@@ -254,7 +294,8 @@ try {
     && cancelKeptReport
     && deleteRefreshedList
     && correctDeleteEndpoint
-    && actionLayoutChecks.every(({ visible, buttonsVisible, noPageOverflow }) => visible && buttonsVisible && noPageOverflow)
+    && actionLayoutChecks.every(({ visible, buttonsVisible, alignedColumns, noPageOverflow }) =>
+      visible && buttonsVisible && alignedColumns && noPageOverflow)
     && responsive
     && reasonFieldRequired
     && returnRequest?.decision === 'RETURN'
