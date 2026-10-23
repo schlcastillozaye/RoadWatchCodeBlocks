@@ -102,12 +102,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   Future<void> _confirmDelete() async {
     final report = _report;
     if (report == null) return;
+    final isAdmin = context.read<AuthProvider>().user?.isAdmin == true;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Withdraw report?'),
-        content: const Text(
-          'This permanently removes the report. This can only be done while it is pending review.',
+        title: Text(isAdmin ? 'Delete report?' : 'Withdraw report?'),
+        content: Text(
+          isAdmin
+              ? 'This permanently removes ${report.referenceNo} and its related photos, assignments, and history. This action cannot be undone.'
+              : 'This permanently removes the report. This can only be done while it is pending review.',
         ),
         actions: [
           TextButton(
@@ -117,7 +120,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text(
-              'Withdraw',
+              isAdmin ? 'Delete report' : 'Withdraw',
               style: TextStyle(color: AppColors.statusRedInk),
             ),
           ),
@@ -126,13 +129,20 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     );
     if (confirmed != true) return;
     if (!mounted) return;
-    final provider = context.read<MyReportsProvider>();
-
+    setState(() => _actionBusy = true);
     try {
-      await provider.delete(report.id);
+      if (isAdmin) {
+        await context.read<RoadWatchApi>().deleteAdminReport(report.id);
+      } else {
+        await context.read<MyReportsProvider>().delete(report.id);
+      }
       if (mounted) Navigator.of(context).pop();
     } on ApiException catch (e) {
       if (mounted) _snack(e.message);
+    } catch (_) {
+      if (mounted) _snack('The report could not be deleted. Please try again.');
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
     }
   }
 
@@ -845,13 +855,16 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ),
           const SizedBox(height: 14),
           _Timeline(history: _history),
-          if (report.moderationStatus == ModerationStatus.pendingReview) ...[
+          if (user?.isAdmin == true ||
+              report.moderationStatus == ModerationStatus.pendingReview) ...[
             const SizedBox(height: 20),
             AppButton(
-              label: 'Withdraw report',
+              label: user?.isAdmin == true
+                  ? 'Delete report'
+                  : 'Withdraw report',
               variant: AppButtonVariant.secondary,
               icon: Icons.delete_outline_rounded,
-              onPressed: _confirmDelete,
+              onPressed: _actionBusy ? null : _confirmDelete,
             ),
           ],
         ],

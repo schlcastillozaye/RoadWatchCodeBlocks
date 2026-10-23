@@ -308,7 +308,11 @@ class RoadWatchApi {
         .toList();
   }
 
-  Future<void> deleteReport(String id) => client.deleteJson('/api/reports/$id');
+  Future<void> deleteReport(String id) =>
+      client.deleteJson('/api/reports/${Uri.encodeComponent(id)}');
+
+  Future<void> deleteAdminReport(String id) =>
+      client.deleteJson('/api/admin/reports/${Uri.encodeComponent(id)}');
 
   // --------------------------------------------------------- staff workflows
 

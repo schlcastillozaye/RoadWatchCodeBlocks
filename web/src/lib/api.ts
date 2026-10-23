@@ -225,11 +225,17 @@ class ApiClient {
   }
 
   getReport(id: string): Promise<Report> {
-    return this.request<{ report: Report }>(`/api/reports/${id}`).then((r) => r.report);
+    return this.request<{ report: Report }>(`/api/reports/${encodeURIComponent(id)}`).then((r) => r.report);
+  }
+
+  deleteAdminReport(id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/admin/reports/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
   }
 
   getHistory(id: string): Promise<StatusHistoryEntry[]> {
-    return this.request<{ history: StatusHistoryEntry[] }>(`/api/reports/${id}/history`).then((r) => r.history);
+    return this.request<{ history: StatusHistoryEntry[] }>(`/api/reports/${encodeURIComponent(id)}/history`).then((r) => r.history);
   }
 
   getStatistics(): Promise<Statistics> {

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AuthImage } from '../components/AuthImage';
 import { EmptyState, ErrorState, LoadingBlock } from '../components/Feedback';
+import { ReportManagementActions } from '../components/ReportManagementActions';
 import { CategoryChip, ModerationBadge, PriorityBadge, RepairBadge } from '../components/StatusBadge';
 import { Pagination, PageHeader, Section } from '../components/ui';
 import { api } from '../lib/api';
@@ -76,6 +77,13 @@ export function ReportsPage() {
     else next.delete(key);
     if (key !== 'page') next.delete('page');
     setParams(next, { replace: true });
+  };
+
+  const reloadAfterDelete = async () => {
+    const refreshed = await reload();
+    if (refreshed && refreshed.items.length === 0 && page > refreshed.totalPages && page > 1) {
+      update('page', String(Math.max(1, refreshed.totalPages)));
+    }
   };
 
   const activeFilterCount = [search, category, moderationStatus, repairStatus, priority, areaLabel, from, to].filter(
@@ -262,62 +270,68 @@ export function ReportsPage() {
       ) : (
         <Section>
           {/* Desktop header row */}
-          <div className="hidden grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] gap-3 border-b border-azure pb-2 text-xs font-semibold uppercase tracking-wide text-ink-3 lg:grid">
-            <span>Report</span>
-            <span>Category</span>
-            <span>Moderation</span>
-            <span>Repair</span>
-            <span className="text-right">Submitted</span>
+          <div className="hidden grid-cols-[minmax(0,1fr)_minmax(8.5rem,auto)] gap-3 border-b border-azure pb-2 text-xs font-semibold uppercase tracking-wide text-ink-3 lg:grid">
+            <div className="grid grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] gap-3">
+              <span>Report</span>
+              <span>Category</span>
+              <span>Moderation</span>
+              <span>Repair</span>
+              <span className="text-right">Submitted</span>
+            </div>
+            <span className="text-right">Actions</span>
           </div>
 
           <ul className="divide-y divide-azure/70">
             {data!.items.map((report) => (
               <li key={report.id}>
-                <Link
-                  to={`/reports/${report.id}`}
-                  className="grid gap-3 py-3.5 transition hover:bg-sheet/70 lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] lg:items-center"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    {report.photos[0] ? (
-                      <AuthImage
-                        src={report.photos[0].url}
-                        isPublic={report.photos[0].isPublic}
-                        alt=""
-                        className="h-12 w-12 shrink-0 rounded-brand-sm object-cover"
-                      />
-                    ) : (
-                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-brand-sm bg-cream text-lg text-navy">
-                        ⚑
-                      </span>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-navy">{report.title}</p>
-                      <p className="truncate text-xs text-ink-3">
-                        {report.referenceNo} · {report.areaLabel ?? `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 lg:hidden">
-                        <CategoryChip category={report.category} />
-                        <ModerationBadge status={report.moderationStatus} />
-                        <RepairBadge status={report.repairStatus} />
+                <div className="grid gap-3 py-3.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <Link
+                    to={`/reports/${encodeURIComponent(report.id)}`}
+                    className="grid min-w-0 gap-3 transition hover:bg-sheet/70 lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] lg:items-center"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      {report.photos[0] ? (
+                        <AuthImage
+                          src={report.photos[0].url}
+                          isPublic={report.photos[0].isPublic}
+                          alt=""
+                          className="h-12 w-12 shrink-0 rounded-brand-sm object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-brand-sm bg-cream text-lg text-navy">
+                          ⚑
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-navy">{report.title}</p>
+                        <p className="truncate text-xs text-ink-3">
+                          {report.referenceNo} · {report.areaLabel ?? `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 lg:hidden">
+                          <CategoryChip category={report.category} />
+                          <ModerationBadge status={report.moderationStatus} />
+                          <RepairBadge status={report.repairStatus} />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="hidden lg:block">
-                    <CategoryChip category={report.category} />
-                  </div>
-                  <div className="hidden lg:block">
-                    <ModerationBadge status={report.moderationStatus} />
-                  </div>
-                  <div className="hidden lg:block">
-                    <RepairBadge status={report.repairStatus} />
-                  </div>
+                    <div className="hidden lg:block">
+                      <CategoryChip category={report.category} />
+                    </div>
+                    <div className="hidden lg:block">
+                      <ModerationBadge status={report.moderationStatus} />
+                    </div>
+                    <div className="hidden lg:block">
+                      <RepairBadge status={report.repairStatus} />
+                    </div>
 
-                  <div className="flex items-center justify-between gap-2 lg:flex-col lg:items-end">
-                    <PriorityBadge priority={report.priority} />
-                    <span className="text-xs text-ink-3">{relativeTime(report.createdAt)}</span>
-                  </div>
-                </Link>
+                    <div className="flex items-center justify-between gap-2 lg:flex-col lg:items-end">
+                      <PriorityBadge priority={report.priority} />
+                      <span className="text-xs text-ink-3">{relativeTime(report.createdAt)}</span>
+                    </div>
+                  </Link>
+                  <ReportManagementActions report={report} onDeleted={reloadAfterDelete} />
+                </div>
               </li>
             ))}
           </ul>

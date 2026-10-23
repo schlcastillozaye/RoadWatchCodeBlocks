@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Lightbox, PhotoGallery } from '../components/AuthImage';
 import { ErrorState, LoadingBlock, Banner } from '../components/Feedback';
+import { ReportManagementActions } from '../components/ReportManagementActions';
 import { MapCanvas, MapLegend } from '../components/MapPanel';
 import { CategoryChip, ModerationBadge, PriorityBadge, RepairBadge } from '../components/StatusBadge';
 import { Timeline } from '../components/Timeline';
@@ -105,6 +106,13 @@ export function ReportDetailPage() {
             >
               Update maintenance status
             </button>
+          )}
+          {isAdmin && (
+            <ReportManagementActions
+              report={report}
+              showDetails={false}
+              onDeleted={() => navigate('/reports', { replace: true })}
+            />
           )}
         </div>
       </div>

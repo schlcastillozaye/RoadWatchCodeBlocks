@@ -11,6 +11,32 @@ import 'package:roadwatch/services/roadwatch_api.dart';
 
 void main() {
   test(
+    'admin report deletion uses the admin endpoint and selected id',
+    () async {
+      final api = RoadWatchApi(
+        ApiClient(
+          tokenStore: TokenStore(),
+          httpClient: MockClient((request) async {
+            expect(request.method, 'DELETE');
+            expect(
+              request.url.toString(),
+              'http://example.test/api/admin/reports/report%2F1',
+            );
+            return http.Response(
+              jsonEncode({'success': true}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+          baseUrl: 'http://example.test',
+        ),
+      );
+
+      await api.deleteAdminReport('report/1');
+    },
+  );
+
+  test(
     'admin statistics are read from the protected reports endpoint',
     () async {
       final api = RoadWatchApi(

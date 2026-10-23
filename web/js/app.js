@@ -2405,10 +2405,10 @@
         </td>
         <td class="admin-report-location">${escapeHtml(reportLocation(report))}</td>
         <td class="admin-report-date">${escapeHtml(adminDate(report.createdAt))}</td>
-        <td>
-          <div class="admin-row-actions">
-            <a href="/report/${encodeURIComponent(report.id)}" data-nav="/report/${encodeURIComponent(report.id)}" class="btn btn-ghost btn-sm">Details</a>
-            ${allowDelete ? `<button type="button" class="btn btn-danger btn-sm" data-delete-report="${escapeHtml(report.id)}" data-report-title="${escapeHtml(report.title || 'Untitled report')}" data-report-reference="${escapeHtml(report.referenceNo || '')}">Delete</button>` : ''}
+        <td class="admin-actions-cell">
+          <div class="admin-row-actions admin-report-actions" role="group" aria-label="Actions for ${escapeHtml(report.referenceNo || report.title || 'report')}">
+            <a href="/report/${encodeURIComponent(report.id)}" data-nav="/report/${encodeURIComponent(report.id)}" class="btn btn-ghost btn-sm" aria-label="Details for ${escapeHtml(report.referenceNo || report.title || 'report')}">Details</a>
+            ${allowDelete ? `<button type="button" class="btn btn-danger btn-sm" data-delete-report="${escapeHtml(report.id)}" data-report-title="${escapeHtml(report.title || 'Untitled report')}" data-report-reference="${escapeHtml(report.referenceNo || '')}" aria-label="Delete ${escapeHtml(report.referenceNo || report.title || 'report')}">Delete</button>` : ''}
           </div>
         </td>
       </tr>`;
@@ -2425,7 +2425,14 @@
 
     return `<div class="admin-table-wrap">
       <table class="admin-table">
-        <thead><tr><th>Report</th><th>Status</th><th>Location</th><th>Submitted</th><th><span class="sr-only">Actions</span></th></tr></thead>
+        <colgroup>
+          <col class="admin-report-column" />
+          <col class="admin-status-column" />
+          <col class="admin-location-column" />
+          <col class="admin-date-column" />
+          <col class="admin-actions-column" />
+        </colgroup>
+        <thead><tr><th scope="col">Report</th><th scope="col">Status</th><th scope="col">Location</th><th scope="col">Submitted</th><th scope="col" class="admin-actions-heading">Actions</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>${paging}`;

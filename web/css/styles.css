@@ -362,15 +362,21 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 }
 .admin-table {
   width: 100%;
-  min-width: 740px;
+  min-width: 900px;
+  table-layout: fixed;
   border-collapse: collapse;
   color: var(--ink-2);
   font-size: 0.82rem;
   text-align: left;
 }
+.admin-report-column { width: 28%; }
+.admin-status-column { width: 19%; }
+.admin-location-column { width: 20%; }
+.admin-date-column { width: 15%; }
+.admin-actions-column { width: 18%; }
 .admin-table th {
   padding: 0.8rem 0.9rem;
-  background: #f0f5fa;
+  background: var(--table-head);
   color: var(--ink-2);
   font-size: 0.7rem;
   font-weight: 700;
@@ -382,6 +388,19 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   padding: 0.8rem 0.9rem;
   border-top: 1px solid #e5ecf2;
   vertical-align: middle;
+}
+.admin-table .admin-actions-heading,
+.admin-table .admin-actions-cell {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  min-width: 10rem;
+  background: var(--surface);
+  box-shadow: -0.5rem 0 0.75rem -0.75rem rgb(15 23 42 / 0.45);
+}
+.admin-table .admin-actions-heading {
+  z-index: 2;
+  background: var(--table-head);
 }
 .admin-report-main { min-width: 12rem; }
 .admin-report-cell { display: flex; align-items: center; gap: 0.65rem; }
@@ -407,6 +426,8 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .admin-repair-state { color: var(--ink-3); font-size: 0.7rem; }
 .admin-row-actions { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
 .admin-row-actions .btn { min-height: 36px; padding: 0.4rem 0.65rem; }
+.admin-report-actions { justify-content: flex-end; }
+.admin-report-actions .btn { flex: 1 1 0; justify-content: center; }
 .admin-pagination {
   display: flex;
   align-items: center;
@@ -972,6 +993,10 @@ input[type='file'].brand-input::file-selector-button {
   .admin-panel-heading { align-items: flex-start; flex-direction: column; }
   .admin-panel-heading > .btn { width: 100%; }
   .admin-filters { grid-template-columns: minmax(0, 1fr); }
+  .admin-table .admin-actions-heading,
+  .admin-table .admin-actions-cell { min-width: 8.5rem; }
+  .admin-report-actions { align-items: stretch; flex-direction: column; gap: 0.35rem; }
+  .admin-report-actions .btn { width: 100%; }
   .admin-pagination { align-items: flex-start; flex-direction: column; }
   .workspace-page > .max-w-7xl { padding-inline: 0; }
   .workspace-page .rw-report-form-card { padding: 1rem; }

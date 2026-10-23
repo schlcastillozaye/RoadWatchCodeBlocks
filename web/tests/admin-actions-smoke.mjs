@@ -37,6 +37,8 @@ const pageErrors = [];
 await page.route(/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//, (route) =>
   route.fulfill({ status: 204, body: '' }));
 const verificationRequests = [];
+const adminDeleteRequests = [];
+const deletedReportIds = new Set();
 page.on('console', (message) => {
   if (message.type() === 'error') consoleErrors.push(message.text());
 });
@@ -74,14 +76,28 @@ const reports = {
 page.route('**/api/**', async (route) => {
   const requestUrl = new URL(route.request().url());
   const endpoint = requestUrl.pathname.replace(/^\/api/, '');
+  const method = route.request().method();
   let body = {};
 
-  if (endpoint === '/auth/me') {
+  if (method === 'DELETE' && endpoint.startsWith('/admin/reports/')) {
+    const reportId = decodeURIComponent(endpoint.slice('/admin/reports/'.length));
+    adminDeleteRequests.push({ id: reportId, endpoint });
+    deletedReportIds.add(reportId);
+    body = { success: true };
+  } else if (endpoint === '/auth/me') {
     body = { user: admin };
   } else if (endpoint === '/reports/stats') {
     body = { totals: { total: 2, pending: 1, approved: 1, rejected: 0 } };
   } else if (endpoint === '/reports') {
-    body = { items: [], total: 0, page: 1, totalPages: 1 };
+    const items = Object.values(reports).filter((report) => !deletedReportIds.has(report.id));
+    const pageSize = Number(requestUrl.searchParams.get('pageSize')) || 25;
+    body = {
+      items,
+      total: items.length,
+      page: Number(requestUrl.searchParams.get('page')) || 1,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(items.length / pageSize)),
+    };
   } else if (endpoint === '/notifications') {
     body = { notifications: [] };
   } else if (endpoint.endsWith('/history')) {
@@ -113,6 +129,80 @@ try {
   await page.addInitScript(() => localStorage.setItem('roadwatch_auth_token', 'synthetic-ui-test-token'));
   await page.goto(origin, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#admin-dashboard-title', { timeout: 15000 });
+  await page.locator('#admin-dashboard-reports .admin-actions-cell').first().waitFor({ state: 'visible' });
+
+  const reportActions = page.locator('#admin-dashboard-reports .admin-report-actions').first();
+  const reportId = await reportActions.locator('[data-delete-report]').getAttribute('data-delete-report');
+  const actionLayoutChecks = [];
+  const viewports = [
+    { width: 375, height: 667 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
+  ];
+  for (const theme of ['light', 'dark']) {
+    const currentTheme = await page.locator('html').getAttribute('data-theme');
+    if (currentTheme !== theme) {
+      await page.locator('[data-theme-toggle]').first().click();
+      await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, theme);
+    }
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
+      const layout = await page.evaluate(() => {
+        const wrap = document.querySelector('#admin-dashboard-reports .admin-table-wrap');
+        const table = wrap?.querySelector('.admin-table');
+        const cell = document.querySelector('#admin-dashboard-reports .admin-actions-cell');
+        const header = document.querySelector('#admin-dashboard-reports .admin-actions-heading');
+        if (!wrap || !table || !cell || !header) return { visible: false, buttonsVisible: false, noPageOverflow: false };
+        const wrapRect = wrap.getBoundingClientRect();
+        const cellRect = cell.getBoundingClientRect();
+        const headerRect = header.getBoundingClientRect();
+        const buttons = [...cell.querySelectorAll('.admin-report-actions .btn')];
+        const buttonRects = buttons.map((button) => button.getBoundingClientRect());
+        return {
+          visible: getComputedStyle(cell).position === 'sticky'
+            && cellRect.left >= wrapRect.left - 1
+            && cellRect.right <= wrapRect.right + 1,
+          headerVisible: getComputedStyle(header).position === 'sticky'
+            && headerRect.left >= wrapRect.left - 1
+            && headerRect.right <= wrapRect.right + 1,
+          buttonsVisible: buttonRects.length === 2 && buttonRects.every((rect) =>
+            rect.width > 0
+            && rect.height > 0
+            && rect.left >= wrapRect.left - 1
+            && rect.right <= wrapRect.right + 1),
+          noPageOverflow: document.documentElement.scrollWidth <= window.innerWidth + 2,
+        };
+      });
+      actionLayoutChecks.push({ theme, ...viewport, ...layout });
+    }
+  }
+
+  await page.locator('#admin-dashboard-reports .admin-report-actions a').first().click();
+  await page.waitForFunction(() => document.body.innerText.includes('Synthetic test location'));
+  const correctDetailsOpened = new URL(page.url()).pathname === `/report/${reportId}`;
+  await page.evaluate(() => window.navigateTo('/admin'));
+  await page.locator('#admin-dashboard-reports .admin-actions-cell').first().waitFor({ state: 'visible' });
+
+  const deleteButton = page.locator(`#admin-dashboard-reports [data-delete-report="${reportId}"]`);
+  await deleteButton.click();
+  const deleteDialog = page.locator('dialog.rw-confirm-dialog');
+  await deleteDialog.waitFor({ state: 'visible', timeout: 5000 });
+  const correctDeleteIdentity = (await deleteDialog.innerText()).includes('Synthetic pending report')
+    && (await deleteDialog.innerText()).includes('UI-PENDING');
+  await deleteDialog.getByRole('button', { name: 'Cancel' }).click();
+  await deleteDialog.waitFor({ state: 'detached', timeout: 5000 });
+  const cancelKeptReport = adminDeleteRequests.length === 0
+    && await page.locator(`#admin-dashboard-reports [data-delete-report="${reportId}"]`).count() === 1;
+
+  await page.locator(`#admin-dashboard-reports [data-delete-report="${reportId}"]`).click();
+  await page.locator('dialog.rw-confirm-dialog').getByRole('button', { name: 'Delete report' }).click();
+  await page.waitForSelector('#admin-dashboard-reports [data-delete-report="verification"]');
+  await page.waitForFunction((id) => !document.querySelector(`#admin-dashboard-reports [data-delete-report="${id}"]`), reportId);
+  const deleteRefreshedList = await page.locator('#admin-dashboard-reports .admin-report-actions').count() === 1;
+  const correctDeleteEndpoint = adminDeleteRequests.length === 1
+    && adminDeleteRequests[0].id === reportId
+    && adminDeleteRequests[0].endpoint === `/admin/reports/${reportId}`;
 
   const checks = [];
   let responsive = true;
@@ -159,6 +249,12 @@ try {
   const staleBrandVisible = /ROADWATCH/i.test(adminText);
   const passed = checks.every(({ heading, present }) => heading === 'Admin actions'
     && Object.values(present).every(Boolean))
+    && correctDetailsOpened
+    && correctDeleteIdentity
+    && cancelKeptReport
+    && deleteRefreshedList
+    && correctDeleteEndpoint
+    && actionLayoutChecks.every(({ visible, buttonsVisible, noPageOverflow }) => visible && buttonsVisible && noPageOverflow)
     && responsive
     && reasonFieldRequired
     && returnRequest?.decision === 'RETURN'
@@ -170,6 +266,13 @@ try {
   console.log(JSON.stringify({
     passed,
     checks,
+    reportId,
+    correctDetailsOpened,
+    correctDeleteIdentity,
+    cancelKeptReport,
+    deleteRefreshedList,
+    correctDeleteEndpoint,
+    actionLayoutChecks,
     responsive,
     reasonFieldRequired,
     returnRequest,

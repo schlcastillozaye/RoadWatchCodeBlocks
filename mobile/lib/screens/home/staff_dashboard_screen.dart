@@ -45,6 +45,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
   int _reportTotal = 0;
   int _reportTotalPages = 1;
   bool _markingRead = false;
+  String? _deletingReportId;
   Timer? _notificationExpiryTimer;
 
   @override
@@ -175,6 +176,59 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     if (page < 1 || page > _reportTotalPages || page == _reportPage) return;
     setState(() => _reportPage = page);
     await _load();
+  }
+
+  Future<void> _confirmAdminDelete(RoadReport report) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete report?'),
+        content: Text(
+          'Permanently delete ${report.referenceNo} — ${report.title}, including its photos, assignments, and history?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              'Delete report',
+              style: TextStyle(color: AppColors.statusRedInk),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deletingReportId = report.id);
+    try {
+      await context.read<RoadWatchApi>().deleteAdminReport(report.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${report.referenceNo} was deleted.')),
+      );
+      await _load();
+      if (mounted && _reports.isEmpty && _reportPage > _reportTotalPages) {
+        setState(() => _reportPage = _reportTotalPages.clamp(1, 1 << 31));
+        await _load();
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The report could not be deleted.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deletingReportId = null);
+    }
   }
 
   Future<void> _openNotification(MaintenanceNotification notification) async {
@@ -365,6 +419,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                           ? 'All reports'
                           : 'Pending review',
                       onOpen: _openReport,
+                      onDelete: widget.isAdmin ? _confirmAdminDelete : null,
+                      deletingReportId: _deletingReportId,
                       onPage: _changeReportPage,
                     ),
                   ] else if (widget.showHistory) ...[
@@ -435,6 +491,8 @@ class _ReviewQueue extends StatelessWidget {
     required this.reports,
     required this.title,
     required this.onOpen,
+    this.onDelete,
+    this.deletingReportId,
     required this.onPage,
   });
 
@@ -444,6 +502,8 @@ class _ReviewQueue extends StatelessWidget {
   final List<RoadReport> reports;
   final String title;
   final ValueChanged<RoadReport> onOpen;
+  final ValueChanged<RoadReport>? onDelete;
+  final String? deletingReportId;
   final ValueChanged<int> onPage;
 
   @override
@@ -468,9 +528,66 @@ class _ReviewQueue extends StatelessWidget {
               for (final report in reports)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: ReportCard(
-                    report: report,
-                    onTap: () => onOpen(report),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ReportCard(report: report, onTap: () => onOpen(report)),
+                      if (onDelete != null) ...[
+                        const SizedBox(height: 8),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final details = OutlinedButton.icon(
+                              onPressed: () => onOpen(report),
+                              icon: const Icon(Icons.open_in_new_rounded),
+                              label: const Text('Details'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 44),
+                              ),
+                            );
+                            final delete = OutlinedButton.icon(
+                              onPressed: deletingReportId == report.id
+                                  ? null
+                                  : () => onDelete!(report),
+                              icon: deletingReportId == report.id
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.delete_outline_rounded),
+                              label: Text(
+                                deletingReportId == report.id
+                                    ? 'Deleting…'
+                                    : 'Delete',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.statusRedInk,
+                                minimumSize: const Size(0, 44),
+                              ),
+                            );
+                            if (constraints.maxWidth < 360) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  details,
+                                  const SizedBox(height: 8),
+                                  delete,
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                Expanded(child: details),
+                                const SizedBox(width: 10),
+                                Expanded(child: delete),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               if (totalPages > 1)

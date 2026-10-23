@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ErrorState, LoadingBlock, SkeletonRows } from '../components/Feedback';
+import { ReportManagementActions } from '../components/ReportManagementActions';
 import { ModerationBadge, PriorityBadge, RepairBadge } from '../components/StatusBadge';
 import { PageHeader, Section, StatCard } from '../components/ui';
 import { api } from '../lib/api';
@@ -151,24 +152,26 @@ function AdminDashboard() {
         ) : (
           <ul className="divide-y divide-azure/70">
             {recent.slice(0, 6).map((report) => (
-              <li key={report.id}>
+              <li
+                key={report.id}
+                className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <Link
-                  to={`/reports/${report.id}`}
-                  className="flex flex-col gap-2 py-3 transition hover:opacity-80 sm:flex-row sm:items-center sm:justify-between"
+                  to={`/reports/${encodeURIComponent(report.id)}`}
+                  className="min-w-0 flex-1 transition hover:opacity-80"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-navy">{report.title}</p>
-                    <p className="text-xs text-ink-3">
-                      {report.referenceNo} · {relativeTime(report.createdAt)}
-                      {report.areaLabel ? ` · ${report.areaLabel}` : ''}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate font-semibold text-navy">{report.title}</p>
+                  <p className="text-xs text-ink-3">
+                    {report.referenceNo} · {relativeTime(report.createdAt)}
+                    {report.areaLabel ? ` · ${report.areaLabel}` : ''}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <ModerationBadge status={report.moderationStatus} />
                     <RepairBadge status={report.repairStatus} />
                     <PriorityBadge priority={report.priority} />
                   </div>
                 </Link>
+                <ReportManagementActions report={report} onDeleted={() => void reload()} />
               </li>
             ))}
           </ul>
