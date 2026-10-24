@@ -595,22 +595,23 @@
         <form id="register-form" class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2">Full name</label>
-            <input type="text" name="fullName" required class="w-full brand-input" placeholder="John Doe" />
+            <input type="text" name="fullName" required minlength="2" maxlength="120" autocomplete="name" class="w-full brand-input" placeholder="John Doe" />
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2">Email address</label>
-            <input type="email" name="email" required class="w-full brand-input" placeholder="you@example.com" />
+            <input type="email" name="email" required maxlength="190" autocomplete="email" class="w-full brand-input" placeholder="you@example.com" />
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2">Phone (optional)</label>
-            <input type="tel" name="phone" class="w-full brand-input" placeholder="+63 912 345 6789" />
+            <input type="tel" name="phone" maxlength="30" autocomplete="tel" class="w-full brand-input" placeholder="+63 912 345 6789" />
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2" for="register-password">Password</label>
             <div class="rw-password-field">
-              <input id="register-password" type="password" name="password" required class="w-full brand-input" placeholder="••••••••" autocomplete="new-password" />
+              <input id="register-password" type="password" name="password" required minlength="8" maxlength="128" aria-describedby="register-password-hint" class="w-full brand-input" placeholder="••••••••" autocomplete="new-password" />
               ${passwordToggleHtml('register-password')}
             </div>
+            <p id="register-password-hint" class="text-xs text-slate-tint mt-1">Use 8–128 characters.</p>
           </div>
           <p id="register-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
           <button type="submit" class="btn btn-primary w-full">Create account</button>
@@ -1517,15 +1518,25 @@
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
+        const fullName = String(formData.get('fullName') || '').trim();
+        const email = String(formData.get('email') || '').trim();
+        if (fullName.length < 2) {
+          if (feedback) {
+            feedback.textContent = 'Registration failed: Full name must be at least 2 characters.';
+            feedback.hidden = false;
+            feedback.focus();
+          }
+          return;
+        }
         const btn = q('button[type="submit"]', form);
         if (btn) { btn.disabled = true; }
         try {
           const data = await api('/auth/register', {
             method: 'POST',
             body: JSON.stringify({
-              fullName: formData.get('fullName'),
-              email: formData.get('email'),
-              phone: formData.get('phone') || undefined,
+              fullName,
+              email,
+              phone: String(formData.get('phone') || '').trim() || undefined,
               password: formData.get('password'),
             }),
           });
@@ -1534,7 +1545,10 @@
           navigateTo('/');
         } catch (err) {
           if (feedback) {
-            feedback.textContent = 'Registration failed: ' + (err.message || err);
+            const details = Array.isArray(err.details)
+              ? err.details.map((item) => [item.path, item.message].filter(Boolean).join(': ')).filter(Boolean).join(' ')
+              : '';
+            feedback.textContent = 'Registration failed: ' + (details || err.message || err);
             feedback.hidden = false;
             feedback.focus();
           }

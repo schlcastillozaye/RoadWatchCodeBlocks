@@ -49,10 +49,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
           );
       // On success the root gate switches to the home shell automatically.
     } on ApiException catch (e) {
-      if (mounted) _showError(e.message);
+      if (mounted) _showError(_registrationError(e));
     } catch (_) {
       if (mounted) _showError('Unable to create your account right now.');
     }
+  }
+
+  String _registrationError(ApiException error) {
+    final details = error.details;
+    if (details is List) {
+      final messages = details
+          .whereType<Map>()
+          .map((detail) {
+            final path = detail['path']?.toString();
+            final message = detail['message']?.toString();
+            if (message == null || message.isEmpty) return null;
+            return path == null || path.isEmpty ? message : '$path: $message';
+          })
+          .whereType<String>()
+          .toList();
+      if (messages.isNotEmpty) return messages.join('\n');
+    }
+    return error.message;
   }
 
   void _showError(String message) {
@@ -103,27 +121,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 22),
                 TextFormField(
+                  key: const Key('register-name-field'),
                   controller: _name,
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
+                  maxLength: 120,
                   decoration: const InputDecoration(
                     labelText: 'Full name',
                     prefixIcon: Icon(Icons.person_outline_rounded),
                   ),
-                  validator: (v) => (v == null || v.trim().length < 2) ? 'Enter your full name' : null,
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.length < 2) return 'Enter your full name';
+                    if (value.length > 120) return 'Name must be 120 characters or fewer';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
+                  key: const Key('register-email-field'),
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
+                  maxLength: 190,
                   decoration: const InputDecoration(
                     labelText: 'Email address',
                     prefixIcon: Icon(Icons.mail_outline_rounded),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email is required';
-                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return 'Email is required';
+                    if (value.length > 190) return 'Email must be 190 characters or fewer';
+                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
                       return 'Enter a valid email address';
                     }
                     return null;
@@ -131,32 +160,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
+                  key: const Key('register-phone-field'),
                   controller: _phone,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
+                  maxLength: 30,
                   decoration: const InputDecoration(
                     labelText: 'Mobile number (optional)',
                     prefixIcon: Icon(Icons.phone_outlined),
                   ),
+                  validator: (v) => (v?.trim().length ?? 0) > 30
+                      ? 'Phone must be 30 characters or fewer'
+                      : null,
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
+                  key: const Key('register-password-field'),
                   controller: _password,
                   obscureText: _obscure,
                   textInputAction: TextInputAction.next,
+                  maxLength: 128,
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    helperText: 'At least 8 characters',
+                    helperText: '8–128 characters',
                     prefixIcon: const Icon(Icons.lock_outline_rounded),
                     suffixIcon: IconButton(
                       icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
-                  validator: (v) => (v == null || v.length < 8) ? 'Use at least 8 characters' : null,
+                  validator: (v) {
+                    if (v == null || v.length < 8) return 'Use at least 8 characters';
+                    if (v.length > 128) return 'Password must be 128 characters or fewer';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
+                  key: const Key('register-confirm-password-field'),
                   controller: _confirm,
                   obscureText: _obscure,
                   textInputAction: TextInputAction.done,
