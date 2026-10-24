@@ -926,7 +926,7 @@
     const roleName = role === 'ADMIN' ? 'Admin' : role === 'MAINTENANCE_OFFICER' ? 'Maintenance' : 'Citizen';
     const navLabel = `${roleName} navigation`;
     return `
-    <section class="admin-workspace">
+    <section class="admin-workspace" data-workspace-role="${role}" data-workspace-page="${active}">
       <aside class="admin-sidebar" aria-label="${navLabel}">
         <div class="admin-sidebar-top">
           <p class="admin-sidebar-heading">${role === 'ADMIN' ? 'ROADBLOCKS OPERATIONS' : `${roleName.toUpperCase()} WORKSPACE`}</p>

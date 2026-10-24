@@ -212,13 +212,13 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 /* ---- Admin workspace ---- */
 .admin-workspace {
   display: grid;
-  grid-template-columns: 13.5rem minmax(0, 1fr);
+  grid-template-columns: 14rem minmax(0, 1fr);
   align-items: start;
   gap: 1.5rem;
   width: 100%;
-  max-width: 80rem;
+  max-width: 100rem;
   margin: 0 auto;
-  padding: clamp(1rem, 2.5vw, 2rem);
+  padding: clamp(1rem, 2vw, 2rem);
 }
 .admin-sidebar {
   position: sticky;
@@ -1039,6 +1039,24 @@ input[type='file'].brand-input::file-selector-button {
   .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+@media (min-width: 1024px) {
+  .admin-workspace { width: min(100% - 2.5rem, 100rem); }
+}
+@media (min-width: 1280px) {
+  .admin-workspace[data-workspace-role="CITIZEN"][data-workspace-page="dashboard"] .admin-content {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 1.25rem;
+  }
+  .admin-workspace[data-workspace-role="CITIZEN"][data-workspace-page="dashboard"] .admin-content > .admin-page-heading,
+  .admin-workspace[data-workspace-role="CITIZEN"][data-workspace-page="dashboard"] .admin-content > section:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+  .admin-workspace[data-workspace-role="CITIZEN"][data-workspace-page="dashboard"] .admin-content > .admin-panel {
+    margin-top: 0;
+  }
+}
 @media (max-width: 1023px) {
   .admin-workspace { grid-template-columns: minmax(0, 1fr); }
   .admin-sidebar {
@@ -1275,7 +1293,7 @@ body,
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
-  width: min(100% - 2.5rem, 80rem);
+  width: min(100% - 2.5rem, 100rem);
   min-height: 76px;
   margin: 0 auto;
 }
@@ -1612,7 +1630,7 @@ html.rw-modal-open { overflow: hidden; }
 }
 
 @media (max-width: 1100px) {
-  .rw-header-inner { gap: 1rem; width: min(100% - 2rem, 80rem); }
+  .rw-header-inner { gap: 1rem; width: min(100% - 2rem, 100rem); }
   .rw-primary-nav { gap: 0.15rem; }
   .rw-primary-nav > a,
   .rw-nav-link { padding-inline: 0.55rem; font-size: 0.77rem; }

@@ -104,6 +104,48 @@ async function routeApi(route) {
   });
 }
 
+async function verifyResponsiveWorkspace(page, role) {
+  const checks = [];
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    for (const viewport of [
+      { width: 375, height: 667 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const layout = await page.evaluate(() => {
+        const workspace = document.querySelector('.admin-workspace');
+        const content = document.querySelector('.admin-content');
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth,
+          workspaceWidth: Math.round(workspace.getBoundingClientRect().width),
+          contentWidth: Math.round(content.getBoundingClientRect().width),
+          role: workspace.dataset.workspaceRole,
+          page: workspace.dataset.workspacePage,
+          dashboardColumns: getComputedStyle(content).gridTemplateColumns,
+        };
+      });
+      assert.ok(
+        layout.scrollWidth <= layout.viewportWidth,
+        `${role} ${theme} ${viewport.width}px has horizontal page overflow: ${JSON.stringify(layout)}`,
+      );
+      assert.equal(layout.role, role);
+      if (role === 'CITIZEN' && viewport.width === 1440) {
+        assert.ok(layout.workspaceWidth > 1280, 'Desktop workspace should use the wider available layout');
+        assert.equal(layout.dashboardColumns.split(' ').length, 2);
+      }
+      checks.push({ theme, ...viewport, ...layout });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  return checks;
+}
+
 try {
   const citizenPage = await browser.newPage();
   citizenPage.on('console', (message) => {
@@ -127,6 +169,7 @@ try {
   await citizenPage.locator('#home-reports').waitFor();
   assert.equal(await citizenPage.locator('.admin-stat-grid').count(), 0);
   assert.equal(await citizenPage.getByText('Total reports', { exact: true }).count(), 0);
+  const citizenLayoutChecks = await verifyResponsiveWorkspace(citizenPage, 'CITIZEN');
   await citizenPage.locator('[data-nav="/profile"]').click();
   await citizenPage.locator('#profile-form').waitFor();
   await citizenPage.locator('#profile-name').fill('Updated Synthetic Citizen');
@@ -156,6 +199,7 @@ try {
     localStorage.setItem('roadwatch_auth_token', 'synthetic-officer-token'));
   await officerPage.goto(origin, { waitUntil: 'domcontentloaded' });
   await officerPage.getByRole('heading', { name: 'My dashboard' }).waitFor();
+  const officerLayoutChecks = await verifyResponsiveWorkspace(officerPage, 'MAINTENANCE_OFFICER');
   assert.equal(await officerPage.locator('#officer-summary .admin-stat-card').count(), 4);
   await officerPage.getByRole('link', { name: 'View my assignments' }).click();
   await officerPage.locator('h1.admin-page-title').getByText('My assignments').waitFor();
@@ -198,7 +242,9 @@ try {
   assert.deepEqual(consoleErrors, []);
   assert.deepEqual(pageErrors, []);
   console.log('PASS: citizen profile update and dashboard content');
+  console.log(`PASS: citizen responsive light/dark workspace at 375, 768, 1024, and 1440px (${citizenLayoutChecks.length} checks)`);
   console.log('PASS: officer dashboard, assignments navigation, start-work, and evidence submission');
+  console.log(`PASS: officer responsive light/dark workspace at 375, 768, 1024, and 1440px (${officerLayoutChecks.length} checks)`);
   console.log('PASS: no browser console or page errors');
 } finally {
   await browser.close();
