@@ -21,11 +21,13 @@ class StaffDashboardScreen extends StatefulWidget {
     required this.isAdmin,
     this.showAllReports = false,
     this.showHistory = false,
+    this.showAssignmentsOnly = false,
   });
 
   final bool isAdmin;
   final bool showAllReports;
   final bool showHistory;
+  final bool showAssignmentsOnly;
 
   @override
   State<StaffDashboardScreen> createState() => _StaffDashboardScreenState();
@@ -374,7 +376,9 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                     : 'Dashboard'
               : widget.showHistory
               ? 'Repair history'
-              : 'My assignments',
+              : widget.showAssignmentsOnly
+              ? 'My assignments'
+              : 'Dashboard',
         ),
         actions: [
           IconButton(
@@ -439,14 +443,11 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                         total: _reportTotal,
                         onPage: _changeReportPage,
                       ),
-                  ] else ...[
-                    _OfficerSummary(summary: _summary),
-                    const SizedBox(height: 16),
-                    _notificationsSection(unreadCount),
-                    const SizedBox(height: 16),
+                  ] else if (widget.showAssignmentsOnly) ...[
                     _ReportSection(
-                      title: 'Assigned work',
-                      subtitle: 'Approved reports assigned to your account',
+                      title: 'My assignments',
+                      subtitle:
+                          'Approved reports assigned to you for maintenance',
                       reports: activeReports,
                       emptyMessage: 'No active assignments.',
                       onOpen: _openReport,
@@ -467,6 +468,33 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                         onOpen: _openReport,
                       ),
                     ],
+                  ] else ...[
+                    _OfficerSummary(summary: _summary),
+                    const SizedBox(height: 16),
+                    _notificationsSection(unreadCount),
+                    const SizedBox(height: 16),
+                    SectionCard(
+                      title: 'Assigned work',
+                      subtitle:
+                          '${_summary['assigned'] ?? 0} report${_summary['assigned'] == 1 ? '' : 's'} assigned to you',
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push<void>(
+                              MaterialPageRoute(
+                                builder: (_) => const StaffDashboardScreen(
+                                  isAdmin: false,
+                                  showAssignmentsOnly: true,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.assignment_outlined),
+                          label: const Text('View my assignments'),
+                        ),
+                      ),
+                    ),
                   ],
                   if (_error != null && _reports.isNotEmpty)
                     Padding(

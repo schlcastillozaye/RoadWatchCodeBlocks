@@ -66,8 +66,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   Future<void> _editUser(AppUser user) async {
     final formKey = GlobalKey<FormState>();
-    final name = TextEditingController(text: user.fullName);
-    final phone = TextEditingController(text: user.phone ?? '');
+    var updatedName = user.fullName;
+    var updatedPhone = user.phone ?? '';
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -78,18 +78,20 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
-                controller: name,
+                initialValue: user.fullName,
                 autofocus: true,
                 maxLength: 120,
+                onSaved: (value) => updatedName = value?.trim() ?? '',
                 decoration: const InputDecoration(labelText: 'Full name'),
                 validator: (value) => (value?.trim().length ?? 0) < 2
                     ? 'Enter at least 2 characters.'
                     : null,
               ),
               TextFormField(
-                controller: phone,
+                initialValue: user.phone ?? '',
                 keyboardType: TextInputType.phone,
                 maxLength: 30,
+                onSaved: (value) => updatedPhone = value?.trim() ?? '',
                 decoration: const InputDecoration(
                   labelText: 'Phone (optional)',
                 ),
@@ -111,7 +113,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           ),
           FilledButton(
             onPressed: () {
-              if (formKey.currentState!.validate()) {
+              final form = formKey.currentState!;
+              if (form.validate()) {
+                form.save();
                 Navigator.pop(dialogContext, true);
               }
             },
@@ -124,8 +128,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       try {
         await context.read<RoadWatchApi>().updateManagedUser(
           user.id,
-          fullName: name.text,
-          phone: phone.text,
+          fullName: updatedName,
+          phone: updatedPhone,
         );
         if (mounted) _message('User information updated.');
         await _load();
@@ -133,8 +137,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         if (mounted) _message(error.message);
       }
     }
-    name.dispose();
-    phone.dispose();
   }
 
   Future<void> _setAccountStatus(AppUser user) async {
@@ -201,6 +203,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   TextField(
                     controller: _search,
                     textInputAction: TextInputAction.search,
+                    maxLines: 1,
                     onSubmitted: (_) {
                       _page = 1;
                       _load();
@@ -208,8 +211,21 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     decoration: InputDecoration(
                       labelText: 'Search name, email or phone',
                       prefixIcon: const Icon(Icons.search_rounded),
+                      prefixIconConstraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 48,
+                      ),
+                      suffixIconConstraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 48,
+                      ),
                       suffixIcon: IconButton(
                         tooltip: 'Search users',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 40,
+                          height: 48,
+                        ),
                         onPressed: () {
                           _page = 1;
                           _load();
@@ -223,6 +239,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String?>(
+                          isExpanded: true,
                           initialValue: _role,
                           decoration: const InputDecoration(labelText: 'Role'),
                           items: const [
@@ -236,11 +253,19 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                             ),
                             DropdownMenuItem(
                               value: 'MAINTENANCE_OFFICER',
-                              child: Text('Officer'),
+                              child: Text(
+                                'Officer',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             DropdownMenuItem(
                               value: 'ADMIN',
-                              child: Text('Administrator'),
+                              child: Text(
+                                'Administrator',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                           onChanged: (value) {
@@ -255,6 +280,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: DropdownButtonFormField<String?>(
+                          isExpanded: true,
                           initialValue: _status,
                           decoration: const InputDecoration(
                             labelText: 'Status',
@@ -330,9 +356,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Role: ${account.role.label}'),
+                              Text(
+                                'Role: ${account.role.label}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               Text(
                                 'Phone: ${account.phone?.isNotEmpty == true ? account.phone : 'Not provided'}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               if (protected) ...[
                                 const SizedBox(height: 8),

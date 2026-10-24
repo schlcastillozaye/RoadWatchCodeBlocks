@@ -28,12 +28,15 @@ class ThemeToggleButton extends StatelessWidget {
 
     return IconButton(
       tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-      onPressed: () => theme.toggleFrom(isDark ? Brightness.dark : Brightness.light),
+      onPressed: () =>
+          theme.toggleFrom(isDark ? Brightness.dark : Brightness.light),
       icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
       color: onDark ? palette.onNavy : palette.ink,
       style: IconButton.styleFrom(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        backgroundColor: onDark ? palette.onNavy.withValues(alpha: 0.12) : Colors.transparent,
+        backgroundColor: onDark
+            ? palette.onNavy.withValues(alpha: 0.12)
+            : Colors.transparent,
       ),
     );
   }
@@ -52,32 +55,45 @@ class ThemeModeSelector extends StatelessWidget {
     AppColors.syncTo(context);
     final theme = context.watch<ThemeProvider>();
 
-    return SegmentedButton<ThemeMode>(
-      segments: const [
-        ButtonSegment(
-          value: ThemeMode.system,
-          icon: Icon(Icons.brightness_auto_rounded, size: 17),
-          label: Text('System'),
-        ),
-        ButtonSegment(
-          value: ThemeMode.light,
-          icon: Icon(Icons.light_mode_rounded, size: 17),
-          label: Text('Light'),
-        ),
-        ButtonSegment(
-          value: ThemeMode.dark,
-          icon: Icon(Icons.dark_mode_rounded, size: 17),
-          label: Text('Dark'),
-        ),
-      ],
-      selected: {theme.mode},
-      showSelectedIcon: false,
-      onSelectionChanged: (selection) => theme.setMode(selection.first),
-      style: ButtonStyle(
-        textStyle: WidgetStatePropertyAll(AppTypography.caption(size: 12, weight: FontWeight.w600)),
-        foregroundColor: WidgetStatePropertyAll(AppColors.textSecondary),
-        side: WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 380;
+        return SegmentedButton<ThemeMode>(
+          segments: [
+            ButtonSegment(
+              value: ThemeMode.system,
+              icon: compact
+                  ? null
+                  : const Icon(Icons.brightness_auto_rounded, size: 17),
+              label: const Text('System'),
+            ),
+            ButtonSegment(
+              value: ThemeMode.light,
+              icon: compact
+                  ? null
+                  : const Icon(Icons.light_mode_rounded, size: 17),
+              label: const Text('Light'),
+            ),
+            ButtonSegment(
+              value: ThemeMode.dark,
+              icon: compact
+                  ? null
+                  : const Icon(Icons.dark_mode_rounded, size: 17),
+              label: const Text('Dark'),
+            ),
+          ],
+          selected: {theme.mode},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) => theme.setMode(selection.first),
+          style: ButtonStyle(
+            textStyle: WidgetStatePropertyAll(
+              AppTypography.caption(size: 12, weight: FontWeight.w600),
+            ),
+            foregroundColor: WidgetStatePropertyAll(AppColors.textSecondary),
+            side: WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
+          ),
+        );
+      },
     );
   }
 }

@@ -57,7 +57,7 @@ class _HomeShellState extends State<HomeShell> {
               ]
             : isStaff
             ? [
-                StaffDashboardScreen(isAdmin: false),
+                const StaffDashboardScreen(isAdmin: false),
                 const PublicMapScreen(),
                 const StaffDashboardScreen(isAdmin: false, showHistory: true),
                 const ProfileScreen(),
@@ -103,17 +103,9 @@ class _HomeShellState extends State<HomeShell> {
             : isStaff
             ? [
                 NavigationDestination(
-                  icon: Icon(
-                    user.isAdmin
-                        ? Icons.fact_check_outlined
-                        : Icons.engineering_outlined,
-                  ),
-                  selectedIcon: Icon(
-                    user.isAdmin
-                        ? Icons.fact_check_rounded
-                        : Icons.engineering_rounded,
-                  ),
-                  label: user.isAdmin ? 'Dashboard' : 'My assignments',
+                  icon: Icon(Icons.fact_check_outlined),
+                  selectedIcon: Icon(Icons.fact_check_rounded),
+                  label: 'Dashboard',
                 ),
                 const NavigationDestination(
                   icon: Icon(Icons.map_outlined),

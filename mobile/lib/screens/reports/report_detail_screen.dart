@@ -153,7 +153,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   }
 
   Future<void> _moderate(String decision) async {
-    final controller = TextEditingController();
+    var reason = '';
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -162,10 +162,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ),
         content: decision == 'REJECT'
             ? TextField(
-                controller: controller,
                 autofocus: true,
                 minLines: 2,
                 maxLines: 4,
+                onChanged: (value) => reason = value,
                 decoration: const InputDecoration(
                   labelText: 'Reason (at least 5 characters)',
                 ),
@@ -185,8 +185,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ],
       ),
     );
-    final reason = controller.text.trim();
-    controller.dispose();
+    reason = reason.trim();
     if (accepted != true) return;
     if (!mounted) return;
     if (decision == 'REJECT' && reason.length < 5) {
@@ -230,7 +229,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         return;
       }
       var selectedId = '';
-      final noteController = TextEditingController();
+      var note = '';
       final officerId = await showDialog<String>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
@@ -255,10 +254,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: noteController,
                   minLines: 2,
                   maxLines: 4,
                   maxLength: 1000,
+                  onChanged: (value) => note = value,
                   decoration: const InputDecoration(
                     labelText: 'Instructions for the officer (optional)',
                     alignLabelWithHint: true,
@@ -281,8 +280,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ),
         ),
       );
-      final note = noteController.text.trim();
-      noteController.dispose();
+      note = note.trim();
       if (officerId == null) return;
       if (!mounted) return;
       final updated = await context.read<RoadWatchApi>().assignReport(
@@ -343,7 +341,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   }
 
   Future<void> _verifyRepair(String decision) async {
-    final controller = TextEditingController();
+    var reason = '';
     final returning = decision == 'RETURN';
     final accepted = await showDialog<bool>(
       context: context,
@@ -351,11 +349,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         title: Text(returning ? 'Return for further work?' : 'Verify repair?'),
         content: returning
             ? TextField(
-                controller: controller,
                 autofocus: true,
                 minLines: 2,
                 maxLines: 4,
                 maxLength: 1000,
+                onChanged: (value) => reason = value,
                 decoration: const InputDecoration(
                   labelText: 'Reason (at least 5 characters)',
                 ),
@@ -375,8 +373,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ],
       ),
     );
-    final reason = controller.text.trim();
-    controller.dispose();
+    reason = reason.trim();
     if (accepted != true) return;
     if (returning && reason.length < 5) {
       _snack('Enter a return reason of at least 5 characters.');
@@ -413,16 +410,16 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Future<void> _completeRepair() async {
     if (_actionBusy) return;
-    final notesController = TextEditingController();
+    var completionNotes = '';
     final notes = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Finish work and submit for review'),
         content: TextField(
-          controller: notesController,
           autofocus: true,
           minLines: 2,
           maxLines: 4,
+          onChanged: (value) => completionNotes = value,
           decoration: const InputDecoration(
             labelText: 'Completion notes (at least 5 characters)',
           ),
@@ -434,13 +431,12 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ),
           FilledButton(
             onPressed: () =>
-                Navigator.pop(dialogContext, notesController.text.trim()),
+                Navigator.pop(dialogContext, completionNotes.trim()),
             child: const Text('Continue'),
           ),
         ],
       ),
     );
-    notesController.dispose();
     if (notes == null) return;
     if (!mounted) return;
     if (notes.length < 5) {

@@ -191,13 +191,14 @@ class RoadWatchApi {
     String? phone,
     String? status,
   }) async {
+    final body = <String, dynamic>{
+      'fullName': fullName.trim(),
+      'phone': phone?.trim() ?? '',
+    };
+    if (status != null) body['status'] = status;
     final json = await client.patchJson(
       '/api/users/${Uri.encodeComponent(id)}',
-      body: {
-        'fullName': fullName.trim(),
-        'phone': phone?.trim() ?? '',
-        ?status: status,
-      },
+      body: body,
     );
     return AppUser.fromJson(asMap(asMap(json)['user']));
   }

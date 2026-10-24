@@ -652,18 +652,6 @@
         </div>
         <button type="button" class="btn btn-secondary btn-sm" data-citizen-refresh>Refresh data</button>
       </div>
-      <div class="admin-stat-grid" aria-label="Your report statistics">
-        ${[
-          ['Total reports', 'citizen-stat-total', 'navy'],
-          ['Awaiting review', 'citizen-stat-pending', 'amber'],
-          ['In repair', 'citizen-stat-progress', 'blue'],
-          ['Completed', 'citizen-stat-completed', 'green'],
-        ].map(([label, id, tone]) => `
-          <article class="admin-stat-card admin-stat-${tone}">
-            <p>${label}</p>
-            <strong id="${id}"><span class="spinner" aria-label="Loading"></span></strong>
-          </article>`).join('')}
-      </div>
       <section class="admin-panel">
         <div class="admin-panel-heading">
           <div>
@@ -922,7 +910,7 @@
       : role === 'MAINTENANCE_OFFICER'
         ? [
             ['dashboard', '/assignments', 'Dashboard'],
-            ['assignments', '/assignments#assigned-work', 'My assignments'],
+            ['assignments', '/assignments?view=assignments#assigned-work', 'My assignments'],
             ['map', '/map', 'Road issue map'],
             ['repair-history', '/assignments?view=history', 'Repair history'],
             ['profile', '/profile', 'My profile'],
@@ -1138,17 +1126,45 @@
   `);
 
   const pageAssignments = () => {
-    const historyView = new URLSearchParams(window.location.search).get('view') === 'history';
-    return workspaceLayout('MAINTENANCE_OFFICER', historyView ? 'repair-history' : 'dashboard', `
+    const view = new URLSearchParams(window.location.search).get('view');
+    const historyView = view === 'history';
+    const assignmentsView = view === 'assignments';
+    return workspaceLayout(
+      'MAINTENANCE_OFFICER',
+      historyView ? 'repair-history' : assignmentsView ? 'assignments' : 'dashboard',
+      `
     <section class="workspace-page">
       <div class="admin-page-heading">
         <div>
           <p class="admin-eyebrow">MAINTENANCE WORKSPACE</p>
-          <h1 class="admin-page-title">${historyView ? 'Repair history' : 'My dashboard'}</h1>
-          <p class="admin-page-subtitle">${historyView ? 'Previously verified repairs assigned to your account.' : 'Assignments, repair progress and notifications for your work.'}</p>
+          <h1 class="admin-page-title">${historyView ? 'Repair history' : assignmentsView ? 'My assignments' : 'My dashboard'}</h1>
+          <p class="admin-page-subtitle">${historyView ? 'Previously verified repairs assigned to your account.' : assignmentsView ? 'Approved reports assigned to your account for maintenance.' : 'Assignments, repair progress and notifications for your work.'}</p>
         </div>
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-assignments">${historyView ? 'Refresh history' : 'Refresh dashboard'}</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-assignments">${historyView ? 'Refresh history' : assignmentsView ? 'Refresh assignments' : 'Refresh dashboard'}</button>
       </div>
+      ${!historyView && !assignmentsView ? `
+      <div class="admin-panel mb-5">
+        <div class="admin-panel-heading">
+          <div>
+            <h2>Assigned work</h2>
+            <p>Open your assignment queue to start repairs and submit completion evidence.</p>
+          </div>
+          <a href="/assignments?view=assignments#assigned-work" data-nav="/assignments?view=assignments#assigned-work" class="btn btn-primary btn-sm">View my assignments</a>
+        </div>
+      </div>` : ''}
+      ${assignmentsView ? `
+      <div class="admin-panel mb-5" id="assigned-work">
+        <div class="admin-panel-heading">
+          <div>
+            <h2>My assignments</h2>
+            <p>Start assigned repairs, track progress and submit evidence for administrator review.</p>
+          </div>
+        </div>
+        <div id="assignments-list" class="space-y-3">
+          <div class="loading-block"><span class="spinner"></span> Loading assignments…</div>
+        </div>
+      </div>` : ''}
+      ${!historyView && !assignmentsView ? `
       <div id="officer-summary" class="admin-stat-grid" aria-label="Maintenance summary">
         <div class="loading-block"><span class="spinner"></span> Loading your summary…</div>
       </div>
@@ -1163,17 +1179,29 @@
         <div id="officer-notification-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
         <div id="officer-notifications"><div class="loading-block"><span class="spinner"></span> Loading notifications…</div></div>
       </section>
-      <section class="admin-panel" id="assigned-work">
+      <section class="admin-panel">
         <div class="admin-panel-heading">
           <div>
-            <h2>${historyView ? 'Verified repairs' : 'My assignments'}</h2>
-            <p>${historyView ? 'Repairs accepted by an administrator as fully verified.' : 'Open a report to review its location, photos and repair history.'}</p>
+            <h2>Recent assigned work</h2>
+            <p>Open a report to review its location, photos and repair history.</p>
           </div>
         </div>
         <div id="assignments-list" class="space-y-3">
           <div class="loading-block"><span class="spinner"></span> Loading assignments…</div>
         </div>
       </section>
+      ` : historyView ? `
+      <section class="admin-panel" id="assigned-work">
+        <div class="admin-panel-heading">
+          <div>
+            <h2>Verified repairs</h2>
+            <p>Repairs accepted by an administrator as fully verified.</p>
+          </div>
+        </div>
+        <div id="assignments-list" class="space-y-3">
+          <div class="loading-block"><span class="spinner"></span> Loading verified repairs…</div>
+        </div>
+      </section>` : ''}
     </section>
   `);
   };
@@ -1405,44 +1433,15 @@
         refreshButton.disabled = true;
         refreshButton.textContent = 'Refreshing…';
       }
-      const query = (values) => {
-        const params = new URLSearchParams({ page: '1', pageSize: '1', ...values });
-        return api(`/reports/mine?${params.toString()}`);
-      };
-      const tasks = await Promise.allSettled([
+      const recentResult = await Promise.allSettled([
         api('/reports/mine?page=1&pageSize=5'),
-        query({ moderationStatus: 'PENDING_REVIEW' }),
-        query({ repairStatus: 'AWAITING_MAINTENANCE' }),
-        query({ repairStatus: 'IN_PROGRESS' }),
-        query({ repairStatus: 'AWAITING_VERIFICATION' }),
-        query({ repairStatus: 'RETURNED_FOR_WORK' }),
-        query({ repairStatus: 'COMPLETED' }),
-        query({ repairStatus: 'VERIFIED_COMPLETED' }),
-      ]);
-      const [recentResult, pendingResult, awaitingResult, progressResult, verificationResult, returnedResult, completedResult, verifiedResult] = tasks;
-      const stats = [
-        ['citizen-stat-total', [recentResult]],
-        ['citizen-stat-pending', [pendingResult]],
-        ['citizen-stat-progress', [awaitingResult, progressResult, verificationResult, returnedResult]],
-        ['citizen-stat-completed', [completedResult, verifiedResult]],
-      ];
-      stats.forEach(([id, results]) => {
-        if (results.every((result) => result.status === 'fulfilled')) {
-          setText(id, results.reduce((sum, result) => sum + (Number(result.value.total) || 0), 0));
-        } else {
-          setText(id, '—');
-        }
-      });
-      const errors = tasks.filter((result) => result.status === 'rejected');
-      if (errors.length) {
-        setAdminFeedback(feedbackId, `Some dashboard information could not be loaded: ${errors.map((r) => r.reason?.message || 'request failed').join('; ')}`, 'error');
-      } else {
-        setAdminFeedback(feedbackId, '');
-      }
+      ]).then(([result]) => result);
 
       if (recentResult.status === 'rejected') {
+        setAdminFeedback(feedbackId, `Could not load your reports: ${recentResult.reason?.message || 'Please retry.'}`, 'error');
         html(host, `<div class="admin-error-block">Could not load your reports. ${escapeHtml(recentResult.reason?.message || 'Please retry.')}</div>`);
       } else {
+        setAdminFeedback(feedbackId, '');
         const items = recentResult.value.items || [];
         html(host, items.length
           ? `<div class="rw-dashboard-report-list">${items.map(reportCardHtml).join('')}</div>`
@@ -2756,7 +2755,9 @@
       event.preventDefault();
       if (!form.reportValidity()) return;
       const button = form.querySelector('[type="submit"]');
-      setBusy(button, true, 'Saving…');
+      const defaultLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Saving…';
       try {
         const values = new FormData(form);
         const data = await api('/users/me', {
@@ -2772,7 +2773,8 @@
       } catch (error) {
         setAdminFeedback('profile-feedback', `Could not save your profile: ${error.message}`, 'error');
       } finally {
-        setBusy(button, false);
+        button.disabled = false;
+        button.textContent = defaultLabel;
       }
     });
   };
@@ -2786,13 +2788,18 @@
     const unreadCountHost = q('#officer-unread-count');
     let expiryRefreshTimer = null;
     const refresh = async () => {
+      const view = new URLSearchParams(window.location.search).get('view');
       const assignmentsUrl = new URLSearchParams(window.location.search).get('view') === 'history'
         ? '/maintenance/assignments?repairStatus=VERIFIED_COMPLETED'
         : '/maintenance/assignments';
       const refreshButton = q('#btn-refresh-assignments');
       if (refreshButton) {
         refreshButton.disabled = true;
-        refreshButton.textContent = 'Refreshing…';
+        refreshButton.textContent = view === 'history'
+          ? 'Refreshing history…'
+          : view === 'assignments'
+            ? 'Refreshing assignments…'
+            : 'Refreshing dashboard…';
       }
       const results = await Promise.allSettled([
         api('/maintenance/summary'),
@@ -2904,9 +2911,11 @@
       const refreshButtonAfter = q('#btn-refresh-assignments');
       if (refreshButtonAfter) {
         refreshButtonAfter.disabled = false;
-        refreshButtonAfter.textContent = new URLSearchParams(window.location.search).get('view') === 'history'
+        refreshButtonAfter.textContent = view === 'history'
           ? 'Refresh history'
-          : 'Refresh dashboard';
+          : view === 'assignments'
+            ? 'Refresh assignments'
+            : 'Refresh dashboard';
       }
     };
 

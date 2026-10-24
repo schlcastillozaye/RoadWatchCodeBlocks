@@ -114,4 +114,45 @@ void main() {
       );
     },
   );
+
+  test(
+    'starting assigned repair sends the allowed in-progress transition',
+    () async {
+      final api = RoadWatchApi(
+        ApiClient(
+          tokenStore: TokenStore(),
+          httpClient: MockClient((request) async {
+            expect(request.method, 'PATCH');
+            expect(request.url.path, '/api/reports/report-1/repair');
+            expect(jsonDecode(request.body), {'repairStatus': 'IN_PROGRESS'});
+            return http.Response(
+              jsonEncode({
+                'report': {
+                  'id': 'report-1',
+                  'referenceNo': 'RW-2026-000001',
+                  'title': 'Road repair',
+                  'description': 'A damaged road surface.',
+                  'category': 'POTHOLE',
+                  'latitude': 14.6,
+                  'longitude': 121.0,
+                  'moderationStatus': 'APPROVED',
+                  'repairStatus': 'IN_PROGRESS',
+                  'assignedOfficerId': 'officer-1',
+                },
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+          baseUrl: 'https://example.test',
+        ),
+      );
+
+      final updated = await api.updateRepair(
+        'report-1',
+        status: RepairStatus.inProgress,
+      );
+      expect(updated.repairStatus, RepairStatus.inProgress);
+    },
+  );
 }

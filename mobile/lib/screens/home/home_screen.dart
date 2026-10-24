@@ -13,7 +13,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/brand_logo.dart';
 import '../../widgets/brand_surface.dart';
-import '../../widgets/dashboard_stat_grid.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/report_card.dart';
 import '../../widgets/section_card.dart';
@@ -30,8 +29,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Map<String, int>? _summary;
-  String? _summaryError;
   List<MaintenanceNotification> _notifications = [];
   String? _notificationError;
   Timer? _notificationExpiryTimer;
@@ -42,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<MyReportsProvider>();
       if (provider.reports.isEmpty) provider.load();
-      _loadSummary();
       _loadNotifications();
     });
     _notificationExpiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -65,24 +61,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _loadSummary() async {
-    setState(() => _summaryError = null);
-    try {
-      final summary = await context.read<RoadWatchApi>().myReportSummary();
-      if (mounted) setState(() => _summary = summary);
-    } on ApiException catch (error) {
-      if (mounted) setState(() => _summaryError = error.message);
-    } catch (_) {
-      if (mounted) {
-        setState(() => _summaryError = 'Could not load report statistics.');
-      }
-    }
-  }
-
   Future<void> _refresh() async {
     await Future.wait([
       context.read<MyReportsProvider>().load(refresh: true),
-      _loadSummary(),
       _loadNotifications(),
     ]);
   }
@@ -150,30 +131,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: AppSpacing.xl),
-                    DashboardStatGrid(
-                      metrics: [
-                        DashboardMetric(
-                          label: 'Total reports',
-                          value: '${_summary?['total'] ?? '—'}',
-                          color: AppColors.textPrimary,
-                        ),
-                        DashboardMetric(
-                          label: 'Awaiting review',
-                          value: '${_summary?['pending'] ?? '—'}',
-                          color: AppColors.statusAmberInk,
-                        ),
-                        DashboardMetric(
-                          label: 'In repair',
-                          value: '${_summary?['inRepair'] ?? '—'}',
-                          color: AppColors.statusBlueInk,
-                        ),
-                        DashboardMetric(
-                          label: 'Completed',
-                          value: '${_summary?['completed'] ?? '—'}',
-                          color: AppColors.statusGreenInk,
-                        ),
-                      ],
-                    ),
                     if (_notificationError != null ||
                         _notifications.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.lg),
@@ -210,16 +167,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                 ],
                               ),
-                      ),
-                    ],
-                    if (_summaryError != null) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'Report statistics unavailable: $_summaryError',
-                        style: AppTypography.caption(
-                          size: 12,
-                          color: AppColors.statusRedInk,
-                        ),
                       ),
                     ],
                     const SizedBox(height: AppSpacing.xxl),

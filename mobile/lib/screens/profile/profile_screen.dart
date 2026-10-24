@@ -18,8 +18,8 @@ class ProfileScreen extends StatelessWidget {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
     final formKey = GlobalKey<FormState>();
-    final name = TextEditingController(text: user.fullName);
-    final phone = TextEditingController(text: user.phone ?? '');
+    var fullName = user.fullName;
+    var phone = user.phone ?? '';
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -30,18 +30,20 @@ class ProfileScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
-                controller: name,
+                initialValue: user.fullName,
                 autofocus: true,
                 maxLength: 120,
+                onSaved: (value) => fullName = value?.trim() ?? '',
                 decoration: const InputDecoration(labelText: 'Full name'),
                 validator: (value) => (value?.trim().length ?? 0) < 2
                     ? 'Enter at least 2 characters.'
                     : null,
               ),
               TextFormField(
-                controller: phone,
+                initialValue: user.phone ?? '',
                 keyboardType: TextInputType.phone,
                 maxLength: 30,
+                onSaved: (value) => phone = value?.trim() ?? '',
                 decoration: const InputDecoration(
                   labelText: 'Phone (optional)',
                 ),
@@ -58,7 +60,9 @@ class ProfileScreen extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () {
-              if (formKey.currentState!.validate()) {
+              final form = formKey.currentState!;
+              if (form.validate()) {
+                form.save();
                 Navigator.pop(dialogContext, true);
               }
             },
@@ -70,8 +74,8 @@ class ProfileScreen extends StatelessWidget {
     if (accepted == true && context.mounted) {
       try {
         await context.read<AuthProvider>().updateProfile(
-          fullName: name.text,
-          phone: phone.text,
+          fullName: fullName,
+          phone: phone,
         );
         if (context.mounted) {
           ScaffoldMessenger.of(context)
@@ -84,8 +88,6 @@ class ProfileScreen extends StatelessWidget {
         }
       }
     }
-    name.dispose();
-    phone.dispose();
   }
 
   Future<void> _signOut(BuildContext context) async {
@@ -313,10 +315,13 @@ class ProfileScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Center(
-                        child: BrandLogo(
-                          onDark: false,
-                          size: LogoSize.medium,
-                          showTagline: true,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: BrandLogo(
+                            onDark: false,
+                            size: LogoSize.medium,
+                            showTagline: true,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 14),
