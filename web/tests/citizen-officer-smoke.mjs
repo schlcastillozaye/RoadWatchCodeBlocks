@@ -112,6 +112,7 @@ async function verifyResponsiveWorkspace(page, role) {
     }, theme);
     for (const viewport of [
       { width: 375, height: 667 },
+      { width: 390, height: 844 },
       { width: 768, height: 1024 },
       { width: 1024, height: 768 },
       { width: 1440, height: 900 },
@@ -180,6 +181,12 @@ try {
     fullName: 'Updated Synthetic Citizen',
     phone: '09171112222',
   });
+  await citizenPage.setViewportSize({ width: 390, height: 844 });
+  await citizenPage.locator('[data-admin-menu-toggle]').click();
+  assert.equal(await citizenPage.locator('[data-admin-menu-toggle]').getAttribute('aria-expanded'), 'true');
+  await citizenPage.locator('.admin-sidebar-nav a[data-nav="/"]').click();
+  assert.equal(await citizenPage.locator('[data-admin-menu-toggle]').getAttribute('aria-expanded'), 'false');
+  await citizenPage.getByRole('heading', { name: 'Welcome, Updated' }).waitFor();
 
   const officerPage = await browser.newPage();
   officerPage.on('console', (message) => {
@@ -201,7 +208,11 @@ try {
   await officerPage.getByRole('heading', { name: 'My dashboard' }).waitFor();
   const officerLayoutChecks = await verifyResponsiveWorkspace(officerPage, 'MAINTENANCE_OFFICER');
   assert.equal(await officerPage.locator('#officer-summary .admin-stat-card').count(), 4);
+  await officerPage.setViewportSize({ width: 390, height: 844 });
+  await officerPage.locator('[data-admin-menu-toggle]').click();
+  assert.equal(await officerPage.locator('[data-admin-menu-toggle]').getAttribute('aria-expanded'), 'true');
   await officerPage.getByRole('link', { name: 'View my assignments' }).click();
+  assert.equal(await officerPage.locator('[data-admin-menu-toggle]').getAttribute('aria-expanded'), 'false');
   await officerPage.locator('h1.admin-page-title').getByText('My assignments').waitFor();
   assert.equal(await officerPage.getByText('Synthetic assigned road repair').count(), 1);
 
@@ -242,9 +253,11 @@ try {
   assert.deepEqual(consoleErrors, []);
   assert.deepEqual(pageErrors, []);
   console.log('PASS: citizen profile update and dashboard content');
-  console.log(`PASS: citizen responsive light/dark workspace at 375, 768, 1024, and 1440px (${citizenLayoutChecks.length} checks)`);
+  console.log(`PASS: citizen responsive light/dark workspace at 375, 390, 768, 1024, and 1440px (${citizenLayoutChecks.length} checks)`);
+  console.log('PASS: citizen mobile workspace menu opens, navigates, and closes');
   console.log('PASS: officer dashboard, assignments navigation, start-work, and evidence submission');
-  console.log(`PASS: officer responsive light/dark workspace at 375, 768, 1024, and 1440px (${officerLayoutChecks.length} checks)`);
+  console.log(`PASS: officer responsive light/dark workspace at 375, 390, 768, 1024, and 1440px (${officerLayoutChecks.length} checks)`);
+  console.log('PASS: officer mobile workspace menu opens, navigates, and closes');
   console.log('PASS: no browser console or page errors');
 } finally {
   await browser.close();

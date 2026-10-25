@@ -759,7 +759,7 @@
     const role = user?.role === 'ADMIN' || user?.role === 'MAINTENANCE_OFFICER' ? user.role : 'CITIZEN';
     const workspaceName = role === 'ADMIN' ? 'ROADBLOCKS OPERATIONS' : role === 'MAINTENANCE_OFFICER' ? 'MAINTENANCE WORKSPACE' : 'CITIZEN WORKSPACE';
     return workspaceLayout(role, 'submit-report', `
-    <section class="workspace-page max-w-2xl mx-auto px-6">
+    <section class="workspace-page max-w-3xl mx-auto px-6">
       <div class="rw-report-form-card admin-panel">
         <div class="admin-page-heading">
           <div>

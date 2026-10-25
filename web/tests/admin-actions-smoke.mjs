@@ -129,6 +129,16 @@ try {
   await page.addInitScript(() => localStorage.setItem('roadwatch_auth_token', 'synthetic-ui-test-token'));
   await page.goto(origin, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#admin-dashboard-title', { timeout: 15000 });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-admin-menu-toggle]').click();
+  if (await page.locator('[data-admin-menu-toggle]').getAttribute('aria-expanded') !== 'true') {
+    throw new Error('Admin mobile workspace menu did not open.');
+  }
+  await page.locator('.admin-sidebar-nav a[data-nav="/admin"]').click();
+  if (await page.locator('[data-admin-menu-toggle]').getAttribute('aria-expanded') !== 'false') {
+    throw new Error('Admin mobile workspace menu did not close after navigation.');
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.locator('#admin-dashboard-reports .admin-actions-cell').first().waitFor({ state: 'visible' });
 
   const reportActions = page.locator('#admin-dashboard-reports .admin-report-actions').first();
@@ -136,6 +146,7 @@ try {
   const actionLayoutChecks = [];
   const viewports = [
     { width: 375, height: 667 },
+    { width: 390, height: 844 },
     { width: 768, height: 1024 },
     { width: 1024, height: 768 },
     { width: 1440, height: 900 },
@@ -166,6 +177,8 @@ try {
           rect: button.getBoundingClientRect(),
           display: getComputedStyle(button).display,
         }));
+        const touchTargets = window.innerWidth > 640
+          || buttons.every(({ rect }) => rect.height >= 44);
         const responsiveCards = wrap.clientWidth < 900;
         const cells = [...row.cells];
         const headings = [...header.cells];
@@ -189,6 +202,7 @@ try {
           visible: responsiveCards
             ? actionCellVisible
             : actionRect.left >= wrapRect.left - 1 && actionRect.right <= wrapRect.right + 1,
+          touchTargets,
           buttonsVisible: buttons.length === 2 && buttons.every(({ rect }) =>
             rect.width > 0 && rect.height > 0
             && rect.left >= (responsiveCards ? rowRect.left : wrapRect.left) - 1
@@ -261,6 +275,7 @@ try {
     const viewportChecks = [];
     for (const viewport of [
       { width: 375, height: 667 },
+      { width: 390, height: 844 },
       { width: 768, height: 1024 },
       { width: 1024, height: 768 },
       { width: 1440, height: 900 },
@@ -294,8 +309,8 @@ try {
     && cancelKeptReport
     && deleteRefreshedList
     && correctDeleteEndpoint
-    && actionLayoutChecks.every(({ visible, buttonsVisible, alignedColumns, noPageOverflow }) =>
-      visible && buttonsVisible && alignedColumns && noPageOverflow)
+    && actionLayoutChecks.every(({ visible, buttonsVisible, alignedColumns, noPageOverflow, touchTargets }) =>
+      visible && buttonsVisible && alignedColumns && noPageOverflow && touchTargets)
     && responsive
     && reasonFieldRequired
     && returnRequest?.decision === 'RETURN'
