@@ -116,7 +116,10 @@ page.route('**/api/**', async (route) => {
           longitude: 121.0,
           createdAt: '2026-10-20T00:00:00.000Z',
           updatedAt: '2026-10-20T00:00:00.000Z',
-          photos: [],
+          photos: [
+            { url: 'https://assets.invalid/synthetic-photo.svg', isPublic: true, kind: 'BEFORE', caption: 'Before repair' },
+            { url: 'https://assets.invalid/synthetic-photo.svg', isPublic: true, kind: 'AFTER', caption: 'After repair' },
+          ],
         },
       };
     }
@@ -124,6 +127,11 @@ page.route('**/api/**', async (route) => {
 
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 });
+page.route('**/synthetic-photo.svg', (route) => route.fulfill({
+  status: 200,
+  contentType: 'image/svg+xml',
+  body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="#78a9d1"/></svg>',
+}));
 
 try {
   await page.addInitScript(() => localStorage.setItem('roadwatch_auth_token', 'synthetic-ui-test-token'));
@@ -281,9 +289,34 @@ try {
       { width: 1440, height: 900 },
     ]) {
       await page.setViewportSize(viewport);
-      const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2);
-      viewportChecks.push({ ...viewport, noOverflow });
-      responsive = responsive && noOverflow;
+      const layout = await page.evaluate(() => {
+        const content = document.querySelector('.admin-content');
+        const detailPage = document.querySelector('.rw-report-detail-page');
+        const detailCard = document.querySelector('#report-detail > .brand-card');
+        const photos = document.querySelector('.rw-report-photos-grid');
+        const photoButtons = [...(photos?.querySelectorAll('.rw-photo-trigger') || [])];
+        if (!content || !detailPage || !detailCard || !photos) {
+          return { visible: false, detailUsesContentWidth: false, photosFit: false, noOverflow: false };
+        }
+        const contentRect = content.getBoundingClientRect();
+        const detailRect = detailCard.getBoundingClientRect();
+        const imageRects = photoButtons.map((button) => button.getBoundingClientRect());
+        const desktop = window.innerWidth >= 1024;
+        return {
+          visible: detailRect.width > 0 && detailRect.height > 0,
+          detailUsesContentWidth: desktop
+            ? detailRect.width >= contentRect.width - 2
+            : detailRect.width <= contentRect.width + 1,
+          photosFit: photoButtons.length === 2
+            && imageRects.every((rect) => rect.width > 0 && rect.left >= photos.getBoundingClientRect().left - 1
+              && rect.right <= photos.getBoundingClientRect().right + 1)
+            && (!desktop || photoButtons.every((button) => button.querySelector('img').getBoundingClientRect().height >= 224)),
+          noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 2,
+        };
+      });
+      viewportChecks.push({ ...viewport, ...layout });
+      responsive = responsive && layout.visible && layout.detailUsesContentWidth
+        && layout.photosFit && layout.noOverflow;
     }
     checks.push({ reportId, heading, present, viewportChecks });
   }
@@ -312,6 +345,8 @@ try {
     && actionLayoutChecks.every(({ visible, buttonsVisible, alignedColumns, noPageOverflow, touchTargets }) =>
       visible && buttonsVisible && alignedColumns && noPageOverflow && touchTargets)
     && responsive
+    && checks.every(({ viewportChecks }) => viewportChecks.every(({ visible, detailUsesContentWidth, photosFit, noOverflow }) =>
+      visible && detailUsesContentWidth && photosFit && noOverflow))
     && reasonFieldRequired
     && returnRequest?.decision === 'RETURN'
     && returnRequest?.reason === 'Evidence is incomplete.'

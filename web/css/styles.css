@@ -1040,7 +1040,27 @@ input[type='file'].brand-input::file-selector-button {
   .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (min-width: 1024px) {
-  .admin-workspace { width: min(100% - 2.5rem, 100rem); }
+  .admin-workspace {
+    width: min(100% - 2rem, 110rem);
+    gap: 1.25rem;
+  }
+  .rw-report-detail-page {
+    min-width: 0;
+    padding-inline: 0;
+  }
+  .rw-report-detail-page .rw-report-photos-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .rw-report-detail-page .rw-report-photos-grid img {
+    height: clamp(14rem, 22vw, 22rem);
+  }
+  .workspace-page > .max-w-7xl {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
 }
 @media (min-width: 1280px) {
   .admin-workspace[data-workspace-role="CITIZEN"][data-workspace-page="dashboard"] .admin-content {

@@ -746,7 +746,7 @@
     const role = user?.role === 'ADMIN' || user?.role === 'MAINTENANCE_OFFICER' ? user.role : 'CITIZEN';
     const active = role === 'ADMIN' ? 'reports' : role === 'MAINTENANCE_OFFICER' ? 'assignments' : 'reports';
     return workspaceLayout(role, active, `
-    <section class="workspace-page max-w-3xl mx-auto px-6">
+    <section class="workspace-page rw-report-detail-page">
       <div id="report-detail">
         <div class="loading-block"><span class="spinner"></span> Loading report…</div>
       </div>
@@ -2032,7 +2032,7 @@
           <div class="mt-6">
             <h2 class="font-medium text-ink-2 mb-2">Photos (${photos.length})</h2>
             <p class="text-xs text-slate-tint mb-2">Select a photo to view it full size.</p>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-2 rw-report-photos-grid">
               ${photos.map((p, i) => `
                 <button type="button" class="rw-photo-trigger rounded border border-slate-300 overflow-hidden group text-left" ${photoViewerAttrs(report, i)} aria-label="View ${escapeHtml(p.caption || 'report photo')} full size">
                   <span class="rw-photo-kind">${escapeHtml(p.kind === 'AFTER' ? 'After repair' : p.kind === 'PROGRESS' ? 'Progress' : 'Before')}</span>
