@@ -1044,6 +1044,40 @@ input[type='file'].brand-input::file-selector-button {
     width: min(100% - 2rem, 110rem);
     gap: 1.25rem;
   }
+  .rw-submit-report-page {
+    max-width: none;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+  .rw-report-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.25rem;
+  }
+  .rw-report-form > * + * { margin-top: 0; }
+  .rw-report-description-field,
+  .rw-report-location-fields {
+    grid-column: 1 / -1;
+  }
+  .rw-report-location-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(15rem, 0.85fr);
+    align-items: start;
+    gap: 1rem 1.25rem;
+  }
+  .rw-report-map-field {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    min-width: 0;
+  }
+  .rw-report-location-fields > .rw-report-field { min-width: 0; }
+  .rw-report-submit {
+    grid-column: 1 / -1;
+    justify-self: end;
+    width: auto;
+    min-width: 12rem;
+  }
+  .rw-profile-panel { max-width: 56rem; }
   .rw-report-detail-page {
     min-width: 0;
     padding-inline: 0;
@@ -1105,6 +1139,7 @@ input[type='file'].brand-input::file-selector-button {
   .admin-pagination { align-items: flex-start; flex-direction: column; }
   .workspace-page > .max-w-7xl { padding-inline: 0; }
   .workspace-page .rw-report-form-card { padding: 1rem; }
+  .rw-report-form .rw-report-submit { width: 100%; }
   .rw-staff-completion .btn { width: 100%; }
 }
 @media (max-width: 640px) {

@@ -137,6 +137,42 @@ try {
   await page.addInitScript(() => localStorage.setItem('roadwatch_auth_token', 'synthetic-ui-test-token'));
   await page.goto(origin, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#admin-dashboard-title', { timeout: 15000 });
+  const adminDashboardPath = await page.evaluate(() => location.pathname + location.search + location.hash);
+  await page.evaluate(() => window.navigateTo('/submit-report'));
+  await page.locator('#report-form').waitFor();
+  const adminFormLayoutChecks = [];
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    for (const viewport of [
+      { width: 375, height: 667 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const layout = await page.evaluate(() => {
+        const content = document.querySelector('.admin-content').getBoundingClientRect();
+        const card = document.querySelector('.rw-report-form-card').getBoundingClientRect();
+        const form = document.querySelector('#report-form');
+        const map = document.querySelector('#report-location-map').getBoundingClientRect();
+        const desktop = window.innerWidth >= 1024;
+        const formColumns = getComputedStyle(form).gridTemplateColumns;
+        return {
+          noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+          fullWidth: desktop
+            ? card.width >= content.width - 2
+            : card.width > 0 && card.right <= content.right + 1,
+          formLayout: desktop
+            ? formColumns.split(' ').length === 2
+            : getComputedStyle(form).display !== 'grid',
+          mapWithinContent: map.left >= content.left - 1 && map.right <= content.right + 1,
+        };
+      });
+      adminFormLayoutChecks.push({ theme, ...viewport, ...layout });
+    }
+  }
+  await page.evaluate((path) => window.navigateTo(path), adminDashboardPath);
+  await page.waitForSelector('#admin-dashboard-title', { timeout: 10000 });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('[data-admin-menu-toggle]').click();
   if (await page.locator('[data-admin-menu-toggle]').getAttribute('aria-expanded') !== 'true') {
@@ -345,6 +381,8 @@ try {
     && actionLayoutChecks.every(({ visible, buttonsVisible, alignedColumns, noPageOverflow, touchTargets }) =>
       visible && buttonsVisible && alignedColumns && noPageOverflow && touchTargets)
     && responsive
+    && adminFormLayoutChecks.every(({ noOverflow, fullWidth, formLayout, mapWithinContent }) =>
+      noOverflow && fullWidth && formLayout && mapWithinContent)
     && checks.every(({ viewportChecks }) => viewportChecks.every(({ visible, detailUsesContentWidth, photosFit, noOverflow }) =>
       visible && detailUsesContentWidth && photosFit && noOverflow))
     && reasonFieldRequired
@@ -364,6 +402,7 @@ try {
     deleteRefreshedList,
     correctDeleteEndpoint,
     actionLayoutChecks,
+    adminFormLayoutChecks,
     responsive,
     reasonFieldRequired,
     returnRequest,

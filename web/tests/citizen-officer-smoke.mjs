@@ -147,6 +147,62 @@ async function verifyResponsiveWorkspace(page, role) {
   return checks;
 }
 
+async function verifyReportFormLayout(page, role) {
+  const returnPath = await page.evaluate(() => location.pathname + location.search + location.hash);
+  await page.evaluate(() => window.navigateTo('/submit-report'));
+  await page.locator('#report-form').waitFor();
+  const checks = [];
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    for (const viewport of [
+      { width: 375, height: 667 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const layout = await page.evaluate(() => {
+        const content = document.querySelector('.admin-content');
+        const form = document.querySelector('#report-form');
+        const card = document.querySelector('.rw-report-form-card');
+        const location = document.querySelector('.rw-report-location-fields');
+        const map = document.querySelector('#report-location-map');
+        const desktop = window.innerWidth >= 1024;
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth,
+          contentWidth: Math.round(content.getBoundingClientRect().width),
+          cardWidth: Math.round(card.getBoundingClientRect().width),
+          formColumns: getComputedStyle(form).gridTemplateColumns,
+          locationColumns: getComputedStyle(location).gridTemplateColumns,
+          mapWithinContent: map.getBoundingClientRect().left >= content.getBoundingClientRect().left - 1
+            && map.getBoundingClientRect().right <= content.getBoundingClientRect().right + 1,
+          desktop,
+        };
+      });
+      assert.ok(
+        layout.scrollWidth <= layout.viewportWidth,
+        `${role} report form ${theme} ${viewport.width}px overflows: ${JSON.stringify(layout)}`,
+      );
+      assert.ok(layout.mapWithinContent, `${role} report location map escaped the content width`);
+      if (layout.desktop) {
+        assert.ok(layout.cardWidth >= layout.contentWidth - 2, `${role} desktop report card is still constrained`);
+        assert.equal(layout.formColumns.split(' ').length, 2);
+        assert.equal(layout.locationColumns.split(' ').length, 2);
+      } else {
+        assert.equal(layout.formColumns, 'none', 'Mobile report form should preserve its stacked layout');
+      }
+      checks.push({ role, theme, ...viewport, ...layout });
+    }
+  }
+  await page.evaluate((path) => window.navigateTo(path), returnPath);
+  await page.locator('h1.admin-page-title').waitFor();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  return checks;
+}
+
 try {
   const citizenPage = await browser.newPage();
   citizenPage.on('console', (message) => {
@@ -171,6 +227,7 @@ try {
   assert.equal(await citizenPage.locator('.admin-stat-grid').count(), 0);
   assert.equal(await citizenPage.getByText('Total reports', { exact: true }).count(), 0);
   const citizenLayoutChecks = await verifyResponsiveWorkspace(citizenPage, 'CITIZEN');
+  const citizenFormChecks = await verifyReportFormLayout(citizenPage, 'CITIZEN');
   await citizenPage.locator('[data-nav="/profile"]').click();
   await citizenPage.locator('#profile-form').waitFor();
   await citizenPage.locator('#profile-name').fill('Updated Synthetic Citizen');
@@ -207,6 +264,7 @@ try {
   await officerPage.goto(origin, { waitUntil: 'domcontentloaded' });
   await officerPage.getByRole('heading', { name: 'My dashboard' }).waitFor();
   const officerLayoutChecks = await verifyResponsiveWorkspace(officerPage, 'MAINTENANCE_OFFICER');
+  const officerFormChecks = await verifyReportFormLayout(officerPage, 'MAINTENANCE_OFFICER');
   assert.equal(await officerPage.locator('#officer-summary .admin-stat-card').count(), 4);
   await officerPage.setViewportSize({ width: 390, height: 844 });
   await officerPage.locator('[data-admin-menu-toggle]').click();
@@ -254,6 +312,7 @@ try {
   assert.deepEqual(pageErrors, []);
   console.log('PASS: citizen profile update and dashboard content');
   console.log(`PASS: citizen responsive light/dark workspace at 375, 390, 768, 1024, and 1440px (${citizenLayoutChecks.length} checks)`);
+  console.log(`PASS: citizen and officer report form width, map layout, and mobile stacking (${citizenFormChecks.length + officerFormChecks.length} checks)`);
   console.log('PASS: citizen mobile workspace menu opens, navigates, and closes');
   console.log('PASS: officer dashboard, assignments navigation, start-work, and evidence submission');
   console.log(`PASS: officer responsive light/dark workspace at 375, 390, 768, 1024, and 1440px (${officerLayoutChecks.length} checks)`);

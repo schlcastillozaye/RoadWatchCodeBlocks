@@ -699,7 +699,7 @@
             <p class="admin-page-subtitle">Update your name and contact phone. Account role and status cannot be changed here.</p>
           </div>
         </div>
-        <section class="admin-panel max-w-2xl">
+        <section class="admin-panel rw-profile-panel max-w-2xl">
           <form id="profile-form" class="space-y-4">
             <label class="block text-sm font-medium text-ink-2" for="profile-name">Full name
               <input id="profile-name" name="fullName" type="text" minlength="2" maxlength="120" required class="brand-input mt-2" value="${escapeHtml(account?.fullName || '')}" />
@@ -759,7 +759,7 @@
     const role = user?.role === 'ADMIN' || user?.role === 'MAINTENANCE_OFFICER' ? user.role : 'CITIZEN';
     const workspaceName = role === 'ADMIN' ? 'ROADBLOCKS OPERATIONS' : role === 'MAINTENANCE_OFFICER' ? 'MAINTENANCE WORKSPACE' : 'CITIZEN WORKSPACE';
     return workspaceLayout(role, 'submit-report', `
-    <section class="workspace-page max-w-3xl mx-auto px-6">
+    <section class="workspace-page rw-submit-report-page px-6">
       <div class="rw-report-form-card admin-panel">
         <div class="admin-page-heading">
           <div>
@@ -768,35 +768,35 @@
             <p class="admin-page-subtitle">Add the details, location and a photo so your report can be reviewed.</p>
           </div>
         </div>
-        <form id="report-form" class="space-y-4">
-          <div>
+        <form id="report-form" class="rw-report-form">
+          <div class="rw-report-field">
             <label class="block text-sm font-medium text-ink-2 mb-2">Issue Title</label>
             <input type="text" name="title" required minlength="4" class="w-full brand-input" placeholder="e.g. Large pothole on Main St" />
           </div>
-          <div>
+          <div class="rw-report-field">
             <label class="block text-sm font-medium text-ink-2 mb-2" for="report-category">Issue Category</label>
             <select name="category" id="report-category" required class="w-full brand-input">
               ${CATEGORY_OPTIONS.map((value) => `<option value="${value}">${escapeHtml(categoryLabel(value))}</option>`).join('')}
             </select>
           </div>
-          <div id="report-category-other-wrap" hidden>
+          <div id="report-category-other-wrap" class="rw-report-field" hidden>
             <label class="block text-sm font-medium text-ink-2 mb-2" for="report-category-other">Describe the issue</label>
             <input type="text" name="categoryOther" id="report-category-other" maxlength="${CATEGORY_OTHER_MAX}"
               class="w-full brand-input" placeholder="e.g. Fallen tree blocking the whole lane" />
             <p class="text-sm text-slate-tint mt-1">Tell us what the issue is (at least ${CATEGORY_OTHER_MIN} characters).</p>
           </div>
-          <div>
+          <div class="rw-report-field rw-report-description-field">
             <label class="block text-sm font-medium text-ink-2 mb-2">Description</label>
             <textarea name="description" rows="4" required minlength="10" class="w-full brand-input rw-report-description" placeholder="Please describe the issue, its location, size, and any safety risks."></textarea>
           </div>
-          <div>
+          <div class="rw-report-field">
             <label class="block text-sm font-medium text-ink-2 mb-2" for="report-damage-cause">Possible cause of damage (optional)</label>
             <textarea name="damageCause" id="report-damage-cause" rows="2" maxlength="500" class="w-full brand-input"
               placeholder="e.g. flooding, heavy vehicles, erosion, or poor drainage"></textarea>
             <p class="text-xs text-slate-tint mt-1">This is your observation, not a verified engineering conclusion. Leave blank or enter “Unknown” if unsure.</p>
           </div>
-          <div class="space-y-4">
-            <div>
+          <div class="rw-report-location-fields">
+            <div class="rw-report-map-field">
               <div class="flex items-center justify-between gap-3 mb-2">
                 <label class="block text-sm font-medium text-ink-2" for="report-location-map">Issue location</label>
                 <button type="button" id="btn-get-location" class="btn btn-sm btn-secondary">Use my location</button>
@@ -808,24 +808,24 @@
               <input type="hidden" name="latitude" id="lat-input" />
               <input type="hidden" name="longitude" id="lon-input" />
             </div>
-            <div>
+            <div class="rw-report-field">
               <label class="block text-sm font-medium text-ink-2 mb-2" for="report-address">Place or address</label>
               <input type="text" name="addressText" id="report-address" maxlength="500" class="w-full brand-input"
                 placeholder="Select a map point to fill in the location, or edit this field" autocomplete="street-address" />
               <p id="address-lookup-status" class="text-xs text-slate-tint mt-1" aria-live="polite">A coordinate label will be used if address lookup is unavailable.</p>
             </div>
-            <div>
+            <div class="rw-report-field">
               <label class="block text-sm font-medium text-ink-2 mb-2" for="report-destination">Destination or affected road segment (optional)</label>
               <input type="text" name="destination" id="report-destination" maxlength="300" class="w-full brand-input"
                 placeholder="e.g. Road leading to San Isidro market or Mabini Street" />
               <p class="text-xs text-slate-tint mt-1">This describes where the road leads; the map pin and coordinates remain the issue location.</p>
             </div>
-            <div>
+            <div class="rw-report-field">
               <label class="block text-sm font-medium text-ink-2 mb-2">Area/Barangay (optional)</label>
               <input type="text" name="areaLabel" class="w-full brand-input" placeholder="e.g. San Isidro" />
             </div>
           </div>
-          <fieldset class="space-y-2">
+          <fieldset class="space-y-2 rw-report-field">
             <legend class="block text-sm font-medium text-ink-2 mb-1">Other visible issues at this location (optional)</legend>
             <p class="text-xs text-slate-tint">Select only issues you can actually observe. Floodwater does not imply hidden cracks or potholes.</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -836,7 +836,7 @@
                 </label>`).join('')}
             </div>
           </fieldset>
-          <div id="report-surface-condition-wrap" hidden>
+          <div id="report-surface-condition-wrap" class="rw-report-field" hidden>
             <label class="block text-sm font-medium text-ink-2 mb-2" for="report-surface-condition">Road surface condition under/near floodwater</label>
             <select name="surfaceCondition" id="report-surface-condition" class="w-full brand-input">
               <option value="UNKNOWN" selected>Unknown / not visible</option>
@@ -845,12 +845,12 @@
             </select>
             <p class="text-xs text-slate-tint mt-1">Choose “Unknown” if water prevents you from inspecting the road.</p>
           </div>
-          <div>
+          <div class="rw-report-field">
             <label class="block text-sm font-medium text-ink-2 mb-2">Issue Photo (1–8 images)</label>
             <input type="file" name="photos" accept="image/*" multiple required class="w-full brand-input" />
             <div id="photo-preview" class="mt-2 grid grid-cols-2 gap-2"></div>
           </div>
-          <button type="submit" class="btn btn-primary w-full">Submit Report</button>
+          <button type="submit" class="btn btn-primary w-full rw-report-submit">Submit Report</button>
         </form>
       </div>
     </section>
