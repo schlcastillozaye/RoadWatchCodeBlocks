@@ -186,7 +186,7 @@ async function verifyReportFormLayout(page, role) {
         layout.scrollWidth <= layout.viewportWidth,
         `${role} report form ${theme} ${viewport.width}px overflows: ${JSON.stringify(layout)}`,
       );
-      assert.ok(layout.mapWithinContent, `${role} report location map escaped the content width`);
+      assert.ok(layout.mapWithinContent, `${role} report location map escaped the content width: ${JSON.stringify(layout)}`);
       if (layout.desktop) {
         assert.ok(layout.cardWidth >= layout.contentWidth - 2, `${role} desktop report card is still constrained`);
         assert.equal(layout.formColumns.split(' ').length, 2);

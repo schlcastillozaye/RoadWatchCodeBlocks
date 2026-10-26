@@ -65,9 +65,11 @@ try {
   });
 
   await page.goto(ORIGIN, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#register-form, #login-form');
+  await page.waitForSelector('#register-form, #login-form, .rw-landing-hero');
   if (await page.locator('#login-form').count()) {
     await page.locator('#show-register').click();
+  } else if (await page.locator('.rw-landing-hero').count()) {
+    await page.locator('.rw-public-header-actions .rw-nav-register').click();
   } else {
     await page.evaluate(() => window.navigateTo('/register'));
   }

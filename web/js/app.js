@@ -636,10 +636,83 @@
             <span class="rw-nav-user" aria-label="Signed in as ${firstName}">${firstName}</span>
             ${themeToggleHtml()}
           </div>
-        ` : `<a href="/login" data-nav="/login" class="rw-nav-login">Sign in</a>`}
+        ` : `
+          <div class="rw-header-account rw-public-header-actions">
+            <a href="/login" data-nav="/login" class="rw-nav-login">Sign in</a>
+            <a href="/register" data-nav="/register" class="rw-nav-register">Create account</a>
+            ${themeToggleHtml()}
+          </div>
+        `}
       </div>
     </header>`;
   };
+
+  const pageLanding = () => `
+    <main class="rw-landing" id="rw-landing-main">
+      <a class="rw-skip-link" href="#rw-landing-content">Skip to main content</a>
+      <div class="rw-landing-container">
+        <section class="rw-landing-hero" aria-labelledby="rw-landing-title">
+          <div class="rw-landing-hero-copy rw-reveal">
+            <p class="rw-landing-eyebrow">ROADWATCH · ROAD ISSUE REPORTING</p>
+            <h1 id="rw-landing-title">Better roads start with a clear report.</h1>
+            <p class="rw-landing-lede">RoadWatch helps residents report road concerns with a location and photo, while giving maintenance teams a clear way to review and track the work.</p>
+            <div class="rw-landing-hero-actions">
+              <a href="/register" data-nav="/register" class="rw-landing-button rw-landing-button-primary">Create a citizen account</a>
+              <a href="/login" data-nav="/login" class="rw-landing-button rw-landing-button-secondary">Sign in</a>
+            </div>
+            <p class="rw-landing-note">Already have an account? <a href="/login" data-nav="/login">Sign in to RoadWatch</a>.</p>
+          </div>
+          <div class="rw-landing-hero-panel rw-reveal" aria-label="RoadWatch report workflow">
+            <div class="rw-landing-panel-heading">
+              <span class="rw-landing-panel-mark" aria-hidden="true">RW</span>
+              <div><p class="rw-landing-panel-kicker">A shared road-care workflow</p><h2>From report to review</h2></div>
+            </div>
+            <ol class="rw-landing-steps">
+              <li><span class="rw-landing-step-index">01</span><span><strong>Describe the issue</strong><small>Add a photo and mark its location.</small></span></li>
+              <li><span class="rw-landing-step-index">02</span><span><strong>Review and assign</strong><small>Reports follow the appropriate review process.</small></span></li>
+              <li><span class="rw-landing-step-index">03</span><span><strong>Track repair progress</strong><small>Maintenance evidence is reviewed before completion is verified.</small></span></li>
+            </ol>
+            <p class="rw-landing-panel-footnote">Clear information helps everyone follow the same process.</p>
+          </div>
+        </section>
+
+        <div id="rw-landing-content">
+          <section class="rw-landing-section rw-reveal" aria-labelledby="rw-landing-how-title">
+            <div class="rw-landing-section-heading">
+              <p class="rw-landing-eyebrow">HOW IT WORKS</p>
+              <h2 id="rw-landing-how-title">A straightforward path from concern to follow-up</h2>
+              <p>Each report includes the details teams need to review the issue and keep its status understandable.</p>
+            </div>
+            <div class="rw-landing-card-grid rw-landing-three">
+              <article class="rw-landing-card"><span class="rw-landing-card-number">01</span><h3>Send a useful report</h3><p>Describe the road issue, select its location on the map, and attach a photo for review.</p></article>
+              <article class="rw-landing-card"><span class="rw-landing-card-number">02</span><h3>Review and coordinate</h3><p>Authorized staff review reports and coordinate approved maintenance through the role-based workspace.</p></article>
+              <article class="rw-landing-card"><span class="rw-landing-card-number">03</span><h3>Follow the status</h3><p>Citizens can check report updates. Submitted repair evidence remains subject to administrator review.</p></article>
+            </div>
+          </section>
+
+          <section class="rw-landing-section rw-landing-benefits rw-reveal" aria-labelledby="rw-landing-benefits-title">
+            <div class="rw-landing-section-heading">
+              <p class="rw-landing-eyebrow">BUILT FOR SHARED FOLLOW-THROUGH</p>
+              <h2 id="rw-landing-benefits-title">Useful tools for residents and maintenance teams</h2>
+            </div>
+            <div class="rw-landing-card-grid rw-landing-two">
+              <article class="rw-landing-benefit-card">
+                <h3>For citizens</h3>
+                <ul><li>Report an issue with a map location and photo.</li><li>Review report status and history from your account.</li><li>See approved road issues on the public report map.</li></ul>
+                <a href="/register" data-nav="/register">Create a citizen account <span aria-hidden="true">→</span></a>
+              </article>
+              <article class="rw-landing-benefit-card">
+                <h3>For maintenance and administrators</h3>
+                <ul><li>Work from role-specific dashboards and assignments.</li><li>Record repair progress and submit evidence.</li><li>Review actions and completion through the existing approval workflow.</li></ul>
+                <a href="/login" data-nav="/login">Sign in to your workspace <span aria-hidden="true">→</span></a>
+              </article>
+            </div>
+          </section>
+        </div>
+      </div>
+      <footer class="rw-landing-footer"><div class="rw-landing-container"><span>RoadWatch · Road issue reporting and maintenance management</span><nav aria-label="Footer"><a href="/login" data-nav="/login">Sign in</a><a href="/register" data-nav="/register">Create account</a></nav></div></footer>
+    </main>
+  `;
 
   const pageHome = () => {
     const u = getUser();
@@ -759,7 +832,7 @@
     const role = user?.role === 'ADMIN' || user?.role === 'MAINTENANCE_OFFICER' ? user.role : 'CITIZEN';
     const workspaceName = role === 'ADMIN' ? 'ROADBLOCKS OPERATIONS' : role === 'MAINTENANCE_OFFICER' ? 'MAINTENANCE WORKSPACE' : 'CITIZEN WORKSPACE';
     return workspaceLayout(role, 'submit-report', `
-    <section class="workspace-page rw-submit-report-page px-6">
+    <section class="workspace-page rw-submit-report-page">
       <div class="rw-report-form-card admin-panel">
         <div class="admin-page-heading">
           <div>
@@ -1230,7 +1303,7 @@
 
   // --- Router (simple SPA) ---------------------------------------------------
   const routes = [
-    { path: '/', name: 'home', page: pageHome, requireAuth: true },
+    { path: '/', name: 'home', page: () => user ? pageHome() : pageLanding() },
     { path: '/login', name: 'login', page: pageLogin },
     { path: '/register', name: 'register', page: pageRegister },
     { path: '/reports', name: 'reports', page: pageReports, requireAuth: true },
@@ -1329,7 +1402,10 @@
 
   const afterRender = async (name, params) => {
     switch (name) {
-      case 'home': initHomePage(); break;
+      case 'home':
+        if (user) await initHomePage();
+        else initLandingPage();
+        break;
       case 'login': initLoginPage(); break;
       case 'register': initRegisterPage(); break;
       case 'reports': await initReportsPage(); break;
@@ -1460,6 +1536,26 @@
     };
     on(q('[data-citizen-refresh]'), 'click', load);
     await load();
+  };
+
+  const initLandingPage = () => {
+    const sections = qa('.rw-reveal');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion || !('IntersectionObserver' in window)) {
+      document.documentElement.classList.remove('rw-motion-ready');
+      sections.forEach((section) => section.classList.add('is-visible'));
+      return;
+    }
+
+    document.documentElement.classList.add('rw-motion-ready');
+    const observer = new IntersectionObserver((entries, activeObserver) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        activeObserver.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -24px 0px' });
+    sections.forEach((section) => observer.observe(section));
   };
 
   const initLoginPage = () => {
