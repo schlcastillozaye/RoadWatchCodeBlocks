@@ -128,3 +128,55 @@ class MapSearchPoint extends StatelessWidget {
     );
   }
 }
+
+class RoadWatchMapZoomControls extends StatelessWidget {
+  const RoadWatchMapZoomControls({
+    super.key,
+    required this.controller,
+    required this.enabled,
+  });
+
+  final MapController controller;
+  final bool enabled;
+
+  void _zoom(double delta) {
+    final camera = controller.camera;
+    controller.move(
+      camera.center,
+      (camera.zoom + delta).clamp(3.0, 19.0).toDouble(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    AppColors.syncTo(context);
+    return Material(
+      color: AppColors.cardSurface,
+      elevation: 3,
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Zoom in map',
+            onPressed: enabled ? () => _zoom(1) : null,
+            icon: const Icon(Icons.add_rounded),
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              foregroundColor: AppColors.brandAccent,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Zoom out map',
+            onPressed: enabled ? () => _zoom(-1) : null,
+            icon: const Icon(Icons.remove_rounded),
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              foregroundColor: AppColors.brandAccent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

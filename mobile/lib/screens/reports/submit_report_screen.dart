@@ -506,15 +506,21 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
               const SizedBox(height: 14),
               SectionCard(
                 title: 'Photos',
-                trailing: Text(
-                  '${_photos.length}/$_maxPhotos',
-                  style: AppTypography.caption(size: 12),
+                trailing: Semantics(
+                  liveRegion: true,
+                  label: '${_photos.length} of $_maxPhotos photos selected',
+                  child: ExcludeSemantics(
+                    child: Text(
+                      '${_photos.length}/$_maxPhotos',
+                      style: AppTypography.caption(size: 12),
+                    ),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Add clear photos of the road issue. At least one is required.',
+                      'Add clear photos of the road issue. Choose an image from your camera or gallery. At least one photo is required; you can add up to $_maxPhotos.',
                       style: AppTypography.caption(size: 12.5),
                     ),
                     const SizedBox(height: 12),
@@ -610,13 +616,23 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
               ),
               const SizedBox(height: 22),
               if (_submitting && _progress != null) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: _progress,
-                    minHeight: 8,
-                    backgroundColor: AppColors.border,
-                    valueColor: AlwaysStoppedAnimation(AppColors.brandAccent),
+                Semantics(
+                  liveRegion: true,
+                  label: 'Uploading report photos',
+                  value:
+                      '${((_progress ?? 0) * 100).toStringAsFixed(0)} percent',
+                  child: ExcludeSemantics(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: _progress,
+                        minHeight: 8,
+                        backgroundColor: AppColors.border,
+                        valueColor: AlwaysStoppedAnimation(
+                          AppColors.brandAccent,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -664,32 +680,34 @@ class _PhotoTile extends StatelessWidget {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          child: Image.memory(
-            photo.bytes,
-            width: 96,
-            height: 96,
-            fit: BoxFit.cover,
+          child: Semantics(
+            image: true,
+            label: 'Selected issue photo: ${photo.name}',
+            child: Image.memory(
+              photo.bytes,
+              width: 96,
+              height: 96,
+              fit: BoxFit.cover,
+              excludeFromSemantics: true,
+            ),
           ),
         ),
         Positioned(
           top: -6,
           right: -6,
-          child: GestureDetector(
-            onTap: onRemove,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: AppColors.statusRed,
-                shape: BoxShape.circle,
-              ),
-              // `statusRed` is a light red in dark mode, so the glyph must darken
-              // rather than stay white.
-              child: Icon(
-                Icons.close_rounded,
-                size: 14,
-                color: AppColors.isDark ? AppColors.darkBlue : AppColors.white,
-              ),
+          child: IconButton(
+            tooltip: 'Remove ${photo.name}',
+            onPressed: onRemove,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              backgroundColor: AppColors.statusRed,
+              foregroundColor: AppColors.isDark
+                  ? AppColors.darkBlue
+                  : AppColors.white,
+              padding: EdgeInsets.zero,
+              shape: const CircleBorder(),
             ),
+            icon: const Icon(Icons.close_rounded, size: 20),
           ),
         ),
       ],
@@ -707,6 +725,7 @@ class _AddPhotoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     AppColors.syncTo(context);
     return PopupMenuButton<String>(
+      tooltip: 'Add an issue photo. Choose camera or gallery.',
       onSelected: (value) => value == 'camera' ? onCamera() : onGallery(),
       position: PopupMenuPosition.under,
       itemBuilder: (context) => const [
@@ -743,7 +762,7 @@ class _AddPhotoTile extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Add',
+              'Add photo',
               style: AppTypography.caption(
                 size: 11.5,
                 weight: FontWeight.w600,

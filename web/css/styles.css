@@ -277,6 +277,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   width: 100%;
   margin-top: 0.5rem;
   background: rgb(255 255 255 / 0.06);
+  color: var(--surface);
   cursor: pointer;
 }
 .admin-sidebar-logout:hover { background: rgb(255 255 255 / 0.12); color: #fff; }
@@ -1462,11 +1463,41 @@ body,
 }
 @media (max-width: 640px) {
   .rw-report-form-card { padding: 1rem; }
+  .rw-location-manual-fields { grid-template-columns: minmax(0, 1fr); }
+  .rw-location-manual-fields .btn { grid-column: auto; width: 100%; }
 }
 .rw-report-location-map .leaflet-control-zoom a {
   min-width: 34px;
   min-height: 34px;
   line-height: 34px;
+}
+.rw-location-manual {
+  min-width: 0;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.rw-location-manual legend { padding-inline: 0.25rem; }
+.rw-location-manual-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+.rw-location-manual-fields label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.rw-location-manual-fields .btn { grid-column: 1 / -1; justify-self: start; }
+.brand-input[aria-invalid='true'] { border-color: var(--red-ink); }
+.brand-input[aria-invalid='true']:focus {
+  border-color: var(--red-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-ink) 24%, transparent);
 }
 .rw-location-coords {
   min-height: 1.5rem;

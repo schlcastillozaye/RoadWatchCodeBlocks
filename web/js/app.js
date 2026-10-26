@@ -650,7 +650,7 @@
         ${u ? `
           <div class="rw-header-account">
             <span class="rw-role-chip">${escapeHtml(u.role === 'ADMIN' ? 'Administrator' : u.role === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : 'Citizen')}</span>
-            <span class="rw-nav-user" aria-label="Signed in as ${firstName}">${firstName}</span>
+            <span class="rw-nav-user">${firstName}</span>
             ${themeToggleHtml()}
           </div>
         ` : `
@@ -860,8 +860,8 @@
         </div>
         <form id="report-form" class="rw-report-form">
           <div class="rw-report-field">
-            <label class="block text-sm font-medium text-ink-2 mb-2">Issue Title</label>
-            <input type="text" name="title" required minlength="4" class="w-full brand-input" placeholder="e.g. Large pothole on Main St" />
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="report-title">Issue Title</label>
+            <input id="report-title" type="text" name="title" required minlength="4" class="w-full brand-input" placeholder="e.g. Large pothole on Main St" />
           </div>
           <div class="rw-report-field">
             <label class="block text-sm font-medium text-ink-2 mb-2" for="report-category">Issue Category</label>
@@ -876,8 +876,8 @@
             <p class="text-sm text-slate-tint mt-1">Tell us what the issue is (at least ${CATEGORY_OTHER_MIN} characters).</p>
           </div>
           <div class="rw-report-field rw-report-description-field">
-            <label class="block text-sm font-medium text-ink-2 mb-2">Description</label>
-            <textarea name="description" rows="4" required minlength="10" class="w-full brand-input rw-report-description" placeholder="Please describe the issue, its location, size, and any safety risks."></textarea>
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="report-description">Description</label>
+            <textarea id="report-description" name="description" rows="4" required minlength="10" class="w-full brand-input rw-report-description" placeholder="Please describe the issue, its location, size, and any safety risks."></textarea>
           </div>
           <div class="rw-report-field">
             <label class="block text-sm font-medium text-ink-2 mb-2" for="report-damage-cause">Possible cause of damage (optional)</label>
@@ -893,6 +893,19 @@
               </div>
               <p class="text-sm text-slate-tint mb-2">Tap the map to place the pin, then drag it to fine-tune.</p>
               <div id="report-location-map" class="rw-report-location-map rounded-lg overflow-hidden border border-slate-300" role="application" aria-label="Choose the road issue location on the map"></div>
+              <fieldset class="rw-location-manual">
+                <legend class="text-sm font-medium text-ink-2">Enter coordinates instead</legend>
+                <p id="report-coordinate-help" class="text-xs text-slate-tint">Use this option if you cannot place or drag the map pin. Latitude: −90 to 90; longitude: −180 to 180.</p>
+                <div class="rw-location-manual-fields">
+                  <label for="report-latitude">Latitude
+                    <input id="report-latitude" type="number" step="any" min="-90" max="90" inputmode="decimal" class="w-full brand-input" aria-describedby="report-coordinate-help" />
+                  </label>
+                  <label for="report-longitude">Longitude
+                    <input id="report-longitude" type="number" step="any" min="-180" max="180" inputmode="decimal" class="w-full brand-input" aria-describedby="report-coordinate-help" />
+                  </label>
+                  <button type="button" id="btn-apply-coordinates" class="btn btn-secondary">Set location from coordinates</button>
+                </div>
+              </fieldset>
               <p id="gps-coords" class="rw-location-coords text-sm mt-2" role="status" aria-live="polite">No location selected yet.</p>
               <p id="location-feedback" class="rw-location-feedback" role="alert" hidden></p>
               <input type="hidden" name="latitude" id="lat-input" />
@@ -911,8 +924,8 @@
               <p class="text-xs text-slate-tint mt-1">This describes where the road leads; the map pin and coordinates remain the issue location.</p>
             </div>
             <div class="rw-report-field">
-              <label class="block text-sm font-medium text-ink-2 mb-2">Area/Barangay (optional)</label>
-              <input type="text" name="areaLabel" class="w-full brand-input" placeholder="e.g. San Isidro" />
+              <label class="block text-sm font-medium text-ink-2 mb-2" for="report-area-label">Area/Barangay (optional)</label>
+              <input id="report-area-label" type="text" name="areaLabel" class="w-full brand-input" placeholder="e.g. San Isidro" />
             </div>
           </div>
           <fieldset class="space-y-2 rw-report-field">
@@ -936,8 +949,10 @@
             <p class="text-xs text-slate-tint mt-1">Choose “Unknown” if water prevents you from inspecting the road.</p>
           </div>
           <div class="rw-report-field">
-            <label class="block text-sm font-medium text-ink-2 mb-2">Issue Photo (1–8 images)</label>
-            <input type="file" name="photos" accept="image/*" multiple required class="w-full brand-input" />
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="report-photos">Issue photos (1–8 images)</label>
+            <input id="report-photos" type="file" name="photos" accept="image/*" multiple required class="w-full brand-input" aria-describedby="report-photo-help report-photo-error" />
+            <p id="report-photo-help" class="text-xs text-slate-tint mt-1" role="status" aria-live="polite">Choose 1–8 image files. At least one clear photo of the issue is required.</p>
+            <p id="report-photo-error" class="rw-location-feedback" role="alert" hidden></p>
             <div id="photo-preview" class="mt-2 grid grid-cols-2 gap-2"></div>
           </div>
           <button type="submit" class="btn btn-primary w-full rw-report-submit">Submit Report</button>
@@ -1300,8 +1315,8 @@
   const pageAudit = () => adminLayout('audit', `
     <section class="py-8 max-w-3xl mx-auto px-6">
       <div class="brand-card p-8 rounded-xl shadow-lg">
-        <h2 class="text-2xl font-bold text-navy mb-4">Audit Log</h2>
-        <div id="audit-log" class="space-y-2 max-h-80 overflow-y-auto">
+        <h2 id="audit-log-heading" class="text-2xl font-bold text-navy mb-4">Audit Log</h2>
+        <div id="audit-log" class="space-y-2 max-h-80 overflow-y-auto" tabindex="0" role="region" aria-labelledby="audit-log-heading">
           <div class="loading-block"><span class="spinner"></span> Loading audit log…</div>
         </div>
       </div>
@@ -2078,8 +2093,9 @@
             <p class="rw-staff-group-label">Submit repair for verification</p>
             <label for="repair-completion-notes">Completion notes</label>
             <textarea id="repair-completion-notes" name="completionNotes" required minlength="5" maxlength="4000" rows="3" class="w-full brand-input" placeholder="Describe the work completed and the current condition."></textarea>
-            <label for="repair-after-photos">After-repair photo <span>(required)</span></label>
-            <input id="repair-after-photos" name="afterPhotos" type="file" accept="image/*" multiple required class="w-full brand-input" />
+            <label for="repair-after-photos">After-repair photos <span>(required)</span></label>
+            <input id="repair-after-photos" name="afterPhotos" type="file" accept="image/*" multiple required class="w-full brand-input" aria-describedby="repair-after-photos-help" />
+            <p id="repair-after-photos-help" class="text-xs text-slate-tint">Choose one or more image files showing the completed repair work.</p>
             <button type="submit" class="btn btn-primary">Finish work and submit evidence</button>
           </form>` : ''}
       </section>` : '';
@@ -2202,12 +2218,28 @@
     `;
   };
 
+  const setLeafletZoomAccessible = (map) => {
+    const zoomControl = map.zoomControl?.getContainer();
+    const zoomIn = zoomControl?.querySelector('.leaflet-control-zoom-in');
+    const zoomOut = zoomControl?.querySelector('.leaflet-control-zoom-out');
+    if (zoomIn) {
+      zoomIn.setAttribute('aria-label', 'Zoom in +');
+      zoomIn.setAttribute('title', 'Zoom in (+)');
+    }
+    if (zoomOut) {
+      zoomOut.setAttribute('aria-label', 'Zoom out −');
+      zoomOut.setAttribute('title', 'Zoom out (−)');
+    }
+  };
+
   const initSubmitReportPage = () => {
     const latInput = q('#lat-input');
     const lonInput = q('#lon-input');
     const gpsCoords = q('#gps-coords');
     const locationFeedback = q('#location-feedback');
     const form = q('#report-form');
+    const manualLatitude = q('#report-latitude');
+    const manualLongitude = q('#report-longitude');
     let locationMap = null;
     let locationMarker = null;
     let geocodeRequest = 0;
@@ -2241,6 +2273,8 @@
 
       latInput.value = lat.toFixed(6);
       lonInput.value = lng.toFixed(6);
+      if (manualLatitude) manualLatitude.value = lat.toFixed(6);
+      if (manualLongitude) manualLongitude.value = lng.toFixed(6);
       if (gpsCoords) gpsCoords.textContent = `Selected: Lat ${lat.toFixed(6)}, Lng ${lng.toFixed(6)}`;
       if (addressInput) addressInput.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
       if (areaInput) areaInput.value = '';
@@ -2274,6 +2308,7 @@
         scrollWheelZoom: false,
         zoomControl: true,
       }).setView([14.7942, 120.879], 11);
+      setLeafletZoomAccessible(locationMap);
       window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap contributors',
@@ -2284,6 +2319,22 @@
       locationMapElement.textContent = 'The location map could not be loaded. You can still use your device location.';
       console.error('Leaflet (window.L) is not available — the report location map cannot be rendered.');
     }
+
+    on(q('#btn-apply-coordinates'), 'click', () => {
+      const latitude = Number(manualLatitude?.value);
+      const longitude = Number(manualLongitude?.value);
+      if (!manualLatitude?.value || !manualLongitude?.value
+        || !Number.isFinite(latitude) || !Number.isFinite(longitude)
+        || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        if (locationFeedback) {
+          locationFeedback.textContent = 'Enter a valid latitude from −90 to 90 and longitude from −180 to 180.';
+          locationFeedback.hidden = false;
+        }
+        manualLatitude?.focus();
+        return;
+      }
+      setSelectedLocation(latitude, longitude);
+    });
 
     on(q('#btn-get-location'), 'click', (event) => {
       const button = event.currentTarget;
@@ -2322,14 +2373,42 @@
 
     const fileInput = form ? form.querySelector('input[type="file"]') : null;
     const photoPreview = q('#photo-preview');
+    const photoHelp = q('#report-photo-help');
+    const photoError = q('#report-photo-error');
+    const validatePhotos = () => {
+      const files = Array.from(fileInput?.files || []);
+      let message = '';
+      if (files.length === 0) message = 'Choose at least one image of the road issue.';
+      else if (files.length > 8) message = 'Choose no more than 8 images.';
+      else if (files.some((file) => file.type && !file.type.startsWith('image/'))) {
+        message = 'Every selected file must be an image.';
+      }
+      if (fileInput) {
+        fileInput.setCustomValidity(message);
+        fileInput.setAttribute('aria-invalid', message ? 'true' : 'false');
+      }
+      if (photoError) {
+        photoError.textContent = message;
+        photoError.hidden = !message;
+      }
+      if (photoHelp && !message && files.length > 0) {
+        photoHelp.textContent = `${files.length} image${files.length === 1 ? '' : 's'} selected. You can choose up to 8.`;
+      } else if (photoHelp && files.length === 0) {
+        photoHelp.textContent = 'Choose 1–8 image files. At least one clear photo of the issue is required.';
+      }
+      return !message;
+    };
+    if (fileInput) fileInput.setCustomValidity('Choose at least one image of the road issue.');
     on(fileInput, 'change', (e) => {
+      validatePhotos();
       if (!photoPreview) return;
       html(photoPreview, '');
-      Array.from(e.target.files || []).forEach((file) => {
+      Array.from(e.target.files || []).forEach((file, index) => {
         const reader = new FileReader();
         reader.onload = (ev) => {
           const img = document.createElement('img');
           img.src = ev.target.result;
+          img.alt = `Selected issue photo ${index + 1} preview`;
           img.className = 'rounded w-full h-24 object-cover';
           photoPreview.appendChild(img);
         };
@@ -2375,6 +2454,10 @@
 
     on(form, 'submit', async (e) => {
       e.preventDefault();
+      if (!validatePhotos()) {
+        fileInput?.reportValidity();
+        return;
+      }
       const lat = (latInput.value || '').trim();
       const lon = (lonInput.value || '').trim();
       const latitude = Number(lat);
@@ -2443,6 +2526,7 @@
     }
 
     const map = window.L.map('map').setView([14.7942, 120.879], 12);
+    setLeafletZoomAccessible(map);
     window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',

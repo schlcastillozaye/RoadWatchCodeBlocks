@@ -347,6 +347,14 @@ class _PublicMapScreenState extends State<PublicMapScreen> {
               message: 'No approved reports to display yet.',
             ),
           ),
+        Positioned(
+          top: 16,
+          right: 16,
+          child: RoadWatchMapZoomControls(
+            controller: _controller,
+            enabled: _mapReady,
+          ),
+        ),
         Positioned(bottom: 16, left: 16, right: 16, child: _Legend()),
       ],
     );

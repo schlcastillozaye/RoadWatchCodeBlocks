@@ -151,6 +151,50 @@ async function verifyReportFormLayout(page, role) {
   const returnPath = await page.evaluate(() => location.pathname + location.search + location.hash);
   await page.evaluate(() => window.navigateTo('/submit-report'));
   await page.locator('#report-form').waitFor();
+  for (const id of ['report-title', 'report-description', 'report-area-label', 'report-photos']) {
+    assert.equal(
+      await page.locator(`label[for="${id}"]`).count(),
+      1,
+      `${role} report field ${id} must have an associated visible label`,
+    );
+  }
+  assert.match(
+    await page.locator('#report-photos').getAttribute('aria-describedby'),
+    /report-photo-help/,
+    `${role} photo field must describe its accepted purpose and constraints`,
+  );
+  await page.locator('#report-photos').setInputFiles(
+    Array.from({ length: 9 }, (_, index) => ({
+      name: `issue-${index + 1}.png`,
+      mimeType: 'image/png',
+      buffer: Buffer.from('synthetic image content'),
+    })),
+  );
+  assert.equal(await page.locator('#report-photos').getAttribute('aria-invalid'), 'true');
+  assert.equal(await page.locator('#report-photo-error').textContent(), 'Choose no more than 8 images.');
+  await page.locator('#report-photos').setInputFiles({
+    name: 'issue.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('synthetic image content'),
+  });
+  assert.equal(await page.locator('#report-photos').getAttribute('aria-invalid'), 'false');
+  assert.match(await page.locator('#report-photo-help').textContent(), /1 image selected/);
+  assert.equal(await page.locator('.rw-nav-user').getAttribute('aria-label'), null);
+  await page.locator('#report-latitude').fill('14.600000');
+  await page.locator('#report-longitude').fill('121.000000');
+  await page.locator('#btn-apply-coordinates').click();
+  assert.equal(await page.locator('#lat-input').inputValue(), '14.600000');
+  assert.equal(await page.locator('#lon-input').inputValue(), '121.000000');
+  assert.match(
+    await page.locator('.leaflet-control-zoom-in').getAttribute('aria-label'),
+    /\+/,
+    'Map zoom-in accessible name must include its visible plus sign',
+  );
+  assert.match(
+    await page.locator('.leaflet-control-zoom-out').getAttribute('aria-label'),
+    /−/,
+    'Map zoom-out accessible name must include its visible minus sign',
+  );
   const checks = [];
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => {
@@ -281,6 +325,12 @@ try {
   await startButton.click();
   await officerPage.waitForFunction(() =>
     document.querySelector('[data-repair-complete-form]') !== null);
+  assert.equal(await officerPage.locator('label[for="repair-after-photos"]').count(), 1);
+  assert.match(
+    await officerPage.locator('#repair-after-photos').getAttribute('aria-describedby'),
+    /repair-after-photos-help/,
+    'Repair evidence upload must explain the accepted photo purpose',
+  );
   assert.deepEqual(repairRequests[0], {
     method: 'PATCH',
     endpoint: '/reports/assigned-report/repair',

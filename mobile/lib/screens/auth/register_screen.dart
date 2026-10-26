@@ -42,11 +42,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (mounted) setState(() {});
     try {
       await context.read<AuthProvider>().register(
-            fullName: _name.text.trim(),
-            email: _email.text.trim(),
-            password: _password.text,
-            phone: _phone.text.trim(),
-          );
+        fullName: _name.text.trim(),
+        email: _email.text.trim(),
+        password: _password.text,
+        phone: _phone.text.trim(),
+      );
       // On success the root gate switches to the home shell automatically.
     } on ApiException catch (e) {
       if (mounted) _showError(_registrationError(e));
@@ -111,13 +111,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Center(child: BrandLogo(onDark: false, size: LogoSize.medium)),
+                const Center(
+                  child: BrandLogo(onDark: false, size: LogoSize.medium),
+                ),
                 const SizedBox(height: 20),
                 Text('Join RoadBlocks', style: AppTypography.display(size: 26)),
                 const SizedBox(height: 6),
                 Text(
                   'Report road issues in your community and follow the repair progress.',
-                  style: AppTypography.bodyStyle(size: 14, color: AppColors.textMuted),
+                  style: AppTypography.bodyStyle(
+                    size: 14,
+                    color: AppColors.textMuted,
+                  ),
                 ),
                 const SizedBox(height: 22),
                 TextFormField(
@@ -132,8 +137,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   validator: (v) {
                     final value = v?.trim() ?? '';
-                    if (value.length < 2) return 'Enter your full name';
-                    if (value.length > 120) return 'Name must be 120 characters or fewer';
+                    if (value.length < 2) {
+                      return 'Enter your full name';
+                    }
+                    if (value.length > 120) {
+                      return 'Name must be 120 characters or fewer';
+                    }
                     return null;
                   },
                 ),
@@ -150,9 +159,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   validator: (v) {
                     final value = v?.trim() ?? '';
-                    if (value.isEmpty) return 'Email is required';
-                    if (value.length > 190) return 'Email must be 190 characters or fewer';
-                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
+                    if (value.isEmpty) {
+                      return 'Email is required';
+                    }
+                    if (value.length > 190) {
+                      return 'Email must be 190 characters or fewer';
+                    }
+                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                        .hasMatch(value)) {
                       return 'Enter a valid email address';
                     }
                     return null;
@@ -185,13 +199,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     helperText: '8–128 characters',
                     prefixIcon: const Icon(Icons.lock_outline_rounded),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      tooltip: _obscure ? 'Show passwords' : 'Hide passwords',
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.length < 8) return 'Use at least 8 characters';
-                    if (v.length > 128) return 'Password must be 128 characters or fewer';
+                    if (v == null || v.length < 8) {
+                      return 'Use at least 8 characters';
+                    }
+                    if (v.length > 128) {
+                      return 'Password must be 128 characters or fewer';
+                    }
                     return null;
                   },
                 ),
@@ -206,7 +229,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Confirm password',
                     prefixIcon: Icon(Icons.lock_reset_rounded),
                   ),
-                  validator: (v) => v != _password.text ? 'Passwords do not match' : null,
+                  validator: (v) =>
+                      v != _password.text ? 'Passwords do not match' : null,
                 ),
                 const SizedBox(height: 24),
                 AppButton(

@@ -7,8 +7,11 @@ import 'package:roadwatch/theme/roadwatch_palette.dart';
 /// WCAG relative-luminance and contrast-ratio maths, so the tokens the app
 /// paints icons and labels with can be asserted, not eyeballed.
 double _luminance(Color color) {
-  double channel(double v) => v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
-  return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+  double channel(double v) =>
+      v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  return 0.2126 * channel(color.r) +
+      0.7152 * channel(color.g) +
+      0.0722 * channel(color.b);
 }
 
 double _contrast(Color a, Color b) {
@@ -21,7 +24,10 @@ double _contrast(Color a, Color b) {
 /// chip must keep AA contrast in *both* palettes. These are the regressions the
 /// old `AppColors.darkBlue`-on-a-surface usages caused in dark mode.
 void main() {
-  for (final theme in [('light', RoadWatchPalette.light), ('dark', RoadWatchPalette.dark)]) {
+  for (final theme in [
+    ('light', RoadWatchPalette.light),
+    ('dark', RoadWatchPalette.dark),
+  ]) {
     final name = theme.$1;
     final p = theme.$2;
 
@@ -43,20 +49,40 @@ void main() {
       expect(_contrast(p.navy, p.cream), greaterThanOrEqualTo(4.5));
     });
 
-    test('$name: the hairline border is visible but not a brand accent', () {
+    test('$name: borders meet non-text contrast on cards and inputs', () {
       expect(p.line, isNot(p.surface));
       expect(p.line, isNot(p.navy));
+      expect(_contrast(p.line, p.surface), greaterThanOrEqualTo(3));
+      expect(_contrast(p.line, p.inputSurface), greaterThanOrEqualTo(3));
+    });
+
+    test('$name: text and muted labels meet AA on app surfaces', () {
+      for (final background in [p.surface, p.sheet, p.inputSurface]) {
+        expect(_contrast(p.ink, background), greaterThanOrEqualTo(4.5));
+        expect(_contrast(p.ink2, background), greaterThanOrEqualTo(4.5));
+        expect(_contrast(p.ink3, background), greaterThanOrEqualTo(4.5));
+      }
+    });
+
+    test('$name: status text meets AA on its matching tint', () {
+      expect(_contrast(p.amberInk, p.amberTint), greaterThanOrEqualTo(4.5));
+      expect(_contrast(p.greenInk, p.greenTint), greaterThanOrEqualTo(4.5));
+      expect(_contrast(p.redInk, p.redTint), greaterThanOrEqualTo(4.5));
+      expect(_contrast(p.blueInk, p.blueTint), greaterThanOrEqualTo(4.5));
     });
   }
 
-  test('dark mode: the theme-swapped secondary ink is unusable on a cream chip', () {
-    // Documents *why* the cream chips hard-code navy: in dark mode
-    // `textSecondary` resolves to a near-white that would vanish on the chip.
-    expect(
-      _contrast(RoadWatchPalette.dark.ink2, RoadWatchPalette.dark.cream),
-      lessThan(4.5),
-    );
-  });
+  test(
+    'dark mode: the theme-swapped secondary ink is unusable on a cream chip',
+    () {
+      // Documents *why* the cream chips hard-code navy: in dark mode
+      // `textSecondary` resolves to a near-white that would vanish on the chip.
+      expect(
+        _contrast(RoadWatchPalette.dark.ink2, RoadWatchPalette.dark.cream),
+        lessThan(4.5),
+      );
+    },
+  );
 
   test('dark mode: navy is invisible on the dark card surface', () {
     // Documents the original bug the accent token fixes: `darkBlue` (navy) on a

@@ -256,6 +256,7 @@ class _Header extends StatelessWidget {
                     : search.text.isEmpty
                     ? null
                     : IconButton(
+                        tooltip: 'Clear search',
                         icon: const Icon(Icons.close_rounded, size: 18),
                         onPressed: onClear,
                       ),

@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -39,6 +40,19 @@ await page.route(/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//, (route) =>
 const verificationRequests = [];
 const adminDeleteRequests = [];
 const deletedReportIds = new Set();
+function contrastRatio(foreground, background) {
+  const luminance = (color) => {
+    const [r, g, b] = color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(Number)
+      .map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const a = luminance(foreground);
+  const b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
 page.on('console', (message) => {
   if (message.type() === 'error') consoleErrors.push(message.text());
 });
@@ -138,6 +152,47 @@ try {
   await page.goto(origin, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#admin-dashboard-title', { timeout: 15000 });
   const adminDashboardPath = await page.evaluate(() => location.pathname + location.search + location.hash);
+  assert.equal(await page.locator('.rw-nav-user').getAttribute('aria-label'), null);
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    const colors = await page.locator('.admin-sidebar-logout').evaluate((element) => {
+      const parse = (value) => value.match(/\d+(?:\.\d+)?/g).map(Number);
+      const foreground = getComputedStyle(element).color;
+      const background = parse(getComputedStyle(element).backgroundColor);
+      const parent = parse(getComputedStyle(element.parentElement).backgroundColor);
+      const alpha = background.length > 3 ? background[3] : 1;
+      const composite = background.slice(0, 3).map((channel, index) =>
+        Math.round(channel * alpha + parent[index] * (1 - alpha)));
+      return { foreground, background: `rgb(${composite.join(', ')})` };
+    });
+    assert.ok(
+      contrastRatio(colors.foreground, colors.background) >= 4.5,
+      `${theme} admin sign-out contrast is below WCAG AA: ${JSON.stringify(colors)}`,
+    );
+  }
+  await page.evaluate(() => window.navigateTo('/audit'));
+  const auditLog = page.locator('#audit-log');
+  await auditLog.waitFor();
+  assert.equal(await auditLog.getAttribute('tabindex'), '0');
+  assert.equal(await auditLog.getAttribute('role'), 'region');
+  await auditLog.focus();
+  assert.equal(await auditLog.evaluate((element) => document.activeElement === element), true);
+  await page.evaluate(() => window.navigateTo('/admin/users'));
+  const statusFilter = page.locator('#admin-user-filters select[name="status"]');
+  await statusFilter.waitFor();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    await page.waitForTimeout(200);
+    const colors = await statusFilter.evaluate((element) => ({
+      foreground: getComputedStyle(element).color,
+      background: getComputedStyle(element).backgroundColor,
+      disabled: element.disabled,
+    }));
+    assert.ok(
+      contrastRatio(colors.foreground, colors.background) >= 4.5,
+      `${theme} admin status selector contrast is below WCAG AA: ${JSON.stringify(colors)}`,
+    );
+  }
   await page.evaluate(() => window.navigateTo('/submit-report'));
   await page.locator('#report-form').waitFor();
   const adminFormLayoutChecks = [];

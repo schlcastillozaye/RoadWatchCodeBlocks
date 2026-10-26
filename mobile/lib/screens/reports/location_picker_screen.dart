@@ -275,10 +275,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           ),
         ),
         Positioned(
+          top: 14,
+          right: 14,
+          child: RoadWatchMapZoomControls(
+            controller: _mapController,
+            enabled: _mapReady,
+          ),
+        ),
+        Positioned(
           right: 14,
           bottom: 14,
           child: FloatingActionButton.small(
             heroTag: 'locate',
+            tooltip: 'Use my current location',
             backgroundColor: AppColors.cardSurface,
             // `darkBlue` is near-black in dark mode and would disappear into the
             // dark card surface; the brand accent contrasts on both.
