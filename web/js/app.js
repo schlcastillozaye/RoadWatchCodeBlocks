@@ -553,57 +553,74 @@
     </button>`;
 
   const pageLogin = () => `
-    <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet rw-auth-page">
+    <main class="min-vh-100 flex items-center justify-center p-4 bg-sheet rw-auth-page rw-auth-page-login" aria-labelledby="login-title">
       ${themeToggleHtml('rw-auth-theme-toggle')}
-      <div class="brand-card w-full max-w-md p-8 rounded-xl shadow-lg">
-        <div class="text-center mb-6">
-          <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
-          <h1 class="text-3xl font-bold text-navy tracking-tight">Welcome back</h1>
-          <p class="text-sm text-slate-tint mt-1">Sign in to continue</p>
-        </div>
-        <form id="login-form" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-ink-2 mb-2" for="login-email">Email address</label>
-            <input id="login-email" type="email" name="email" required class="w-full brand-input" placeholder="you@example.com" autocomplete="username" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-ink-2 mb-2" for="login-password">Password</label>
-            <div class="rw-password-field">
-              <input id="login-password" type="password" name="password" required class="w-full brand-input" placeholder="••••••••" autocomplete="current-password" />
-              ${passwordToggleHtml('login-password')}
+      <div class="rw-auth-layout">
+        <aside class="rw-auth-intro" aria-label="About RoadWatch">
+          <div class="rw-auth-brand">${brandLogoHtml('dark')}</div>
+          <p class="rw-auth-intro-eyebrow">ROAD ISSUE REPORTING &amp; MAINTENANCE</p>
+          <p class="rw-auth-intro-title">Better roads start with a clear report.</p>
+          <p class="rw-auth-intro-copy">RoadWatch helps residents share road concerns with a location and photo, while giving maintenance teams a clear way to review and track the work.</p>
+          <ol class="rw-auth-intro-steps">
+            <li><span>01</span><strong>Describe the issue</strong></li>
+            <li><span>02</span><strong>Review and coordinate</strong></li>
+            <li><span>03</span><strong>Follow repair progress</strong></li>
+          </ol>
+        </aside>
+        <div class="rw-auth-panel">
+          <div class="brand-card rw-auth-card rw-auth-card-login">
+            <a href="/" id="login-back-home" data-nav="/" class="rw-auth-back-home">Back to Home</a>
+            <div class="text-center mb-6">
+              <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
+              <h1 id="login-title" class="text-3xl font-bold text-navy tracking-tight">Welcome back</h1>
+              <p class="text-sm text-slate-tint mt-1">Sign in to continue</p>
             </div>
+            <form id="login-form" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-ink-2 mb-2" for="login-email">Email address</label>
+                <input id="login-email" type="email" name="email" required class="w-full brand-input" placeholder="you@example.com" autocomplete="username" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-ink-2 mb-2" for="login-password">Password</label>
+                <div class="rw-password-field">
+                  <input id="login-password" type="password" name="password" required class="w-full brand-input" placeholder="••••••••" autocomplete="current-password" />
+                  ${passwordToggleHtml('login-password')}
+                </div>
+              </div>
+              <p id="login-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
+              <button type="submit" class="btn btn-primary w-full">Sign in</button>
+              <p class="text-center text-sm text-slate-tint mt-3">
+                New to RoadBlocks? <a href="/register" id="show-register" class="font-medium text-navy underline">Create account</a>
+              </p>
+            </form>
           </div>
-          <p id="login-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
-          <button type="submit" class="btn btn-primary w-full">Sign in</button>
-          <p class="text-center text-sm text-slate-tint mt-3">
-            New to RoadBlocks? <a href="/register" id="show-register" class="font-medium text-navy underline">Create account</a>
-          </p>
-        </form>
+        </div>
       </div>
-    </section>
+    </main>
   `;
 
   const pageRegister = () => `
-    <section class="min-vh-100 flex items-center justify-center p-4 bg-sheet rw-auth-page">
+    <main class="min-vh-100 flex items-center justify-center p-4 bg-sheet rw-auth-page rw-auth-page-register" aria-labelledby="register-title">
       ${themeToggleHtml('rw-auth-theme-toggle')}
       <div class="brand-card w-full max-w-md p-8 rounded-xl shadow-lg">
+        <a href="/" id="register-back-home" data-nav="/" class="rw-auth-back-home">Back to Home</a>
         <div class="text-center mb-6">
           <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
-          <h1 class="text-3xl font-bold text-navy tracking-tight">Create account</h1>
+          <h1 id="register-title" class="text-3xl font-bold text-navy tracking-tight">Create account</h1>
           <p class="text-sm text-slate-tint mt-1">Join RoadBlocks and report road issues</p>
         </div>
         <form id="register-form" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-ink-2 mb-2">Full name</label>
-            <input type="text" name="fullName" required minlength="2" maxlength="120" autocomplete="name" class="w-full brand-input" placeholder="John Doe" />
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="register-full-name">Full name</label>
+            <input id="register-full-name" type="text" name="fullName" required minlength="2" maxlength="120" autocomplete="name" class="w-full brand-input" placeholder="John Doe" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-ink-2 mb-2">Email address</label>
-            <input type="email" name="email" required maxlength="190" autocomplete="email" class="w-full brand-input" placeholder="you@example.com" />
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="register-email">Email address</label>
+            <input id="register-email" type="email" name="email" required maxlength="190" autocomplete="email" class="w-full brand-input" placeholder="you@example.com" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-ink-2 mb-2">Phone (optional)</label>
-            <input type="tel" name="phone" maxlength="30" autocomplete="tel" class="w-full brand-input" placeholder="+63 912 345 6789" />
+            <label class="block text-sm font-medium text-ink-2 mb-2" for="register-phone">Phone (optional)</label>
+            <input id="register-phone" type="tel" name="phone" maxlength="30" autocomplete="tel" class="w-full brand-input" placeholder="+63 912 345 6789" />
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-2 mb-2" for="register-password">Password</label>
@@ -620,7 +637,7 @@
           </p>
         </form>
       </div>
-    </section>
+    </main>
   `;
 
   const headerHtml = () => {
@@ -629,7 +646,7 @@
     return `
     <header class="rw-header">
       <div class="rw-header-inner">
-        <a href="/" id="nav-home" data-nav="/" class="rw-brand-home" aria-label="RoadBlocks by Code Blocks Inc.">${brandLogoHtml('dark')}</a>
+        <a href="/" id="nav-home" data-nav="/" class="rw-brand-home" aria-label="CODEBLOCKS INC. — RoadWatch home">${brandLogoHtml('dark')}</a>
         ${u ? `
           <div class="rw-header-account">
             <span class="rw-role-chip">${escapeHtml(u.role === 'ADMIN' ? 'Administrator' : u.role === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : 'Citizen')}</span>
