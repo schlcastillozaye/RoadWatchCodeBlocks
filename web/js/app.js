@@ -1275,7 +1275,7 @@
       'MAINTENANCE_OFFICER',
       historyView ? 'repair-history' : assignmentsView ? 'assignments' : 'dashboard',
       `
-    <section class="workspace-page">
+    <section class="workspace-page${!historyView && !assignmentsView ? ' rw-officer-dashboard' : ''}">
       <div class="admin-page-heading">
         <div>
           <p class="admin-eyebrow">MAINTENANCE WORKSPACE</p>
@@ -1285,7 +1285,7 @@
         <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-assignments">${historyView ? 'Refresh history' : assignmentsView ? 'Refresh assignments' : 'Refresh dashboard'}</button>
       </div>
       ${!historyView && !assignmentsView ? `
-      <div class="admin-panel mb-5">
+      <div class="admin-panel">
         <div class="admin-panel-heading">
           <div>
             <h2>Assigned work</h2>
@@ -1307,11 +1307,11 @@
         </div>
       </div>` : ''}
       ${!historyView && !assignmentsView ? `
-      <div id="officer-summary" class="admin-stat-grid" aria-label="Maintenance summary">
+      <div id="officer-summary" class="admin-stat-grid rw-officer-summary" aria-label="Maintenance summary">
         <div class="loading-block"><span class="spinner"></span> Loading your summary…</div>
       </div>
-      <section class="admin-panel">
-        <div class="admin-panel-heading">
+      <section class="admin-panel rw-officer-notifications">
+        <div class="admin-panel-heading rw-officer-notifications-heading">
           <div>
             <h2>Assignment notifications</h2>
             <p id="officer-unread-count">Loading unread count…</p>
@@ -3209,20 +3209,20 @@
           ? `<button type="button" class="rw-photo-trigger flex-shrink-0" ${photoViewerAttrs(r, 0)} aria-label="View photo for ${escapeHtml(r.title || 'report')}"><img ${firstPhoto.isPublic === false ? `data-authed-src="${escapeHtml(absoluteUrl(firstPhoto.url))}"` : `src="${escapeHtml(absoluteUrl(firstPhoto.url))}"`} alt="" class="w-14 h-14 rounded object-cover" /></button>`
           : '';
         return `
-          <article class="p-4 rounded border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors" data-nav="/report/${encodeURIComponent(r.id)}">
-            <div class="flex items-start gap-3">
+          <article class="rw-officer-assignment-card" data-nav="/report/${encodeURIComponent(r.id)}">
+            <div class="rw-officer-assignment-row">
               ${thumb}
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-start justify-between gap-2">
-                  <h3 class="font-medium text-navy break-words">${escapeHtml(r.title)}</h3>
+              <div class="rw-officer-assignment-copy">
+                <div class="rw-officer-assignment-title-row">
+                  <h3>${escapeHtml(r.title)}</h3>
                   ${statusBadge(r.moderationStatus, r.repairStatus)}
                 </div>
-                <p class="text-slate-tint text-sm mt-1">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
-                <div class="text-slate-tint text-xs mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                <p class="rw-officer-assignment-location">${escapeHtml(categoryText(r))} · ${escapeHtml(reportLocation(r))}</p>
+                <div class="rw-officer-assignment-meta">
                   <span>Reported ${escapeHtml(relativeDate(r.createdAt))}</span>
                   ${priorityIndicator(r.priority)}
                 </div>
-                <p class="text-xs text-ink-2 mt-2 line-clamp-2">${escapeHtml(r.description || '')}</p>
+                <p class="rw-officer-assignment-description">${escapeHtml(r.description || '')}</p>
               </div>
             </div>
           </article>`;
@@ -3233,7 +3233,7 @@
         html(host, `<div class="admin-error-block">Could not load assignments. ${escapeHtml(assignmentsResult.reason.message)}</div>`);
       }
 
-      if (notificationsResult.status === 'fulfilled') {
+      if (notificationsResult.status === 'fulfilled' && notificationsHost) {
         const notificationData = notificationsResult.value || {};
         const items = notificationData.items || [];
         if (expiryRefreshTimer) window.clearTimeout(expiryRefreshTimer);
@@ -3252,15 +3252,13 @@
           html(notificationsHost, '<div class="empty-state"><p class="text-slate-tint text-sm">No assignment notifications yet.</p></div>');
         } else {
           html(notificationsHost, `<div class="space-y-2">${items.map((item) => `
-            <button type="button" class="w-full text-left p-3 rounded border ${item.isRead ? 'border-slate-200 bg-white' : 'border-azure bg-sheet'} hover:bg-slate-50 transition-colors"
+            <button type="button" class="rw-officer-notification-item${item.isRead ? ' is-read' : ''}"
               data-open-notification="${escapeHtml(item.id)}" data-notification-report="${escapeHtml(item.reportId)}">
-              <span class="flex items-start gap-3">
-                <span class="mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${item.isRead ? 'bg-slate-300' : 'bg-blue-600'}" aria-hidden="true"></span>
-                <span class="min-w-0 flex-1">
-                  <span class="block font-semibold text-navy">${escapeHtml(item.title || 'Assignment notification')}</span>
-                  <span class="block text-sm text-ink-2 mt-1 break-words">${escapeHtml(item.message || '')}</span>
-                  <span class="block text-xs text-slate-tint mt-2">${escapeHtml(relativeDate(item.createdAt))} · ${escapeHtml(item.repairStatus || 'AWAITING_MAINTENANCE')}</span>
-                </span>
+              <span class="rw-officer-notification-dot" aria-hidden="true"></span>
+              <span class="rw-officer-notification-copy">
+                <strong>${escapeHtml(item.title || 'Assignment notification')}</strong>
+                <span>${escapeHtml(item.message || '')}</span>
+                <small>${escapeHtml(relativeDate(item.createdAt))} · ${escapeHtml(item.repairStatus || 'AWAITING_MAINTENANCE')}</small>
               </span>
             </button>`).join('')}</div>`);
           notificationsHost.querySelectorAll('[data-open-notification]').forEach((button) => {
@@ -3275,7 +3273,7 @@
             });
           });
         }
-      } else {
+      } else if (notificationsResult.status === 'rejected' && notificationsHost) {
         if (unreadCountHost) unreadCountHost.textContent = 'Unread count unavailable';
         html(notificationsHost, `<div class="admin-error-block">Could not load notifications. ${escapeHtml(notificationsResult.reason.message)}</div>`);
         if (feedbackHost) feedbackHost.textContent = 'Refresh the dashboard to retry. If your session expired, sign in again.';

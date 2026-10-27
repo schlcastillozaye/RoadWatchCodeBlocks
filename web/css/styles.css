@@ -566,6 +566,129 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .admin-content > .admin-panel + .admin-panel,
 .workspace-page > .admin-panel + .admin-panel { margin-top: 0.75rem; }
 .workspace-page { min-width: 0; }
+.rw-officer-dashboard {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+.rw-officer-dashboard > .admin-page-heading,
+.rw-officer-dashboard > #officer-summary { margin-bottom: 0; }
+.rw-officer-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rw-officer-dashboard .admin-panel { min-width: 0; }
+.rw-officer-dashboard .admin-panel-heading { margin-bottom: 0.9rem; }
+.rw-officer-notifications .admin-panel-heading {
+  align-items: flex-start;
+  margin-bottom: 0.9rem;
+}
+.rw-officer-notifications-heading > .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.rw-officer-notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--card-surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.rw-officer-notification-item:hover {
+  border-color: var(--blue);
+  background: var(--interactive-hover);
+}
+.rw-officer-notification-item:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+.rw-officer-notification-dot {
+  flex: 0 0 0.6rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-top: 0.35rem;
+  border-radius: 50%;
+  background: var(--blue-ink);
+}
+.rw-officer-notification-item.is-read .rw-officer-notification-dot { background: var(--ink-3); }
+.rw-officer-notification-copy {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  text-align: left;
+}
+.rw-officer-notification-copy strong { color: var(--ink); font-size: 0.88rem; }
+.rw-officer-notification-copy > span {
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.rw-officer-notification-copy small { color: var(--ink-3); font-size: 0.72rem; }
+.rw-officer-assignment-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--card-surface);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.rw-officer-assignment-card:hover {
+  border-color: var(--blue);
+  background: var(--interactive-hover);
+}
+.rw-officer-assignment-card:focus-within { outline: 2px solid var(--navy); outline-offset: 2px; }
+.rw-officer-assignment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  min-width: 0;
+}
+.rw-officer-assignment-row > .rw-photo-trigger { flex: 0 0 auto; }
+.rw-officer-assignment-row > .rw-photo-trigger img { width: 3.5rem; height: 3.5rem; }
+.rw-officer-assignment-copy { flex: 1 1 auto; min-width: 0; }
+.rw-officer-assignment-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+.rw-officer-assignment-title-row h3 {
+  min-width: 0;
+  color: var(--navy);
+  font-size: 0.98rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.rw-officer-assignment-location {
+  margin-top: 0.4rem;
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.rw-officer-assignment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  margin-top: 0.65rem;
+  color: var(--ink-3);
+  font-size: 0.75rem;
+}
+.rw-officer-assignment-description {
+  margin-top: 0.65rem;
+  color: var(--ink-2);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 .rw-dashboard-actions {
   display: flex;
   flex: 0 0 auto;
@@ -1223,6 +1346,14 @@ input[type='file'].brand-input::file-selector-button {
   .workspace-page .rw-report-form-card { padding: 1rem; }
   .rw-report-form .rw-report-submit { width: 100%; }
   .rw-staff-completion .btn { width: 100%; }
+  .rw-officer-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rw-officer-dashboard .rw-officer-notifications .admin-panel-heading {
+    align-items: flex-start;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+  .rw-officer-notifications-heading > .btn { width: auto; padding-inline: 0.65rem; }
 }
 @media (min-width: 768px) {
   .rw-auth-register-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1447,6 +1578,7 @@ body,
 :root[data-theme='dark'] .admin-page-title,
 :root[data-theme='dark'] .admin-panel-heading h2,
 :root[data-theme='dark'] .admin-stat-card strong { color: var(--ink); }
+:root[data-theme='dark'] .rw-officer-assignment-title-row h3 { color: var(--ink); }
 :root[data-theme='dark'] .text-navy { color: var(--ink); }
 :root[data-theme='dark'] .text-red-400 { color: #ff9a9a; }
 :root[data-theme='dark'] .admin-sidebar-nav a,

@@ -49,12 +49,14 @@ const report = () => ({
   title: 'Synthetic assigned road repair',
   description: 'A test report assigned to the maintenance officer.',
   category: 'POTHOLE',
+  priority: 'HIGH',
   moderationStatus: 'APPROVED',
   repairStatus,
   completionNotes,
   assignedOfficer: { id: 'officer-test', fullName: 'Test Officer' },
   latitude: 14.6,
   longitude: 121.0,
+  areaLabel: '14.794200, 120.879000',
   createdAt: '2026-10-20T00:00:00.000Z',
   photos: [...evidencePhotos],
 });
@@ -81,7 +83,18 @@ async function routeApi(route) {
   } else if (endpoint === '/maintenance/assignments') {
     body = { items: [report()], total: 1, page: 1, pageSize: 50, totalPages: 1 };
   } else if (endpoint.startsWith('/maintenance/notifications')) {
-    body = { items: [], unreadCount: 0 };
+    body = {
+      items: [{
+        id: 'officer-notification',
+        reportId: 'assigned-report',
+        title: 'Repair returned for further work',
+        message: 'RW-2026-000018: 123456789',
+        repairStatus: 'RETURNED_FOR_WORK',
+        createdAt: new Date().toISOString(),
+        isRead: false,
+      }],
+      unreadCount: 1,
+    };
   } else if (endpoint === '/reports/assigned-report/repair' && method === 'PATCH') {
     repairRequests.push({ method, endpoint, body: JSON.parse(request.postData() || '{}') });
     repairStatus = 'IN_PROGRESS';
@@ -295,7 +308,7 @@ try {
   citizenPage.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
-  citizenPage.on('pageerror', (error) => pageErrors.push(error.message));
+  citizenPage.on('pageerror', (error) => pageErrors.push(error.stack || error.message));
   await citizenPage.route(/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//, (route) =>
     route.fulfill({ status: 204, body: '' }));
   await citizenPage.route('**/api/**', routeApi);
@@ -338,7 +351,7 @@ try {
       consoleErrors.push(message.text());
     }
   });
-  officerPage.on('pageerror', (error) => pageErrors.push(error.message));
+  officerPage.on('pageerror', (error) => pageErrors.push(error.stack || error.message));
   await officerPage.route(/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//, (route) =>
     route.fulfill({ status: 204, body: '' }));
   await officerPage.route('https://assets.invalid/**', (route) =>
@@ -361,6 +374,81 @@ try {
   const officerLayoutChecks = await verifyResponsiveWorkspace(officerPage, 'MAINTENANCE_OFFICER');
   const officerFormChecks = await verifyReportFormLayout(officerPage, 'MAINTENANCE_OFFICER');
   assert.equal(await officerPage.locator('#officer-summary .admin-stat-card').count(), 4);
+  const officerDashboardLayoutChecks = [];
+  for (const theme of ['light', 'dark']) {
+    await officerPage.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    for (const viewport of [
+      { width: 375, height: 667 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
+      { width: 1440, height: 900 },
+    ]) {
+      await officerPage.setViewportSize(viewport);
+      const layout = await officerPage.evaluate(() => {
+        const dashboard = document.querySelector('.rw-officer-dashboard');
+        const pageHeading = dashboard.querySelector('.admin-page-heading');
+        const workCard = dashboard.querySelector(':scope > .admin-panel');
+        const summary = dashboard.querySelector('#officer-summary');
+        const notifications = dashboard.querySelector('.rw-officer-notifications');
+        const recentWork = [...dashboard.querySelectorAll(':scope > .admin-panel')].at(-1);
+        const cards = [...summary.querySelectorAll('.admin-stat-card')].map((card) => card.getBoundingClientRect());
+        const rect = (element) => element.getBoundingClientRect();
+        const verticalGap = (above, below) => Math.round(rect(below).top - rect(above).bottom);
+        const notification = dashboard.querySelector('.rw-officer-notification-item');
+        const notificationCopy = notification?.querySelector('.rw-officer-notification-copy');
+        const notificationTitle = notification?.querySelector('strong');
+        const assignment = dashboard.querySelector('.rw-officer-assignment-card');
+        const assignmentTitle = assignment?.querySelector('h3');
+        const badge = assignment?.querySelector('.rw-officer-assignment-title-row > span');
+        const priority = assignment?.querySelector('.rw-priority-indicator');
+        const assignmentText = assignment?.innerText || '';
+        const widths = cards.map((card) => card.width);
+        return {
+          viewportWidth: innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          sectionsVisible: [pageHeading, workCard, summary, notifications, recentWork].every((element) =>
+            element && rect(element).width > 0 && rect(element).height > 0),
+          gaps: [
+            verticalGap(pageHeading, workCard),
+            verticalGap(workCard, summary),
+            verticalGap(summary, notifications),
+            verticalGap(notifications, recentWork),
+          ],
+          statCardCount: cards.length,
+          statWidthsEven: Math.max(...widths) - Math.min(...widths) < 1,
+          statRows: new Set(cards.map((card) => Math.round(card.top))).size,
+          notificationTextAlign: notificationCopy ? getComputedStyle(notificationCopy).textAlign : null,
+          notificationTitleWithinCard: Boolean(notification && notificationTitle
+            && rect(notificationTitle).left >= rect(notification).left
+            && rect(notificationTitle).right <= rect(notification).right),
+          assignmentTitleVisible: Boolean(assignmentTitle && rect(assignmentTitle).width > 0),
+          assignmentBadgeVisible: Boolean(badge && rect(badge).width > 0),
+          assignmentMetaVisible: assignmentText.includes('14.794200, 120.879000')
+            && assignmentText.includes('Reported')
+            && Boolean(priority && rect(priority).width > 0),
+          assignmentDetailsFit: Boolean(assignment
+            && rect(assignment).right <= innerWidth
+            && rect(assignment).left >= 0),
+        };
+      });
+      assert.equal(layout.viewportWidth, viewport.width);
+      assert.equal(layout.scrollWidth, viewport.width, `officer dashboard overflow at ${viewport.width}px: ${JSON.stringify(layout)}`);
+      assert.equal(layout.sectionsVisible, true, `officer dashboard section missing at ${viewport.width}px: ${JSON.stringify(layout)}`);
+      assert.ok(layout.gaps.every((gap) => gap >= 12), `officer dashboard sections touch at ${viewport.width}px: ${JSON.stringify(layout.gaps)}`);
+      assert.equal(layout.statCardCount, 4);
+      assert.equal(layout.statWidthsEven, true, `officer statistic cards are uneven at ${viewport.width}px`);
+      assert.equal(layout.statRows, viewport.width <= 639 ? 2 : 1, `officer statistics use unexpected rows at ${viewport.width}px`);
+      assert.equal(layout.notificationTextAlign, 'left');
+      assert.equal(layout.notificationTitleWithinCard, true);
+      assert.equal(layout.assignmentTitleVisible, true);
+      assert.equal(layout.assignmentBadgeVisible, true);
+      assert.equal(layout.assignmentMetaVisible, true);
+      assert.equal(layout.assignmentDetailsFit, true);
+      officerDashboardLayoutChecks.push({ theme, ...viewport, ...layout });
+    }
+  }
+  console.log(`PASS: officer dashboard section spacing, four even statistic cards, notification alignment and report row at five widths in light/dark mode (${officerDashboardLayoutChecks.length} checks)`);
   await officerPage.setViewportSize({ width: 390, height: 844 });
   await officerPage.locator('[data-admin-menu-toggle]').click();
   assert.equal(await officerPage.locator('[data-admin-menu-toggle]').getAttribute('aria-expanded'), 'true');
