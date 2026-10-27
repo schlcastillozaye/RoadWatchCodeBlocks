@@ -330,6 +330,27 @@ try {
   const citizenFormChecks = await verifyReportFormLayout(citizenPage, 'CITIZEN');
   await citizenPage.locator('[data-nav="/profile"]').click();
   await citizenPage.locator('#profile-form').waitFor();
+  for (const viewport of [
+    { width: 375, height: 667 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    await citizenPage.setViewportSize(viewport);
+    const profileLayout = await citizenPage.evaluate(() => ({
+      width: innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      panelWidth: document.querySelector('.rw-profile-panel').getBoundingClientRect().width,
+      contentWidth: document.querySelector('.admin-content').getBoundingClientRect().width,
+      columns: getComputedStyle(document.querySelector('.rw-profile-form')).gridTemplateColumns.split(' ').length,
+    }));
+    assert.equal(profileLayout.scrollWidth, viewport.width, `citizen profile overflows at ${viewport.width}px`);
+    assert.ok(profileLayout.panelWidth > profileLayout.contentWidth * 0.9,
+      `citizen profile panel does not use workspace width: ${JSON.stringify(profileLayout)}`);
+    assert.equal(profileLayout.columns, viewport.width <= 639 ? 1 : 2);
+  }
+  await citizenPage.setViewportSize({ width: 1440, height: 900 });
   await citizenPage.locator('#profile-name').fill('Updated Synthetic Citizen');
   await citizenPage.locator('#profile-phone').fill('09171112222');
   await citizenPage.locator('#profile-form button[type="submit"]').click();
@@ -543,6 +564,7 @@ try {
   console.log('PASS: officer dashboard, assignments navigation, start-work, and evidence submission');
   console.log('PASS: officer previews/removes photos, retries a failed upload, and appends evidence without resetting verification');
   console.log(`PASS: officer responsive light/dark workspace at 375, 390, 768, 1024, and 1440px (${officerLayoutChecks.length} checks)`);
+  console.log('PASS: shared citizen and administrator profile layouts use desktop width and stack cleanly on mobile');
   console.log('PASS: officer mobile workspace menu opens, navigates, and closes');
   console.log('PASS: no browser console or page errors');
 } finally {

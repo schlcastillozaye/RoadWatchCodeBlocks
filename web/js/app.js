@@ -817,7 +817,7 @@
     const account = getUser();
     const role = account && account.role !== 'CITIZEN' ? account.role : 'CITIZEN';
     return workspaceLayout(role, 'profile', `
-      <section class="workspace-page">
+      <section class="workspace-page rw-profile-page">
         <div class="admin-page-heading">
           <div>
             <p class="admin-eyebrow">ACCOUNT SETTINGS</p>
@@ -825,15 +825,15 @@
             <p class="admin-page-subtitle">Update your name and contact phone. Account role and status cannot be changed here.</p>
           </div>
         </div>
-        <section class="admin-panel rw-profile-panel max-w-2xl">
-          <form id="profile-form" class="space-y-4">
+        <section class="admin-panel rw-profile-panel">
+          <form id="profile-form" class="rw-profile-form">
             <label class="block text-sm font-medium text-ink-2" for="profile-name">Full name
               <input id="profile-name" name="fullName" type="text" minlength="2" maxlength="120" required class="brand-input mt-2" value="${escapeHtml(account?.fullName || '')}" />
             </label>
             <label class="block text-sm font-medium text-ink-2" for="profile-phone">Phone (optional)
               <input id="profile-phone" name="phone" type="tel" maxlength="30" class="brand-input mt-2" value="${escapeHtml(account?.phone || '')}" />
             </label>
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="rw-profile-account-meta">
               <div><span class="block text-sm font-medium text-ink-2 mb-1">Email</span><p class="text-ink-2 break-all">${escapeHtml(account?.email || '')}</p></div>
               <div><span class="block text-sm font-medium text-ink-2 mb-1">Role</span><p class="text-ink-2">${escapeHtml(account?.role === 'ADMIN' ? 'Administrator' : account?.role === 'MAINTENANCE_OFFICER' ? 'Maintenance officer' : 'Citizen')}</p></div>
             </div>
@@ -1349,10 +1349,16 @@
   };
 
   const pageAudit = () => adminLayout('audit', `
-    <section class="py-8 max-w-3xl mx-auto px-6">
-      <div class="brand-card p-8 rounded-xl shadow-lg">
-        <h1 id="audit-log-heading" class="text-2xl font-bold text-navy mb-4">Audit Log</h1>
-        <div id="audit-log" class="space-y-2 max-h-80 overflow-y-auto" tabindex="0" role="region" aria-labelledby="audit-log-heading">
+    <section class="workspace-page rw-audit-page">
+      <div class="admin-page-heading">
+        <div>
+          <p class="admin-eyebrow">ROADBLOCKS OPERATIONS</p>
+          <h1 id="audit-log-heading" class="admin-page-title">Audit log</h1>
+          <p class="admin-page-subtitle">Review recent account, report and maintenance actions.</p>
+        </div>
+      </div>
+      <div class="admin-panel rw-audit-panel">
+        <div id="audit-log" class="rw-audit-log" tabindex="0" role="region" aria-labelledby="audit-log-heading">
           <div class="loading-block"><span class="spinner"></span> Loading audit log…</div>
         </div>
       </div>
@@ -3325,7 +3331,7 @@
         return;
       }
       html(host, logs.map((a) => `
-        <div class="p-2 text-xs text-slate-500 border-b border-slate-100">
+        <div class="rw-audit-entry">
           <span class="font-medium text-navy">${escapeHtml(a.actor && a.actor.role ? a.actor.role : 'System')}</span>
           ${escapeHtml(a.action || '')}
           ${a.entityType ? ` on ${escapeHtml(a.entityType)}` : ''}

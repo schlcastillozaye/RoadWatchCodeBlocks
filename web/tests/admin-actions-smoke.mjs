@@ -93,7 +93,17 @@ page.route('**/api/**', async (route) => {
   const method = route.request().method();
   let body = {};
 
-  if (method === 'DELETE' && endpoint.startsWith('/admin/reports/')) {
+  if (endpoint === '/analytics/audit-logs') {
+    body = {
+      logs: Array.from({ length: 20 }, (_, index) => ({
+        actor: { role: index % 2 ? 'MAINTENANCE_OFFICER' : 'ADMIN' },
+        action: index === 3 ? 'REPORT_DELETED' : 'USER_LOGIN',
+        entityType: index === 3 ? 'Report' : 'User',
+        metadata: index === 3 ? { referenceNo: 'RW-2026-000018' } : {},
+        createdAt: new Date(Date.now() - index * 60000).toISOString(),
+      })),
+    };
+  } else if (method === 'DELETE' && endpoint.startsWith('/admin/reports/')) {
     const reportId = decodeURIComponent(endpoint.slice('/admin/reports/'.length));
     adminDeleteRequests.push({ id: reportId, endpoint });
     deletedReportIds.add(reportId);
@@ -182,11 +192,48 @@ try {
   const auditLog = page.locator('#audit-log');
   await auditLog.waitFor();
   assert.equal(await page.locator('#audit-log-heading').evaluate((heading) => heading.tagName), 'H1');
-  assert.equal(await page.locator('#audit-log-heading').textContent(), 'Audit Log');
+  assert.equal(await page.locator('#audit-log-heading').textContent(), 'Audit log');
   assert.equal(await auditLog.getAttribute('tabindex'), '0');
   assert.equal(await auditLog.getAttribute('role'), 'region');
+  assert.equal(await auditLog.locator('.rw-audit-entry').count(), 20);
+  const auditDesktopLayout = await page.evaluate(() => {
+    const content = document.querySelector('.admin-content').getBoundingClientRect();
+    const panel = document.querySelector('.rw-audit-panel').getBoundingClientRect();
+    const log = document.querySelector('#audit-log');
+    return {
+      contentWidth: content.width,
+      panelWidth: panel.width,
+      logMaxHeight: parseFloat(getComputedStyle(log).maxHeight),
+      logClientHeight: log.clientHeight,
+      logScrollHeight: log.scrollHeight,
+    };
+  });
+  assert.ok(auditDesktopLayout.panelWidth > auditDesktopLayout.contentWidth * 0.9,
+    `audit panel should use the desktop content width: ${JSON.stringify(auditDesktopLayout)}`);
+  assert.ok(auditDesktopLayout.logMaxHeight > 320, 'audit log should show more content on desktop');
+  assert.ok(auditDesktopLayout.logScrollHeight > auditDesktopLayout.logClientHeight,
+    'audit log should remain scrollable when entries exceed the visible area');
   await auditLog.focus();
   assert.equal(await auditLog.evaluate((element) => document.activeElement === element), true);
+  for (const viewport of [
+    { width: 375, height: 667 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const layout = await page.evaluate(() => ({
+      width: innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      panelWidth: document.querySelector('.rw-audit-panel').getBoundingClientRect().width,
+      contentWidth: document.querySelector('.admin-content').getBoundingClientRect().width,
+    }));
+    assert.equal(layout.scrollWidth, viewport.width, `audit page overflows at ${viewport.width}px`);
+    assert.ok(layout.panelWidth > layout.contentWidth * 0.9,
+      `audit panel does not fill available workspace at ${viewport.width}px`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => window.navigateTo('/admin/users'));
   const statusFilter = page.locator('#admin-user-filters select[name="status"]');
   await statusFilter.waitFor();
@@ -203,6 +250,37 @@ try {
       `${theme} admin status selector contrast is below WCAG AA: ${JSON.stringify(colors)}`,
     );
   }
+  await page.evaluate(() => window.navigateTo('/profile'));
+  await page.locator('#profile-form').waitFor();
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    for (const viewport of [
+      { width: 375, height: 667 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const layout = await page.evaluate(() => {
+        const content = document.querySelector('.admin-content').getBoundingClientRect();
+        const panel = document.querySelector('.rw-profile-panel').getBoundingClientRect();
+        const form = document.querySelector('.rw-profile-form');
+        return {
+          viewportWidth: innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          contentWidth: content.width,
+          panelWidth: panel.width,
+          formColumns: getComputedStyle(form).gridTemplateColumns.split(' ').length,
+        };
+      });
+      assert.equal(layout.scrollWidth, viewport.width, `admin profile overflows at ${viewport.width}px`);
+      assert.ok(layout.panelWidth > layout.contentWidth * 0.9,
+        `profile panel does not use desktop space at ${viewport.width}px: ${JSON.stringify(layout)}`);
+      assert.equal(layout.formColumns, viewport.width <= 639 ? 1 : 2);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => window.navigateTo('/submit-report'));
   await page.locator('#report-form').waitFor();
   const adminFormLayoutChecks = [];
