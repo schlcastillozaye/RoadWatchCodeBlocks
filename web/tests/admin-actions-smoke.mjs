@@ -181,6 +181,8 @@ try {
   await page.evaluate(() => window.navigateTo('/audit'));
   const auditLog = page.locator('#audit-log');
   await auditLog.waitFor();
+  assert.equal(await page.locator('#audit-log-heading').evaluate((heading) => heading.tagName), 'H1');
+  assert.equal(await page.locator('#audit-log-heading').textContent(), 'Audit Log');
   assert.equal(await auditLog.getAttribute('tabindex'), '0');
   assert.equal(await auditLog.getAttribute('role'), 'region');
   await auditLog.focus();

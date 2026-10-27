@@ -35,7 +35,23 @@
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <main class="rw-landing rw-landing-boot" aria-labelledby="rw-landing-boot-title">
+      <div class="rw-landing-container">
+        <section class="rw-landing-hero">
+          <div class="rw-landing-hero-copy">
+            <p class="rw-landing-eyebrow">ROADWATCH · ROAD ISSUE REPORTING</p>
+            <h1 id="rw-landing-boot-title">Better roads start with a clear report.</h1>
+            <p class="rw-landing-lede">RoadWatch helps residents report road concerns with a location and photo, while giving maintenance teams a clear way to review and track the work.</p>
+            <div class="rw-landing-hero-actions">
+              <a href="/register" class="rw-landing-button rw-landing-button-primary">Create a citizen account</a>
+              <a href="/login" class="rw-landing-button rw-landing-button-secondary">Sign in</a>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
   <!-- Absolute paths so client-side routes (/login, /admin, /reports/…) still
        find these assets when the page is loaded or reloaded on a deep link. -->
   <script src="/vendor/leaflet.js"></script>

@@ -1351,7 +1351,7 @@
   const pageAudit = () => adminLayout('audit', `
     <section class="py-8 max-w-3xl mx-auto px-6">
       <div class="brand-card p-8 rounded-xl shadow-lg">
-        <h2 id="audit-log-heading" class="text-2xl font-bold text-navy mb-4">Audit Log</h2>
+        <h1 id="audit-log-heading" class="text-2xl font-bold text-navy mb-4">Audit Log</h1>
         <div id="audit-log" class="space-y-2 max-h-80 overflow-y-auto" tabindex="0" role="region" aria-labelledby="audit-log-heading">
           <div class="loading-block"><span class="spinner"></span> Loading audit log…</div>
         </div>

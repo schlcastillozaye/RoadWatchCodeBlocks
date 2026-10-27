@@ -38,6 +38,34 @@ await page.route(/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//, (route) =>
   route.fulfill({ status: 204, body: '' }));
 
 try {
+  await page.route('**/js/app.js', (route) => route.abort());
+  await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
+  const bootHeading = page.getByRole('heading', { level: 1, name: 'Better roads start with a clear report.' });
+  await bootHeading.waitFor();
+  const bootState = await bootHeading.evaluate((heading) => {
+    const bounds = heading.getBoundingClientRect();
+    const style = getComputedStyle(heading);
+    return {
+      visible: bounds.width > 0 && bounds.height > 0 && style.visibility !== 'hidden' && style.display !== 'none',
+      text: heading.textContent.trim(),
+    };
+  });
+  assert.equal(bootState.visible, true, 'initial HTML must expose a visible landing-page h1 before app JavaScript runs');
+  assert.equal(bootState.text, 'Better roads start with a clear report.');
+  await page.unroute('**/js/app.js');
+  await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
+  await page.locator('#rw-landing-title').waitFor();
+  const renderedLanding = await page.evaluate(() => ({
+    headingCount: document.querySelectorAll('h1').length,
+    title: document.querySelector('#rw-landing-title')?.textContent.trim(),
+    bootFallbackPresent: Boolean(document.querySelector('#rw-landing-boot-title')),
+  }));
+  assert.deepEqual(renderedLanding, {
+    headingCount: 1,
+    title: 'Better roads start with a clear report.',
+    bootFallbackPresent: false,
+  }, 'the client-rendered landing page should replace, not duplicate, the static h1 fallback');
+
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 1024, height: 768 },

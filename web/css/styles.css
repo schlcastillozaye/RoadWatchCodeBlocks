@@ -2003,6 +2003,7 @@ html.rw-modal-open { overflow: hidden; }
   gap: clamp(2rem, 5vw, 5rem);
   padding-block: clamp(3.5rem, 7vw, 6.5rem);
 }
+.rw-landing-boot .rw-landing-hero { grid-template-columns: minmax(0, 1fr); }
 .rw-landing-hero-copy { max-width: 44rem; }
 .rw-landing-eyebrow {
   margin-bottom: 0.8rem;
