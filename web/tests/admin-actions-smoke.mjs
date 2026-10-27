@@ -58,6 +58,98 @@ page.on('console', (message) => {
 });
 page.on('pageerror', (error) => pageErrors.push(error.message));
 
+async function setTheme(theme, context) {
+  const themeToggle = page.locator('[data-theme-toggle]').first();
+  const currentTheme = await page.locator('html').getAttribute('data-theme');
+  if (currentTheme !== theme) {
+    assert.ok(
+      currentTheme === 'light' || currentTheme === 'dark',
+      `${context}: cannot switch to ${theme}; current theme is ${JSON.stringify(currentTheme)}`,
+    );
+    await themeToggle.click();
+    await page.waitForFunction(
+      (expected) => document.documentElement.dataset.theme === expected,
+      theme,
+      { timeout: 5000 },
+    );
+    await page.waitForTimeout(250);
+  }
+  assert.equal(
+    await page.locator('html').getAttribute('data-theme'),
+    theme,
+    `${context}: requested ${theme} theme`,
+  );
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+  assert.equal(
+    await themeToggle.getAttribute('aria-label'),
+    `Switch to ${nextTheme} mode`,
+    `${context}: theme toggle label should offer ${nextTheme} mode`,
+  );
+}
+
+async function assertAdminPageHeadings(route, expectedTitle) {
+  await page.evaluate((path) => window.navigateTo(path), route);
+  try {
+    await page.waitForFunction((title) => {
+      const headings = [...document.querySelectorAll('h1')];
+      const isVisible = (heading) => {
+        const style = getComputedStyle(heading);
+        return heading.getClientRects().length > 0
+          && style.display !== 'none'
+          && style.visibility !== 'hidden'
+          && Number(style.opacity) > 0;
+      };
+      return headings.length === 1
+        && headings[0].textContent.trim() === title
+        && isVisible(headings[0]);
+    }, expectedTitle, { timeout: 10000 });
+  } catch (error) {
+    throw new Error(
+      `Heading check failed for ${route}: expected exactly one visible <h1> with text "${expectedTitle}".`,
+      { cause: error },
+    );
+  }
+
+  const headingStructure = await page.evaluate(() => {
+    const isVisible = (heading) => {
+      const style = getComputedStyle(heading);
+      return heading.getClientRects().length > 0
+        && style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number(style.opacity) > 0;
+    };
+    const headings = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')]
+      .filter(isVisible)
+      .map((heading) => ({
+        level: Number(heading.tagName.slice(1)),
+        text: heading.textContent.trim(),
+        inPageContent: Boolean(heading.closest('.admin-content')),
+      }));
+    return headings;
+  });
+  assert.equal(
+    headingStructure.filter(({ level }) => level === 1).length,
+    1,
+    `${route}: expected exactly one visible <h1>; found ${JSON.stringify(headingStructure)}`,
+  );
+  assert.equal(headingStructure[0]?.level, 1, `${route}: the first visible heading should be an <h1>`);
+  assert.equal(
+    headingStructure[0]?.text,
+    expectedTitle,
+    `${route}: expected the page <h1> to read "${expectedTitle}"`,
+  );
+  assert.equal(headingStructure[0]?.inPageContent, true, `${route}: the <h1> should be in the page content`);
+  for (let index = 1; index < headingStructure.length; index += 1) {
+    const previous = headingStructure[index - 1];
+    const current = headingStructure[index];
+    assert.ok(
+      current.level <= previous.level + 1,
+      `${route}: heading hierarchy skips from h${previous.level} "${previous.text}" `
+        + `to h${current.level} "${current.text}"`,
+    );
+  }
+}
+
 const admin = {
   id: 'admin-ui-test',
   fullName: 'Synthetic Administrator',
@@ -166,13 +258,31 @@ page.route('**/synthetic-photo.svg', (route) => route.fulfill({
 }));
 
 try {
-  await page.addInitScript(() => localStorage.setItem('roadwatch_auth_token', 'synthetic-ui-test-token'));
+  await page.addInitScript(() => {
+    localStorage.setItem('roadwatch_auth_token', 'synthetic-ui-test-token');
+    localStorage.setItem('roadwatch_theme', 'light');
+  });
   await page.goto(origin, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#admin-dashboard-title', { timeout: 15000 });
   const adminDashboardPath = await page.evaluate(() => location.pathname + location.search + location.hash);
-  assert.equal(await page.locator('.rw-nav-user').getAttribute('aria-label'), null);
+  for (const [route, expectedTitle] of [
+    ['/admin', 'Dashboard'],
+    ['/admin?view=statistics', 'Reports & statistics'],
+    ['/admin/reports', 'Report management'],
+    ['/admin/reports?view=assignments', 'Maintenance assignments'],
+    ['/admin/reports?view=repair-monitoring', 'Repair monitoring'],
+    ['/admin/users', 'Users'],
+    ['/profile', 'My profile'],
+    ['/audit', 'Audit log'],
+  ]) {
+    await assertAdminPageHeadings(route, expectedTitle);
+  }
+  await page.evaluate((path) => window.navigateTo(path), adminDashboardPath);
+  await page.waitForSelector('#admin-dashboard-title', { timeout: 10000 });
+  assert.equal(await page.locator('.rw-nav-user').getAttribute('aria-label'), null,
+    'Admin dashboard: navigation user element should not have a prohibited aria-label');
   for (const theme of ['light', 'dark']) {
-    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    await setTheme(theme, `Admin sign-out contrast ${theme}`);
     const colors = await page.locator('.admin-sidebar-logout').evaluate((element) => {
       const parse = (value) => value.match(/\d+(?:\.\d+)?/g).map(Number);
       const foreground = getComputedStyle(element).color;
@@ -191,11 +301,13 @@ try {
   await page.evaluate(() => window.navigateTo('/audit'));
   const auditLog = page.locator('#audit-log');
   await auditLog.waitFor();
-  assert.equal(await page.locator('#audit-log-heading').evaluate((heading) => heading.tagName), 'H1');
-  assert.equal(await page.locator('#audit-log-heading').textContent(), 'Audit log');
-  assert.equal(await auditLog.getAttribute('tabindex'), '0');
-  assert.equal(await auditLog.getAttribute('role'), 'region');
-  assert.equal(await auditLog.locator('.rw-audit-entry').count(), 20);
+  assert.equal(await page.locator('#audit-log-heading').evaluate((heading) => heading.tagName), 'H1',
+    '/audit: expected the audit title to be an h1');
+  assert.equal((await page.locator('#audit-log-heading').textContent()).trim(), 'Audit log',
+    '/audit: unexpected page heading');
+  assert.equal(await auditLog.getAttribute('tabindex'), '0', '/audit: log region should be keyboard-focusable');
+  assert.equal(await auditLog.getAttribute('role'), 'region', '/audit: log should have a named region role');
+  assert.equal(await auditLog.locator('.rw-audit-entry').count(), 20, '/audit: expected all synthetic audit entries');
   const auditDesktopLayout = await page.evaluate(() => {
     const content = document.querySelector('.admin-content').getBoundingClientRect();
     const panel = document.querySelector('.rw-audit-panel').getBoundingClientRect();
@@ -209,14 +321,16 @@ try {
     };
   });
   assert.ok(auditDesktopLayout.panelWidth > auditDesktopLayout.contentWidth * 0.9,
-    `audit panel should use the desktop content width: ${JSON.stringify(auditDesktopLayout)}`);
-  assert.ok(auditDesktopLayout.logMaxHeight > 320, 'audit log should show more content on desktop');
+    `/audit at 1440x900: panel should use the desktop content width: ${JSON.stringify(auditDesktopLayout)}`);
+  assert.ok(auditDesktopLayout.logMaxHeight > 320,
+    `/audit at 1440x900: log should show more content on desktop: ${JSON.stringify(auditDesktopLayout)}`);
   assert.ok(auditDesktopLayout.logScrollHeight > auditDesktopLayout.logClientHeight,
-    'audit log should remain scrollable when entries exceed the visible area');
+    `/audit at 1440x900: log should scroll when entries exceed the visible area: ${JSON.stringify(auditDesktopLayout)}`);
   await auditLog.focus();
-  assert.equal(await auditLog.evaluate((element) => document.activeElement === element), true);
+  assert.equal(await auditLog.evaluate((element) => document.activeElement === element), true,
+    '/audit: keyboard focus should reach the log region');
   for (const theme of ['light', 'dark']) {
-    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    await setTheme(theme, `/audit layout ${theme}`);
     for (const viewport of [
       { width: 375, height: 667 },
       { width: 390, height: 844 },
@@ -231,9 +345,11 @@ try {
         panelWidth: document.querySelector('.rw-audit-panel').getBoundingClientRect().width,
         contentWidth: document.querySelector('.admin-content').getBoundingClientRect().width,
       }));
-      assert.equal(layout.scrollWidth, viewport.width, `${theme} audit page overflows at ${viewport.width}px`);
+      const context = `/audit ${theme} ${viewport.width}x${viewport.height}`;
+      assert.equal(layout.width, viewport.width, `${context}: measured viewport width`);
+      assert.equal(layout.scrollWidth, viewport.width, `${context}: unexpected horizontal overflow`);
       assert.ok(layout.panelWidth > layout.contentWidth * 0.9,
-        `${theme} audit panel does not fill available workspace at ${viewport.width}px`);
+        `${context}: audit panel should fill available workspace: ${JSON.stringify(layout)}`);
     }
   }
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -241,8 +357,7 @@ try {
   const statusFilter = page.locator('#admin-user-filters select[name="status"]');
   await statusFilter.waitFor();
   for (const theme of ['light', 'dark']) {
-    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
-    await page.waitForTimeout(200);
+    await setTheme(theme, `/admin/users status selector ${theme}`);
     const colors = await statusFilter.evaluate((element) => ({
       foreground: getComputedStyle(element).color,
       background: getComputedStyle(element).backgroundColor,
@@ -252,11 +367,12 @@ try {
       contrastRatio(colors.foreground, colors.background) >= 4.5,
       `${theme} admin status selector contrast is below WCAG AA: ${JSON.stringify(colors)}`,
     );
+    assert.equal(colors.disabled, false, `${theme} admin status selector should be enabled`);
   }
   await page.evaluate(() => window.navigateTo('/profile'));
   await page.locator('#profile-form').waitFor();
   for (const theme of ['light', 'dark']) {
-    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    await setTheme(theme, `/profile layout ${theme}`);
     for (const viewport of [
       { width: 375, height: 667 },
       { width: 390, height: 844 },
@@ -277,10 +393,13 @@ try {
           formColumns: getComputedStyle(form).gridTemplateColumns.split(' ').length,
         };
       });
-      assert.equal(layout.scrollWidth, viewport.width, `admin profile overflows at ${viewport.width}px`);
+      const context = `/profile ${theme} ${viewport.width}x${viewport.height}`;
+      assert.equal(layout.viewportWidth, viewport.width, `${context}: measured viewport width`);
+      assert.equal(layout.scrollWidth, viewport.width, `${context}: unexpected horizontal overflow`);
       assert.ok(layout.panelWidth > layout.contentWidth * 0.9,
-        `profile panel does not use desktop space at ${viewport.width}px: ${JSON.stringify(layout)}`);
-      assert.equal(layout.formColumns, viewport.width <= 639 ? 1 : 2);
+        `${context}: profile panel should use available workspace width: ${JSON.stringify(layout)}`);
+      assert.equal(layout.formColumns, viewport.width <= 639 ? 1 : 2,
+        `${context}: unexpected number of profile form columns: ${JSON.stringify(layout)}`);
     }
   }
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -288,7 +407,7 @@ try {
   await page.locator('#report-form').waitFor();
   const adminFormLayoutChecks = [];
   for (const theme of ['light', 'dark']) {
-    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    await setTheme(theme, `/admin report form layout ${theme}`);
     for (const viewport of [
       { width: 375, height: 667 },
       { width: 768, height: 1024 },
@@ -342,11 +461,7 @@ try {
     { width: 1440, height: 900 },
   ];
   for (const theme of ['light', 'dark']) {
-    const currentTheme = await page.locator('html').getAttribute('data-theme');
-    if (currentTheme !== theme) {
-      await page.locator('[data-theme-toggle]').first().click();
-      await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, theme);
-    }
+    await setTheme(theme, `/admin dashboard actions ${theme}`);
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
       const layout = await page.evaluate(() => {
@@ -408,11 +523,7 @@ try {
   if (process.env.RW_LAYOUT_SCREENSHOT_DIR) {
     fs.mkdirSync(process.env.RW_LAYOUT_SCREENSHOT_DIR, { recursive: true });
     for (const theme of ['light', 'dark']) {
-      const currentTheme = await page.locator('html').getAttribute('data-theme');
-      if (currentTheme !== theme) {
-        await page.locator('[data-theme-toggle]').first().click();
-        await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, theme);
-      }
+      await setTheme(theme, `/admin dashboard screenshot ${theme}`);
       for (const width of [375, 1440]) {
         await page.setViewportSize({ width, height: width === 375 ? 667 : 900 });
         await page.locator('#admin-dashboard-reports .admin-table-wrap').screenshot({
@@ -523,26 +634,48 @@ try {
 
   const adminText = await page.locator('body').innerText();
   const staleBrandVisible = /ROADWATCH/i.test(adminText);
-  const passed = checks.every(({ heading, present }) => heading === 'Admin actions'
-    && Object.values(present).every(Boolean))
-    && correctDetailsOpened
-    && correctDeleteIdentity
-    && cancelKeptReport
-    && deleteRefreshedList
-    && correctDeleteEndpoint
-    && actionLayoutChecks.every(({ visible, buttonsVisible, alignedColumns, noPageOverflow, touchTargets }) =>
-      visible && buttonsVisible && alignedColumns && noPageOverflow && touchTargets)
-    && responsive
-    && adminFormLayoutChecks.every(({ noOverflow, fullWidth, formLayout, mapWithinContent }) =>
-      noOverflow && fullWidth && formLayout && mapWithinContent)
-    && checks.every(({ viewportChecks }) => viewportChecks.every(({ visible, detailUsesContentWidth, photosFit, noOverflow }) =>
-      visible && detailUsesContentWidth && photosFit && noOverflow))
-    && reasonFieldRequired
-    && returnRequest?.decision === 'RETURN'
-    && returnRequest?.reason === 'Evidence is incomplete.'
-    && !staleBrandVisible
-    && consoleErrors.length === 0
-    && pageErrors.length === 0;
+  const failures = [];
+  for (const { reportId: checkedReportId, heading, present, viewportChecks } of checks) {
+    if (heading !== 'Admin actions') failures.push(`/report/${checkedReportId}: expected "Admin actions" heading`);
+    for (const [label, isPresent] of Object.entries(present)) {
+      if (!isPresent) failures.push(`/report/${checkedReportId}: "${label}" action is not visible`);
+    }
+    for (const { width, height, visible, detailUsesContentWidth, photosFit, noOverflow } of viewportChecks) {
+      const context = `/report/${checkedReportId} ${width}x${height}`;
+      if (!visible) failures.push(`${context}: report detail card is not visible`);
+      if (!detailUsesContentWidth) failures.push(`${context}: report detail card does not fit available content width`);
+      if (!photosFit) failures.push(`${context}: evidence photos do not fit their gallery`);
+      if (!noOverflow) failures.push(`${context}: page has horizontal overflow`);
+    }
+  }
+  for (const { theme, width, height, visible, buttonsVisible, alignedColumns, noPageOverflow, touchTargets } of actionLayoutChecks) {
+    const context = `/admin ${theme} ${width}x${height}`;
+    if (!visible) failures.push(`${context}: report action cell is misplaced or not visible`);
+    if (!buttonsVisible) failures.push(`${context}: report action buttons are misplaced or not visible`);
+    if (!alignedColumns) failures.push(`${context}: table columns are misaligned`);
+    if (!noPageOverflow) failures.push(`${context}: page has horizontal overflow`);
+    if (!touchTargets) failures.push(`${context}: mobile action buttons are smaller than 44px`);
+  }
+  for (const { theme, width, height, noOverflow, fullWidth, formLayout, mapWithinContent } of adminFormLayoutChecks) {
+    const context = `/submit-report ${theme} ${width}x${height}`;
+    if (!noOverflow) failures.push(`${context}: page has horizontal overflow`);
+    if (!fullWidth) failures.push(`${context}: form card does not fit the available content width`);
+    if (!formLayout) failures.push(`${context}: form columns do not match the responsive breakpoint`);
+    if (!mapWithinContent) failures.push(`${context}: location map extends outside the content area`);
+  }
+  if (!responsive) failures.push('Admin report details failed one or more responsive layout checks');
+  if (!correctDetailsOpened) failures.push(`Dashboard action did not open /report/${reportId}`);
+  if (!correctDeleteIdentity) failures.push('Delete confirmation does not identify the selected report');
+  if (!cancelKeptReport) failures.push('Cancelling delete changed the report or sent a delete request');
+  if (!deleteRefreshedList) failures.push('Confirmed delete did not refresh the report list');
+  if (!correctDeleteEndpoint) failures.push('Delete action called an unexpected API endpoint or report ID');
+  if (!reasonFieldRequired) failures.push('Return-for-work dialog does not require an explanation');
+  if (returnRequest?.decision !== 'RETURN') failures.push('Return-for-work action sent an unexpected decision');
+  if (returnRequest?.reason !== 'Evidence is incomplete.') failures.push('Return-for-work action did not send the entered reason');
+  if (staleBrandVisible) failures.push('Dashboard contains stale RoadWatch branding');
+  if (consoleErrors.length) failures.push(`Browser console errors: ${consoleErrors.join(' | ')}`);
+  if (pageErrors.length) failures.push(`Browser page errors: ${pageErrors.join(' | ')}`);
+  const passed = failures.length === 0;
 
   console.log(JSON.stringify({
     passed,
@@ -559,6 +692,7 @@ try {
     reasonFieldRequired,
     returnRequest,
     staleBrandVisible,
+    failures,
     consoleErrors,
     pageErrors,
   }, null, 2));

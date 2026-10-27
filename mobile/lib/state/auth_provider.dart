@@ -4,7 +4,7 @@ import '../core/api_exception.dart';
 import '../models/models.dart';
 import '../services/roadwatch_api.dart';
 
-/// Owns the authentication session: bootstrap, login, register, logout,
+/// Owns the authentication session: bootstrap, login, logout,
 /// token persistence and silent refresh.
 class AuthProvider extends ChangeNotifier {
   AuthProvider(this._api) {
@@ -78,7 +78,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> register({
+  Future<AppUser> register({
     required String fullName,
     required String email,
     required String password,
@@ -86,13 +86,12 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _setBusy(true);
     try {
-      final session = await _api.register(
+      return await _api.register(
         fullName: fullName,
         email: email,
         password: password,
         phone: phone,
       );
-      await _persist(session);
     } finally {
       _setBusy(false);
     }

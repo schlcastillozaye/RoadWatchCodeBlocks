@@ -606,6 +606,9 @@
         <div class="rw-auth-panel">
           <div class="brand-card rw-auth-card rw-auth-card-login">
             <a href="/" id="login-back-home" data-nav="/" class="rw-auth-back-home">Back to Home</a>
+            ${new URLSearchParams(window.location.search).get('registration') === 'success'
+              ? '<p class="rw-auth-success" role="status" aria-live="polite">Your account was created successfully! Please sign in to continue.</p>'
+              : ''}
             <div class="text-center mb-6">
               <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
               <h2 id="login-title" class="text-3xl font-bold text-navy tracking-tight">Welcome back</h2>
@@ -1698,8 +1701,15 @@
           }
           return;
         }
+        if (form.dataset.submitting === 'true') return;
+        form.dataset.submitting = 'true';
+        form.setAttribute('aria-busy', 'true');
         const btn = q('button[type="submit"]', form);
-        if (btn) { btn.disabled = true; }
+        const buttonLabel = btn?.textContent;
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Creating account…';
+        }
         try {
           const data = await api('/auth/register', {
             method: 'POST',
@@ -1710,19 +1720,32 @@
               password: formData.get('password'),
             }),
           });
-          setToken(data.accessToken);
-          setUser(data.user);
-          navigateTo('/');
+          if (!data?.user?.id || data.user.role !== 'CITIZEN') {
+            throw new Error('The server did not confirm that your account was created. Please try again.');
+          }
+          navigateTo('/login?registration=success');
         } catch (err) {
           if (feedback) {
             const details = Array.isArray(err.details)
               ? err.details.map((item) => [item.path, item.message].filter(Boolean).join(': ')).filter(Boolean).join(' ')
               : '';
-            feedback.textContent = 'Registration failed: ' + (details || err.message || err);
+            const message = err.status >= 500
+              ? 'We could not create your account right now. Please try again.'
+              : !err.status
+                ? (err.message.includes('server did not confirm')
+                  ? err.message
+                  : 'Unable to reach RoadBlocks. Check your connection and try again.')
+                : details || err.message || 'Please review your details and try again.';
+            feedback.textContent = 'Registration failed: ' + message;
             feedback.hidden = false;
             feedback.focus();
           }
-          if (btn) { btn.disabled = false; }
+          form.dataset.submitting = 'false';
+          form.removeAttribute('aria-busy');
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = buttonLabel;
+          }
         }
       });
     }
@@ -3022,7 +3045,7 @@
         loadedAccounts = items;
         totalPages = Number(data.totalPages) || 1;
         if (items.length === 0) {
-          html(host, '<div class="empty-state admin-empty"><h3 class="text-xl font-bold text-navy mb-2">No users found</h3><p>Try a different name, email or role filter.</p></div>');
+          html(host, '<div class="empty-state admin-empty"><h2 class="text-xl font-bold text-navy mb-2">No users found</h2><p>Try a different name, email or role filter.</p></div>');
           return;
         }
         html(host, `<div class="admin-table-wrap"><table class="admin-table admin-user-table">

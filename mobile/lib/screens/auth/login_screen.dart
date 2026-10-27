@@ -23,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _obscure = true;
+  bool _registrationSucceeded = false;
 
   @override
   void dispose() {
@@ -43,6 +44,15 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) _showError(e.message);
     } catch (_) {
       if (mounted) _showError('Unable to sign in right now. Please try again.');
+    }
+  }
+
+  Future<void> _openRegistration() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const RegisterScreen()),
+    );
+    if (created == true && mounted) {
+      setState(() => _registrationSucceeded = true);
     }
   }
 
@@ -140,6 +150,45 @@ class _LoginScreenState extends State<LoginScreen> {
                                   'Sign in to continue',
                                   style: AppTypography.headingStyle(size: 19),
                                 ),
+                                if (_registrationSucceeded) ...[
+                                  const SizedBox(height: 14),
+                                  Semantics(
+                                    container: true,
+                                    liveRegion: true,
+                                    child: Container(
+                                      key: const Key('registration-success'),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.tintGreen,
+                                        border: Border.all(
+                                          color: AppColors.statusGreenInk,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(
+                                            Icons.check_circle_outline_rounded,
+                                            color: AppColors.statusGreenInk,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Your account was created successfully! Please sign in to continue.',
+                                              style: AppTypography.bodyStyle(
+                                                size: 13,
+                                                color: AppColors.statusGreenInk,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 16),
                                 TextFormField(
                                   controller: _email,
@@ -216,12 +265,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     TextButton(
                                       onPressed: busy
                                           ? null
-                                          : () => Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const RegisterScreen(),
-                                              ),
-                                            ),
+                                          : _openRegistration,
                                       child: const Text('Create account'),
                                     ),
                                   ],

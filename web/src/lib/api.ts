@@ -196,10 +196,9 @@ class ApiClient {
     email: string;
     password: string;
     phone?: string;
-  }): Promise<AuthSession> {
-    const session = await this.json<AuthSession>('/api/auth/register', 'POST', input, false);
-    this.setSession(session.accessToken, session.refreshToken);
-    return session;
+  }): Promise<User> {
+    const result = await this.json<{ user: User }>('/api/auth/register', 'POST', input, false);
+    return result.user;
   }
 
   async me(): Promise<User> {

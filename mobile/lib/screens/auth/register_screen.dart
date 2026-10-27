@@ -24,6 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   bool _obscure = true;
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -36,10 +37,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting || context.read<AuthProvider>().isBusy) return;
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
 
-    if (mounted) setState(() {});
+    setState(() => _submitting = true);
     try {
       await context.read<AuthProvider>().register(
         fullName: _name.text.trim(),
@@ -47,11 +49,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _password.text,
         phone: _phone.text.trim(),
       );
-      // On success the root gate switches to the home shell automatically.
+      if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
       if (mounted) _showError(_registrationError(e));
     } catch (_) {
       if (mounted) _showError('Unable to create your account right now.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -95,6 +99,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     AppColors.syncTo(context);
     final busy = context.watch<AuthProvider>().isBusy;
+    final submitting = busy || _submitting;
 
     return Scaffold(
       backgroundColor: AppColors.sheetBackground,
@@ -104,21 +109,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
         actions: const [ThemeToggleButton(onDark: true), SizedBox(width: 6)],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Center(
-                  child: BrandLogo(onDark: false, size: LogoSize.medium),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final cardPadding = constraints.maxWidth < 400 ? 20.0 : 28.0;
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Container(
+                    key: const Key('register-card'),
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardSurface,
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    padding: EdgeInsets.all(cardPadding),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: BrandLogo(
+                    onDark: false,
+                    size: LogoSize.auth,
+                    showTagline: true,
+                  ),
                 ),
-                const SizedBox(height: 20),
-                Text('Join RoadBlocks', style: AppTypography.display(size: 26)),
+                const SizedBox(height: 24),
+                Text(
+                  'Join RoadBlocks',
+                  style: AppTypography.display(
+                    size: 26,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Text(
-                  'Report road issues in your community and follow the repair progress.',
+                  'Create an account to report road issues and follow repair progress.',
                   style: AppTypography.bodyStyle(
                     size: 14,
                     color: AppColors.textMuted,
@@ -234,19 +265,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 24),
                 AppButton(
+                  key: const Key('register-submit'),
                   label: 'Create my account',
                   icon: Icons.person_add_alt_1_rounded,
-                  loading: busy,
-                  onPressed: busy ? null : _submit,
+                  loading: submitting,
+                  onPressed: submitting ? null : _submit,
                 ),
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: busy ? null : () => Navigator.of(context).pop(),
-                  child: const Text('I already have an account'),
+                  onPressed: submitting ? null : () => Navigator.of(context).pop(),
+                  child: const Text('I already have an account? Sign in'),
                 ),
-              ],
-            ),
-          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              );
+          },
         ),
       ),
     );

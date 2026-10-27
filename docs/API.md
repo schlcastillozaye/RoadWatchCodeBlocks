@@ -106,11 +106,12 @@ Public. Creates a **citizen** account only; staff accounts are created by an adm
 
 ```json
 {
-  "user": { "id": "clx…", "fullName": "Juan Dela Cruz", "email": "juan@example.com", "role": "CITIZEN" },
-  "accessToken": "eyJ…",
-  "refreshToken": "9f2c…"
+  "user": { "id": "clx…", "fullName": "Juan Dela Cruz", "email": "juan@example.com", "role": "CITIZEN" }
 }
 ```
+
+Registration creates the account but does not issue a sign-in session. The user
+must sign in separately with `POST /api/auth/login`.
 
 ### `POST /api/auth/login`
 
@@ -118,7 +119,7 @@ Public. Creates a **citizen** account only; staff accounts are created by an adm
 { "email": "admin@roadwatch.gov", "password": "<password supplied securely>" }
 ```
 
-**200** — same shape as register.
+**200** — returns the user and access/refresh tokens.
 
 ### `POST /api/auth/refresh`
 

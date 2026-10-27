@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../core/api_exception.dart';
 import '../core/api_client.dart';
 import '../core/json.dart';
 import '../models/models.dart';
@@ -101,7 +102,7 @@ class RoadWatchApi {
 
   // ------------------------------------------------------------------ auth
 
-  Future<AuthSession> register({
+  Future<AppUser> register({
     required String fullName,
     required String email,
     required String password,
@@ -117,7 +118,18 @@ class RoadWatchApi {
       },
       auth: false,
     );
-    return AuthSession.fromJson(asMap(json));
+    final response = asMap(json);
+    final user = response['user'];
+    if (user is! Map<String, dynamic> ||
+        user['id'] is! String ||
+        (user['id'] as String).isEmpty ||
+        user['role'] != 'CITIZEN') {
+      throw const ApiException(
+        'The server did not confirm that your account was created.',
+        code: 'INVALID_RESPONSE',
+      );
+    }
+    return AppUser.fromJson(user);
   }
 
   Future<AuthSession> login({

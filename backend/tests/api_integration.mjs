@@ -118,9 +118,14 @@ async function main() {
       json: { fullName: 'IT Citizen One', email: citizenEmail, password: PW },
     });
     check('register returns 201', r.status === 201, `status=${r.status} ${JSON.stringify(r.body)}`);
-    check('register returns tokens + user', !!r.body?.accessToken && !!r.body?.refreshToken && r.body?.user?.role === 'CITIZEN');
-    citizenToken = r.body?.accessToken;
+    check('register returns user without a sign-in session',
+      r.body?.user?.role === 'CITIZEN' && !r.body?.accessToken && !r.body?.refreshToken);
     citizenId = r.body?.user?.id;
+    const registeredLogin = await login(citizenEmail, PW);
+    check('newly registered citizen can sign in', registeredLogin.status === 200
+      && !!registeredLogin.body?.accessToken && !!registeredLogin.body?.refreshToken
+      && registeredLogin.body?.user?.id === citizenId);
+    citizenToken = registeredLogin.body?.accessToken;
 
     const dup = await api('POST', '/api/auth/register', {
       json: { fullName: 'IT Citizen One', email: citizenEmail, password: PW },
@@ -143,9 +148,12 @@ async function main() {
     const r2 = await api('POST', '/api/auth/register', {
       json: { fullName: 'IT Citizen Two', email: citizen2Email, password: PW },
     });
-    citizen2Token = r2.body?.accessToken;
     citizen2Id = r2.body?.user?.id;
-    check('second citizen registered', r2.status === 201 && !!citizen2Token);
+    const registeredLogin2 = await login(citizen2Email, PW);
+    citizen2Token = registeredLogin2.body?.accessToken;
+    check('second citizen registered and can sign in',
+      r2.status === 201 && registeredLogin2.status === 200 && !!citizen2Token
+      && registeredLogin2.body?.user?.id === citizen2Id);
   }
 
   // ---------------------------------------------------------------------

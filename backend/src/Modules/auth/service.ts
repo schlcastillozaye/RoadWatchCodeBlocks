@@ -57,7 +57,7 @@ export async function registerCitizen(input: {
   email: string;
   phone?: string;
   password: string;
-}, meta: RequestMeta = {}): Promise<AuthResult> {
+}): Promise<{ user: ReturnType<typeof userToDto> }> {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) throw AppError.conflict('An account with this email already exists.');
 
@@ -72,7 +72,7 @@ export async function registerCitizen(input: {
     },
   });
 
-  return issueTokens(user, meta);
+  return { user: userToDto(user) };
 }
 
 export async function login(input: { email: string; password: string }, meta: RequestMeta = {}): Promise<AuthResult> {

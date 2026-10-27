@@ -29,7 +29,7 @@ router.post(
   authLimiter,
   validate({ body: registerSchema }),
   asyncHandler(async (req, res) => {
-    const result = await authService.registerCitizen(req.body, meta(req));
+    const result = await authService.registerCitizen(req.body);
     await recordAudit({
       actorId: result.user.id,
       actorRole: 'CITIZEN',

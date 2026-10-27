@@ -32,7 +32,7 @@ class AuthController
             'email' => $email,
             'phone' => $phone,
             'password' => $password,
-        ], self::meta());
+        ]);
 
         Audit::record(array_merge([
             'actorId' => $result['user']['id'],

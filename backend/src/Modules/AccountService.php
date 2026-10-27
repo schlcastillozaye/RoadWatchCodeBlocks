@@ -77,7 +77,7 @@ class AccountService
         ];
     }
 
-    public static function register(array $input, array $meta = []): array
+    public static function register(array $input): array
     {
         $existing = Db::one('SELECT `id` FROM `User` WHERE `email` = ?', [$input['email']]);
         if ($existing !== null) {
@@ -104,7 +104,7 @@ class AccountService
         );
 
         $user = Db::one('SELECT * FROM `User` WHERE `id` = ?', [$id]);
-        return self::issueTokens($user, $meta);
+        return ['user' => Dto::user($user)];
     }
 
     public static function login(array $input, array $meta = []): array
