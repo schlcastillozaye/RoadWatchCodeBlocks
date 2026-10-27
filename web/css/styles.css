@@ -213,6 +213,41 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .rw-auth-brand .rw-brand-lockup { --rw-mark-cell: 0.9rem; gap: 0.75rem; }
 .rw-auth-brand .rw-brand-name { font-size: 1.45rem; }
 .rw-auth-brand .rw-brand-inc { font-size: 0.72rem; }
+.rw-auth-page-register { padding: clamp(1rem, 3vw, 2rem); }
+.rw-auth-page-register .rw-auth-register-card {
+  width: min(100%, 52rem);
+  max-width: 52rem;
+  padding: clamp(1.5rem, 3.5vw, 2.75rem);
+  border-color: var(--azure);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.rw-auth-page-register .rw-auth-back-home { margin-bottom: 1.35rem; }
+.rw-auth-register-heading {
+  margin-bottom: 1.65rem;
+  text-align: center;
+}
+.rw-auth-register-heading .rw-auth-brand { margin-bottom: 1.1rem; }
+.rw-auth-register-heading h1 { line-height: 1.1; }
+.rw-auth-register-heading > p { margin-top: 0.45rem; }
+.rw-auth-register-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem 1.25rem;
+}
+.rw-auth-register-field { min-width: 0; }
+.rw-auth-register-field > label { display: block; margin-bottom: 0.4rem; }
+.rw-auth-register-field > .brand-input,
+.rw-auth-register-field .rw-password-field > .brand-input { min-height: 3rem; }
+.rw-auth-register-field .rw-password-field > .brand-input { padding-right: 3.25rem; }
+.rw-auth-register-field #register-password-hint { margin-top: 0.4rem; }
+.rw-auth-register-full-row { grid-column: 1 / -1; }
+.rw-auth-register-signin {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.875rem;
+  text-align: center;
+}
 
 /* ---- Admin workspace ---- */
 .admin-workspace {
@@ -1142,6 +1177,11 @@ input[type='file'].brand-input::file-selector-button {
 }
 @media (max-width: 639px) {
   .rw-auth-page .brand-card { padding: 1.25rem; }
+  .rw-auth-page-register {
+    justify-content: flex-start;
+    padding: max(4.5rem, calc(env(safe-area-inset-top) + 4rem)) 1rem 1.25rem;
+  }
+  .rw-auth-page-register .rw-auth-register-card { margin-block: auto; }
   .admin-content .brand-card.p-6 { padding: 1rem; }
   .admin-page-heading { flex-direction: column; }
   .admin-page-heading > .btn { width: 100%; }
@@ -1155,6 +1195,9 @@ input[type='file'].brand-input::file-selector-button {
   .workspace-page .rw-report-form-card { padding: 1rem; }
   .rw-report-form .rw-report-submit { width: 100%; }
   .rw-staff-completion .btn { width: 100%; }
+}
+@media (min-width: 768px) {
+  .rw-auth-register-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (min-width: 901px) {
   .rw-auth-page-login {

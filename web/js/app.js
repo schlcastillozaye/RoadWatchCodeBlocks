@@ -602,27 +602,27 @@
   const pageRegister = () => `
     <main class="min-vh-100 flex items-center justify-center p-4 bg-sheet rw-auth-page rw-auth-page-register" aria-labelledby="register-title">
       ${themeToggleHtml('rw-auth-theme-toggle')}
-      <div class="brand-card w-full max-w-md p-8 rounded-xl shadow-lg">
+      <div class="brand-card rw-auth-register-card">
         <a href="/" id="register-back-home" data-nav="/" class="rw-auth-back-home">Back to Home</a>
-        <div class="text-center mb-6">
+        <div class="rw-auth-register-heading">
           <div class="rw-auth-brand">${brandLogoHtml('light')}</div>
           <h1 id="register-title" class="text-3xl font-bold text-navy tracking-tight">Create account</h1>
           <p class="text-sm text-slate-tint mt-1">Join RoadBlocks and report road issues</p>
         </div>
-        <form id="register-form" class="space-y-4">
-          <div>
+        <form id="register-form" class="rw-auth-register-form">
+          <div class="rw-auth-register-field">
             <label class="block text-sm font-medium text-ink-2 mb-2" for="register-full-name">Full name</label>
             <input id="register-full-name" type="text" name="fullName" required minlength="2" maxlength="120" autocomplete="name" class="w-full brand-input" placeholder="John Doe" />
           </div>
-          <div>
+          <div class="rw-auth-register-field">
             <label class="block text-sm font-medium text-ink-2 mb-2" for="register-email">Email address</label>
             <input id="register-email" type="email" name="email" required maxlength="190" autocomplete="email" class="w-full brand-input" placeholder="you@example.com" />
           </div>
-          <div>
+          <div class="rw-auth-register-field">
             <label class="block text-sm font-medium text-ink-2 mb-2" for="register-phone">Phone (optional)</label>
             <input id="register-phone" type="tel" name="phone" maxlength="30" autocomplete="tel" class="w-full brand-input" placeholder="+63 912 345 6789" />
           </div>
-          <div>
+          <div class="rw-auth-register-field">
             <label class="block text-sm font-medium text-ink-2 mb-2" for="register-password">Password</label>
             <div class="rw-password-field">
               <input id="register-password" type="password" name="password" required minlength="8" maxlength="128" aria-describedby="register-password-hint" class="w-full brand-input" placeholder="••••••••" autocomplete="new-password" />
@@ -630,9 +630,9 @@
             </div>
             <p id="register-password-hint" class="text-xs text-slate-tint mt-1">Use 8–128 characters.</p>
           </div>
-          <p id="register-feedback" class="rw-auth-feedback" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
-          <button type="submit" class="btn btn-primary w-full">Create account</button>
-          <p class="text-center text-sm text-slate-tint mt-3">
+          <p id="register-feedback" class="rw-auth-feedback rw-auth-register-full-row" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
+          <button type="submit" class="btn btn-primary w-full rw-auth-register-full-row">Create account</button>
+          <p class="rw-auth-register-signin rw-auth-register-full-row">
             Already have an account? <a href="/login" id="show-login" class="font-medium text-navy underline">Sign in</a>
           </p>
         </form>
