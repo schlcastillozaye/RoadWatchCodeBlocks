@@ -57,6 +57,11 @@ try {
       const intro = document.querySelector('.rw-auth-intro');
       const mainBounds = main.getBoundingClientRect();
       const cardBounds = card.getBoundingClientRect();
+      const headings = [...document.querySelectorAll('.rw-auth-page h1, .rw-auth-page h2, .rw-auth-page h3')]
+        .map((heading) => ({
+          level: Number(heading.tagName.slice(1)),
+          text: heading.textContent.trim(),
+        }));
       return {
         viewportWidth: innerWidth,
         scrollWidth: document.documentElement.scrollWidth,
@@ -69,11 +74,16 @@ try {
         backHomeVisible: document.querySelector('#login-back-home').getBoundingClientRect().width > 0,
         mainLandmarks: document.querySelectorAll('main').length,
         headingCount: document.querySelectorAll('h1').length,
+        headings,
       };
     });
     assert.equal(layout.scrollWidth, layout.viewportWidth, `login overflows at ${viewport.width}px: ${JSON.stringify(layout)}`);
     assert.equal(layout.mainLandmarks, 1);
     assert.equal(layout.headingCount, 1);
+    assert.deepEqual(layout.headings, [
+      { level: 1, text: 'Better roads start with a clear report.' },
+      { level: 2, text: 'Welcome back' },
+    ], `login heading hierarchy is not logical: ${JSON.stringify(layout.headings)}`);
     assert.ok(layout.backHomeVisible, `login back link is hidden at ${viewport.width}px`);
     if (viewport.width >= 901) {
       assert.ok(layout.introVisible, `desktop login introduction is hidden at ${viewport.width}px`);
