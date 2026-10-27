@@ -215,23 +215,26 @@ try {
     'audit log should remain scrollable when entries exceed the visible area');
   await auditLog.focus();
   assert.equal(await auditLog.evaluate((element) => document.activeElement === element), true);
-  for (const viewport of [
-    { width: 375, height: 667 },
-    { width: 390, height: 844 },
-    { width: 768, height: 1024 },
-    { width: 1024, height: 768 },
-    { width: 1440, height: 900 },
-  ]) {
-    await page.setViewportSize(viewport);
-    const layout = await page.evaluate(() => ({
-      width: innerWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-      panelWidth: document.querySelector('.rw-audit-panel').getBoundingClientRect().width,
-      contentWidth: document.querySelector('.admin-content').getBoundingClientRect().width,
-    }));
-    assert.equal(layout.scrollWidth, viewport.width, `audit page overflows at ${viewport.width}px`);
-    assert.ok(layout.panelWidth > layout.contentWidth * 0.9,
-      `audit panel does not fill available workspace at ${viewport.width}px`);
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+    for (const viewport of [
+      { width: 375, height: 667 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 768 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const layout = await page.evaluate(() => ({
+        width: innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        panelWidth: document.querySelector('.rw-audit-panel').getBoundingClientRect().width,
+        contentWidth: document.querySelector('.admin-content').getBoundingClientRect().width,
+      }));
+      assert.equal(layout.scrollWidth, viewport.width, `${theme} audit page overflows at ${viewport.width}px`);
+      assert.ok(layout.panelWidth > layout.contentWidth * 0.9,
+        `${theme} audit panel does not fill available workspace at ${viewport.width}px`);
+    }
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => window.navigateTo('/admin/users'));
