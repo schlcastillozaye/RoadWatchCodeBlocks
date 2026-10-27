@@ -185,6 +185,42 @@
     return data;
   }
 
+  function uploadWithProgress(path, formData, onProgress) {
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open('POST', `${resolveApiBase()}/api${path}`);
+      request.setRequestHeader('Accept', 'application/json');
+      const token = getToken();
+      if (token) request.setRequestHeader('Authorization', `Bearer ${token}`);
+      request.timeout = 300000;
+      request.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+      });
+      request.addEventListener('load', () => {
+        let data = null;
+        try {
+          data = request.responseText ? JSON.parse(request.responseText) : null;
+        } catch (_) {
+          data = null;
+        }
+        if (request.status >= 200 && request.status < 300) {
+          resolve(data);
+          return;
+        }
+        const message = (data && data.error && data.error.message)
+          || (data && data.message)
+          || `HTTP ${request.status}`;
+        const error = new Error(message);
+        error.status = request.status;
+        reject(error);
+      });
+      request.addEventListener('error', () => reject(new Error('Upload failed because the server could not be reached. Check your connection and retry.')));
+      request.addEventListener('timeout', () => reject(new Error('Photo upload timed out. Check your connection and retry.')));
+      request.addEventListener('abort', () => reject(new Error('Photo upload was interrupted. Retry when your connection is stable.')));
+      request.send(formData);
+    });
+  }
+
   // --- Authenticated image loading -------------------------------------------
   // Photos on non-approved reports require a Bearer token (FilesController),
   // so a bare <img src> receives a 401 JSON body which the browser blocks as
@@ -2028,6 +2064,112 @@
         setBusy(submit, false);
       }
     });
+
+    const additionalPhotosForm = host.querySelector('[data-additional-photos-form]');
+    if (additionalPhotosForm) {
+      const input = additionalPhotosForm.querySelector('input[type="file"]');
+      const kindSelect = additionalPhotosForm.querySelector('[name="photoKind"]');
+      const preview = additionalPhotosForm.querySelector('[data-photo-preview-list]');
+      const countFeedback = additionalPhotosForm.querySelector('[data-photo-selection-feedback]');
+      const uploadProgress = additionalPhotosForm.querySelector('[data-photo-upload-progress]');
+      const maxPhotos = 8;
+      const maxSize = 8 * 1024 * 1024;
+      const supportedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+      let selectedFiles = [];
+      let previewUrls = [];
+
+      const renderPreview = () => {
+        previewUrls.forEach((url) => URL.revokeObjectURL(url));
+        previewUrls = [];
+        preview.innerHTML = selectedFiles.map((file, index) => {
+          const url = URL.createObjectURL(file);
+          previewUrls.push(url);
+          return `
+            <li class="rw-additional-photo-item">
+              <img src="${url}" alt="" data-preview-url="${url}" />
+              <span class="rw-additional-photo-name">${escapeHtml(file.name)}<small>${(file.size / (1024 * 1024)).toFixed(1)} MB</small></span>
+              <button type="button" class="btn btn-ghost btn-sm" data-remove-photo="${index}" aria-label="Remove ${escapeHtml(file.name)}">Remove</button>
+            </li>`;
+        }).join('');
+        countFeedback.textContent = selectedFiles.length
+          ? `${selectedFiles.length} of ${maxPhotos} photos selected.`
+          : 'Select up to 8 images. Each image must be 8 MB or smaller.';
+        preview.querySelectorAll('[data-remove-photo]').forEach((button) => {
+          button.addEventListener('click', () => {
+            selectedFiles.splice(Number(button.dataset.removePhoto), 1);
+            renderPreview();
+          });
+        });
+      };
+
+      input.addEventListener('change', () => {
+        const incoming = Array.from(input.files || []);
+        input.value = '';
+        const supportedExtensions = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']);
+        const invalid = incoming.find((file) => {
+          const extension = file.name.split('.').pop().toLowerCase();
+          return !supportedTypes.has(file.type.toLowerCase()) && !supportedExtensions.has(extension);
+        });
+        if (invalid) {
+          setActionFeedback(`${invalid.name} is not a supported image. Use JPEG, PNG, WebP, or HEIC.`, 'error');
+          return;
+        }
+        const oversized = incoming.find((file) => file.size > maxSize);
+        if (oversized) {
+          setActionFeedback(`${oversized.name} exceeds the 8 MB per-image limit.`, 'error');
+          return;
+        }
+        if (selectedFiles.length + incoming.length > maxPhotos) {
+          setActionFeedback(`Select no more than ${maxPhotos} photos per upload.`, 'error');
+          return;
+        }
+        selectedFiles = selectedFiles.concat(incoming);
+        setActionFeedback('');
+        renderPreview();
+      });
+
+      additionalPhotosForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (selectedFiles.length === 0) {
+          setActionFeedback('Choose at least one photo before uploading.', 'error');
+          return;
+        }
+        const submit = additionalPhotosForm.querySelector('[type="submit"]');
+        const kind = kindSelect.value;
+        const upload = new FormData();
+        upload.append('kind', kind);
+        selectedFiles.forEach((file) => upload.append(kind === 'AFTER' ? 'afterPhotos[]' : 'progressPhotos[]', file));
+        setBusy(submit, true, 'Uploading…');
+        input.disabled = true;
+        kindSelect.disabled = true;
+        preview.querySelectorAll('[data-remove-photo]').forEach((button) => { button.disabled = true; });
+        uploadProgress.hidden = false;
+        uploadProgress.value = 0;
+        uploadProgress.setAttribute('aria-valuetext', 'Uploading photos');
+        setActionFeedback(`Uploading ${selectedFiles.length} photo${selectedFiles.length === 1 ? '' : 's'}…`);
+        try {
+          await uploadWithProgress(
+            `/reports/${encodeURIComponent(report.id)}/photos`,
+            upload,
+            (percent) => {
+              uploadProgress.value = percent;
+              uploadProgress.setAttribute('aria-valuetext', `${percent}% uploaded`);
+              setActionFeedback(`Uploading photos… ${percent}%`);
+            },
+          );
+          notify('Additional repair photos uploaded successfully.');
+          await refresh();
+        } catch (err) {
+          const message = `Photo upload failed: ${err.message}`;
+          setActionFeedback(`${message} Your selected photos are still available to retry.`, 'error');
+          notify(message);
+          setBusy(submit, false);
+          input.disabled = false;
+          kindSelect.disabled = false;
+          uploadProgress.hidden = true;
+        }
+      });
+    }
   };
 
   const reportDetailHtml = (report, history) => {
@@ -2042,7 +2184,7 @@
     const canAssign = isAdmin && report.moderationStatus === 'APPROVED'
       && !['AWAITING_VERIFICATION', 'COMPLETED', 'VERIFIED_COMPLETED'].includes(report.repairStatus);
     const canMaintain = report.moderationStatus === 'APPROVED'
-      && ['AWAITING_MAINTENANCE', 'IN_PROGRESS', 'RETURNED_FOR_WORK'].includes(report.repairStatus)
+      && ['AWAITING_MAINTENANCE', 'IN_PROGRESS', 'RETURNED_FOR_WORK', 'AWAITING_VERIFICATION'].includes(report.repairStatus)
       && isAssignedOfficer;
     const canVerifyRepair = isAdmin && report.moderationStatus === 'APPROVED'
       && report.repairStatus === 'AWAITING_VERIFICATION';
@@ -2056,7 +2198,9 @@
               ? 'Review the report details and choose one moderation decision.'
               : isAdmin
                 ? 'Manage assignment and monitor progress. The assigned officer reports completion.'
-                : 'Update your assigned repair and submit completion evidence when the work is finished.'}</p>
+                : report.repairStatus === 'AWAITING_VERIFICATION'
+                  ? 'Add supplementary repair evidence while the administrator reviews the submitted completion.'
+                  : 'Update your assigned repair and submit completion evidence when the work is finished.'}</p>
           </div>
         </div>
         ${canModerate ? `
@@ -2088,6 +2232,23 @@
         ${isAdmin && report.moderationStatus === 'APPROVED' ? `
           <p class="rw-staff-monitor" role="status">Current repair status: <strong>${escapeHtml(adminRepairLabel(report.repairStatus))}</strong>. Completion notes and after-photos are submitted by the assigned maintenance officer.</p>` : ''}
         <p class="rw-staff-feedback" data-report-action-feedback role="status" aria-live="polite"></p>
+        ${canMaintain ? `
+          <form class="rw-staff-completion rw-additional-photos-form" data-additional-photos-form>
+            <p class="rw-staff-group-label">Add More Photos</p>
+            <label for="additional-photo-kind">Photo type</label>
+            <select id="additional-photo-kind" name="photoKind" class="w-full brand-input">
+              <option value="PROGRESS">Repair progress</option>
+              ${['IN_PROGRESS', 'RETURNED_FOR_WORK', 'AWAITING_VERIFICATION'].includes(report.repairStatus)
+                ? '<option value="AFTER">Additional repair evidence</option>' : ''}
+            </select>
+            <label for="additional-repair-photos">Choose photos</label>
+            <input id="additional-repair-photos" name="additionalPhotos" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple class="w-full brand-input" aria-describedby="additional-photo-help additional-photo-selection" />
+            <p id="additional-photo-help" class="text-xs text-slate-tint">JPEG, PNG, WebP, or HEIC; up to 8 photos per upload and 8 MB per photo. Submitted photos are added to the existing gallery and cannot be removed here.</p>
+            <p id="additional-photo-selection" class="text-xs text-slate-tint" data-photo-selection-feedback role="status">Select up to 8 images. Each image must be 8 MB or smaller.</p>
+            <ul class="rw-additional-photo-preview" data-photo-preview-list aria-label="Selected photos"></ul>
+            <progress class="rw-photo-upload-progress" data-photo-upload-progress max="100" value="0" aria-label="Photo upload progress" hidden></progress>
+            <button type="submit" class="btn btn-secondary">Upload selected photos</button>
+          </form>` : ''}
         ${canMaintain && report.repairStatus === 'IN_PROGRESS' ? `
           <form class="rw-staff-completion" data-repair-complete-form>
             <p class="rw-staff-group-label">Submit repair for verification</p>
@@ -2166,6 +2327,7 @@
                 <button type="button" class="rw-photo-trigger rounded border border-slate-300 overflow-hidden group text-left" ${photoViewerAttrs(report, i)} aria-label="View ${escapeHtml(p.caption || 'report photo')} full size">
                   <span class="rw-photo-kind">${escapeHtml(p.kind === 'AFTER' ? 'After repair' : p.kind === 'PROGRESS' ? 'Progress' : 'Before')}</span>
                   <img ${p.isPublic ? `src="${escapeHtml(absoluteUrl(p.url))}"` : `data-authed-src="${escapeHtml(absoluteUrl(p.url))}"`} alt="${escapeHtml(p.caption || (p.kind === 'AFTER' ? 'After-repair photo' : p.kind === 'PROGRESS' ? 'Repair progress photo' : 'Before photo'))}" class="w-full h-32 object-cover group-hover:opacity-90 transition-opacity" />
+                  <span class="rw-photo-meta">${p.caption ? `<strong>${escapeHtml(p.caption)}</strong>` : ''}${p.createdAt ? `<span>Uploaded ${escapeHtml(relativeDate(p.createdAt))}</span>` : ''}${p.uploadedBy?.fullName ? `<span>By ${escapeHtml(p.uploadedBy.fullName)}${p.uploadedBy.role === 'MAINTENANCE_OFFICER' ? ' · Maintenance officer' : ''}</span>` : ''}</span>
                 </button>`).join('')}
             </div>
           </div>` : ''}

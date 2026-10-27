@@ -22,9 +22,9 @@ class Dto
         return $base . '/api/files/by-key/' . $encoded;
     }
 
-    public static function photo(array $photo, string $moderationStatus): array
+    public static function photo(array $photo, string $moderationStatus, bool $includeUploader = true): array
     {
-        return [
+        $result = [
             'id' => $photo['id'],
             'kind' => $photo['kind'],
             'url' => self::photoUrl($photo['storageKey']),
@@ -36,6 +36,17 @@ class Dto
             'isPublic' => $moderationStatus === 'APPROVED',
             'createdAt' => Dates::iso($photo['createdAt']),
         ];
+        if ($includeUploader) {
+            $uploader = $photo['uploadedBy'] ?? null;
+            $result['uploadedBy'] = is_array($uploader) && isset($uploader['id'])
+                ? [
+                    'id' => $uploader['id'],
+                    'fullName' => $uploader['fullName'] ?? null,
+                    'role' => $uploader['role'] ?? null,
+                ]
+                : null;
+        }
+        return $result;
     }
 
     /**
@@ -46,7 +57,7 @@ class Dto
         $moderation = (string) $report['moderationStatus'];
         $photos = [];
         foreach ($report['photos'] ?? [] as $photo) {
-            $photos[] = self::photo($photo, $moderation);
+            $photos[] = self::photo($photo, $moderation, !$publicView);
         }
 
         $base = [

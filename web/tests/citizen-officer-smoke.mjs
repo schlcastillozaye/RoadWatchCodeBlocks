@@ -37,6 +37,9 @@ let activeUser;
 let repairStatus = 'AWAITING_MAINTENANCE';
 let profileUpdate;
 const repairRequests = [];
+const evidencePhotos = [];
+let completionNotes;
+let failNextAdditionalUpload = true;
 const consoleErrors = [];
 const pageErrors = [];
 
@@ -48,11 +51,12 @@ const report = () => ({
   category: 'POTHOLE',
   moderationStatus: 'APPROVED',
   repairStatus,
+  completionNotes,
   assignedOfficer: { id: 'officer-test', fullName: 'Test Officer' },
   latitude: 14.6,
   longitude: 121.0,
   createdAt: '2026-10-20T00:00:00.000Z',
-  photos: [],
+  photos: [...evidencePhotos],
 });
 
 async function routeApi(route) {
@@ -90,6 +94,45 @@ async function routeApi(route) {
       contentType: request.headers()['content-type'] || '',
     });
     repairStatus = 'AWAITING_VERIFICATION';
+    completionNotes = 'Surface repair completed.';
+    evidencePhotos.push({
+      id: 'original-after',
+      kind: 'AFTER',
+      url: 'https://assets.invalid/original-after.png',
+      isPublic: true,
+      createdAt: '2026-10-27T04:00:00.000Z',
+      uploadedBy: { id: 'officer-test', fullName: 'Test Officer', role: 'MAINTENANCE_OFFICER' },
+    });
+    body = { report: report() };
+  } else if (endpoint === '/reports/assigned-report/photos' && method === 'POST') {
+    const formData = request.postData() || '';
+    repairRequests.push({
+      method,
+      endpoint,
+      body: formData,
+      contentType: request.headers()['content-type'] || '',
+    });
+    if (failNextAdditionalUpload) {
+      failNextAdditionalUpload = false;
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Temporary upload interruption.' } }),
+      });
+      return;
+    }
+    const count = (formData.match(/name="afterPhotos\[\]"/g) || []).length;
+    for (let i = 0; i < count; i += 1) {
+      evidencePhotos.push({
+        id: `additional-after-${evidencePhotos.length}`,
+        kind: 'AFTER',
+        url: `https://assets.invalid/additional-${i}.png`,
+        isPublic: true,
+        caption: 'Additional repair evidence',
+        createdAt: '2026-10-27T04:10:00.000Z',
+        uploadedBy: { id: 'officer-test', fullName: 'Test Officer', role: 'MAINTENANCE_OFFICER' },
+      });
+    }
     body = { report: report() };
   } else if (endpoint === '/reports/assigned-report/history') {
     body = { history: [] };
@@ -291,11 +334,19 @@ try {
 
   const officerPage = await browser.newPage();
   officerPage.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() === 'error' && !message.text().includes('503 (Service Unavailable)')) {
+      consoleErrors.push(message.text());
+    }
   });
   officerPage.on('pageerror', (error) => pageErrors.push(error.message));
   await officerPage.route(/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//, (route) =>
     route.fulfill({ status: 204, body: '' }));
+  await officerPage.route('https://assets.invalid/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+    }));
   await officerPage.route('**/api/**', routeApi);
   activeUser = {
     id: 'officer-test',
@@ -357,6 +408,43 @@ try {
   assert.match(repairRequests[1].body, /completionNotes/);
   assert.match(repairRequests[1].body, /afterPhotos\[\]/);
   assert.equal(repairStatus, 'AWAITING_VERIFICATION');
+  await officerPage.locator('[data-additional-photos-form]').waitFor();
+  await officerPage.locator('[name="photoKind"]').selectOption('AFTER');
+  await officerPage.locator('#additional-repair-photos').setInputFiles([
+    {
+      name: 'discard.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+    },
+    {
+      name: 'additional-a.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+    },
+    {
+      name: 'additional-b.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+    },
+  ]);
+  assert.equal(await officerPage.locator('[data-photo-preview-list] li').count(), 3);
+  await officerPage.getByRole('button', { name: 'Remove discard.png' }).click();
+  assert.equal(await officerPage.locator('[data-photo-preview-list] li').count(), 2);
+  await officerPage.locator('[data-additional-photos-form] button[type="submit"]').click();
+  await officerPage.locator('[data-report-action-feedback]').getByText(/Temporary upload interruption/).waitFor();
+  assert.equal(await officerPage.locator('[data-photo-preview-list] li').count(), 2,
+    'selected photos should remain available after a failed upload');
+  await officerPage.locator('[data-additional-photos-form] button[type="submit"]').click();
+  await officerPage.getByText('Additional repair photos uploaded successfully.').waitFor();
+  assert.equal(repairRequests[2].endpoint, '/reports/assigned-report/photos');
+  assert.equal(repairRequests[3].endpoint, '/reports/assigned-report/photos');
+  assert.match(repairRequests[3].contentType, /^multipart\/form-data;/);
+  assert.match(repairRequests[3].body, /AFTER/);
+  assert.match(repairRequests[3].body, /additional-a\.png/);
+  assert.match(repairRequests[3].body, /additional-b\.png/);
+  assert.doesNotMatch(repairRequests[3].body, /discard\.png/);
+  assert.equal(repairStatus, 'AWAITING_VERIFICATION', 'additional evidence must not change verification status');
+  assert.equal(evidencePhotos.length, 3, 'original completion photo must be retained alongside additions');
 
   assert.deepEqual(consoleErrors, []);
   assert.deepEqual(pageErrors, []);
@@ -365,6 +453,7 @@ try {
   console.log(`PASS: citizen and officer report form width, map layout, and mobile stacking (${citizenFormChecks.length + officerFormChecks.length} checks)`);
   console.log('PASS: citizen mobile workspace menu opens, navigates, and closes');
   console.log('PASS: officer dashboard, assignments navigation, start-work, and evidence submission');
+  console.log('PASS: officer previews/removes photos, retries a failed upload, and appends evidence without resetting verification');
   console.log(`PASS: officer responsive light/dark workspace at 375, 390, 768, 1024, and 1440px (${officerLayoutChecks.length} checks)`);
   console.log('PASS: officer mobile workspace menu opens, navigates, and closes');
   console.log('PASS: no browser console or page errors');

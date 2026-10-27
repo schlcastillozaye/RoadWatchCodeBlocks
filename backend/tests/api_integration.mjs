@@ -812,6 +812,49 @@ async function main() {
     check('atomic evidence response returns the saved completion notes', submitted.body?.report?.completionNotes === 'Filled and levelled the pothole completely.');
     check('officer submission does not mark verified completion', !submitted.body?.report?.completedAt);
 
+    const originalAfterPhotos = submitted.body?.report?.photos?.filter((photo) => photo.kind === 'AFTER') || [];
+    const additionalEvidence = await api('POST', `/api/reports/${reportId}/photos`, {
+      token: officer1Token,
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    const addedPhotos = additionalEvidence.body?.report?.photos?.filter((photo) => photo.kind === 'AFTER') || [];
+    check('assigned officer can append after photos while awaiting verification',
+      additionalEvidence.status === 201 &&
+        additionalEvidence.body?.report?.repairStatus === 'AWAITING_VERIFICATION' &&
+        additionalEvidence.body?.report?.completionNotes === submitted.body?.report?.completionNotes &&
+        addedPhotos.length === originalAfterPhotos.length + 1,
+      `status=${additionalEvidence.status} repair=${additionalEvidence.body?.report?.repairStatus}`);
+    check('additional photo is marked and records uploader and upload time',
+      addedPhotos.some((photo) => photo.caption === 'Additional repair evidence' &&
+        photo.uploadedBy?.id === officer1Id &&
+        photo.uploadedBy?.role === 'MAINTENANCE_OFFICER' &&
+        !!photo.createdAt));
+    const citizenAdditionalEvidence = await api('POST', `/api/reports/${reportId}/photos`, {
+      token: citizenToken,
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    check('citizen cannot upload maintenance evidence', citizenAdditionalEvidence.status === 403,
+      `status=${citizenAdditionalEvidence.status}`);
+    const unauthorizedAdditionalEvidence = await api('POST', `/api/reports/${reportId}/photos`, {
+      token: officer2Token,
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    check('another officer cannot append repair evidence', unauthorizedAdditionalEvidence.status === 403,
+      `status=${unauthorizedAdditionalEvidence.status}`);
+    const citizenReportWithEvidence = await api('GET', `/api/reports/${reportId}`, { token: citizenToken });
+    check('report owner can view appended evidence without a verified status',
+      citizenReportWithEvidence.status === 200 &&
+        citizenReportWithEvidence.body?.report?.repairStatus === 'AWAITING_VERIFICATION' &&
+        citizenReportWithEvidence.body?.report?.photos?.some((photo) => photo.caption === 'Additional repair evidence'));
+    const publicReportWithEvidence = await api('GET', `/api/reports/${reportId}`);
+    const publicAdditionalPhoto = publicReportWithEvidence.body?.report?.photos?.find(
+      (photo) => photo.caption === 'Additional repair evidence'
+    );
+    check('approved report viewers can see evidence without uploader identity disclosure',
+      publicReportWithEvidence.status === 200 &&
+        !!publicAdditionalPhoto &&
+        !Object.hasOwn(publicAdditionalPhoto, 'uploadedBy'));
+
     const duplicateSubmission = await api('POST', `/api/reports/${reportId}/repair-evidence`, {
       token: officer1Token,
       form: pngForm({ completionNotes: 'Duplicate repair submission attempt.' }, 'afterPhotos'),
@@ -881,6 +924,22 @@ async function main() {
     });
     check('admin verifies submitted repair', verified.status === 200 && verified.body?.report?.repairStatus === 'VERIFIED_COMPLETED', `status=${verified.status}`);
     check('verified completion timestamp set only on admin verification', !!verified.body?.report?.completedAt && verified.body?.report?.completionOverride === false);
+    check('admin verification retains original and additional evidence',
+      verified.body?.report?.photos?.filter((photo) => photo.kind === 'AFTER').length >= 3 &&
+        verified.body?.report?.photos?.some((photo) => photo.caption === 'Additional repair evidence'));
+    check('admin verification response includes uploader metadata for supplementary evidence',
+      verified.body?.report?.photos?.some((photo) =>
+        photo.caption === 'Additional repair evidence' &&
+        photo.uploadedBy?.id === officer1Id &&
+        photo.uploadedBy?.role === 'MAINTENANCE_OFFICER'));
+    const verifiedEvidenceMutation = await api('POST', `/api/reports/${reportId}/photos`, {
+      token: officer1Token,
+      form: pngForm({ kind: 'AFTER' }, 'afterPhotos'),
+    });
+    check('verified reports reject additional evidence without changing verified status',
+      verifiedEvidenceMutation.status === 409 &&
+        (await api('GET', `/api/reports/${reportId}`, { token: adminToken })).body?.report?.repairStatus === 'VERIFIED_COMPLETED',
+      `status=${verifiedEvidenceMutation.status}`);
 
     const citizenVerified = await api('GET', '/api/notifications', { token: citizenToken });
     check('citizen receives notification only after repair verification', citizenVerified.status === 200 &&

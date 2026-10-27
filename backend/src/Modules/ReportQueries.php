@@ -40,8 +40,6 @@ class ReportQueries
                 }
             }
         }
-        $userIds = array_keys($userIds);
-
         $photosByReport = [];
         if ($reportIds) {
             $rows = Db::all(
@@ -53,14 +51,18 @@ class ReportQueries
                 $reportIds
             );
             foreach ($rows as $row) {
+                if (!empty($row['uploadedById'])) {
+                    $userIds[$row['uploadedById']] = true;
+                }
                 $photosByReport[$row['reportId']][] = $row;
             }
         }
 
+        $userIds = array_keys($userIds);
         $users = [];
         if ($userIds) {
             $rows = Db::all(
-                'SELECT `id`, `fullName`, `email` FROM `User` WHERE `id` IN (' . Db::placeholders($userIds) . ')',
+                'SELECT `id`, `fullName`, `email`, `role` FROM `User` WHERE `id` IN (' . Db::placeholders($userIds) . ')',
                 $userIds
             );
             foreach ($rows as $row) {
@@ -70,7 +72,12 @@ class ReportQueries
 
         $out = [];
         foreach ($reports as $report) {
-            $report['photos'] = $photosByReport[$report['id']] ?? [];
+            $report['photos'] = array_map(static function (array $photo) use ($users): array {
+                $photo['uploadedBy'] = !empty($photo['uploadedById'])
+                    ? ($users[$photo['uploadedById']] ?? null)
+                    : null;
+                return $photo;
+            }, $photosByReport[$report['id']] ?? []);
             $report['citizen'] = (!empty($report['citizenId']) && isset($users[$report['citizenId']])) ? $users[$report['citizenId']] : null;
             $report['assignedOfficer'] = (!empty($report['assignedOfficerId']) && isset($users[$report['assignedOfficerId']])) ? $users[$report['assignedOfficerId']] : null;
             $report['moderatedBy'] = (!empty($report['moderatedById']) && isset($users[$report['moderatedById']])) ? $users[$report['moderatedById']] : null;

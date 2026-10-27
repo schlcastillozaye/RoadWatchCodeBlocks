@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -44,6 +46,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   List<StatusHistoryEntry> _history = [];
   bool _loading = true;
   bool _actionBusy = false;
+  List<XFile> _additionalPhotos = [];
+  PhotoKind _additionalPhotoKind = PhotoKind.progress;
+  int? _uploadPercent;
   String? _error;
 
   @override
@@ -150,6 +155,128 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _pickAdditionalPhotos() async {
+    if (_actionBusy) return;
+    try {
+      final picked = await ImagePicker().pickMultiImage(imageQuality: 85);
+      if (picked.isEmpty || !mounted) return;
+      final selected = [..._additionalPhotos, ...picked];
+      if (selected.length > 8) {
+        _snack('Choose no more than 8 photos per upload.');
+        return;
+      }
+      const allowedExtensions = {'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'};
+      for (final image in picked) {
+        final extension = image.name.split('.').last.toLowerCase();
+        if (!allowedExtensions.contains(extension)) {
+          _snack('${image.name} is not a supported image format.');
+          return;
+        }
+        if (await image.length() > 8 * 1024 * 1024) {
+          _snack('${image.name} exceeds the 8 MB per-photo limit.');
+          return;
+        }
+      }
+      if (!mounted) return;
+      setState(() => _additionalPhotos = selected);
+    } catch (_) {
+      if (mounted) _snack('Photos could not be selected. Please try again.');
+    }
+  }
+
+  Future<void> _uploadAdditionalPhotos(RoadReport report) async {
+    if (_actionBusy || _additionalPhotos.isEmpty) return;
+    final selected = List<XFile>.of(_additionalPhotos);
+    final oldPhotoIds = report.photos.map((photo) => photo.id).toSet();
+    final api = context.read<RoadWatchApi>();
+    setState(() {
+      _actionBusy = true;
+      _uploadPercent = 0;
+    });
+    try {
+      final updated = await api.addReportPhotos(
+        report.id,
+        kind: _additionalPhotoKind,
+        photos: selected
+            .map(
+              (image) => UploadFile(
+                field: _additionalPhotoKind == PhotoKind.after
+                    ? 'afterPhotos'
+                    : 'progressPhotos',
+                path: image.path,
+                filename: image.name,
+              ),
+            )
+            .toList(),
+        onProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          setState(
+            () => _uploadPercent = (sent * 100 / total)
+                .round()
+                .clamp(0, 100)
+                .toInt(),
+          );
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _report = updated;
+        _additionalPhotos = [];
+        _uploadPercent = 100;
+      });
+      await _load();
+      if (mounted) _snack('Additional repair photos uploaded successfully.');
+    } on ApiException catch (error) {
+      RoadReport? latest;
+      try {
+        latest = await api.getReport(report.id);
+      } on ApiException {
+        // Keep the original upload error if the status refresh also fails.
+      } catch (_) {
+        // The selected files remain available for retry.
+      }
+      if (!mounted) return;
+      final addedCount =
+          latest?.photos
+              .where(
+                (photo) =>
+                    photo.kind == _additionalPhotoKind &&
+                    !oldPhotoIds.contains(photo.id),
+              )
+              .length ??
+          0;
+      if (addedCount >= selected.length) {
+        setState(() {
+          _report = latest;
+          _additionalPhotos = [];
+          _uploadPercent = 100;
+        });
+        await _load();
+        if (mounted) {
+          _snack('Additional repair photos were uploaded successfully.');
+        }
+      } else {
+        if (latest != null) setState(() => _report = latest);
+        _snack(
+          '${error.message} Your selected photos are still available to retry.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _snack(
+          'Photo upload failed. Check your connection; selected photos are ready to retry.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actionBusy = false;
+          _uploadPercent = null;
+        });
+      }
+    }
   }
 
   Future<void> _moderate(String decision) async {
@@ -569,6 +696,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           RepairStatus.awaitingMaintenance,
           RepairStatus.inProgress,
           RepairStatus.returnedForWork,
+          RepairStatus.awaitingVerification,
         ].contains(report.repairStatus);
 
     return RefreshIndicator(
@@ -666,6 +794,96 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                       icon: Icons.upload_file_rounded,
                       onPressed: _actionBusy ? null : _completeRepair,
                     ),
+                  if (canMaintain) ...[
+                    if (report.repairStatus !=
+                            RepairStatus.awaitingMaintenance &&
+                        report.repairStatus != RepairStatus.inProgress)
+                      const SizedBox(height: 12),
+                    DropdownButtonFormField<PhotoKind>(
+                      initialValue: _additionalPhotoKind,
+                      decoration: const InputDecoration(
+                        labelText: 'Additional photo type',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: PhotoKind.progress,
+                          child: Text(PhotoKind.progress.label),
+                        ),
+                        if (report.repairStatus !=
+                            RepairStatus.awaitingMaintenance)
+                          DropdownMenuItem(
+                            value: PhotoKind.after,
+                            child: Text('Additional repair evidence'),
+                          ),
+                      ],
+                      onChanged: _actionBusy
+                          ? null
+                          : (kind) {
+                              if (kind != null) {
+                                setState(() => _additionalPhotoKind = kind);
+                              }
+                            },
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'JPEG, PNG, WebP, or HEIC · Up to 8 photos, 8 MB each.',
+                        style: AppTypography.caption(
+                          size: 11,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    AppButton(
+                      label: 'Add More Photos',
+                      icon: Icons.add_a_photo_outlined,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: _actionBusy ? null : _pickAdditionalPhotos,
+                    ),
+                    if (_additionalPhotos.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _SelectedRepairPhotos(
+                        photos: _additionalPhotos,
+                        onRemove: (photo) =>
+                            setState(() => _additionalPhotos.remove(photo)),
+                      ),
+                      AppButton(
+                        label:
+                            'Upload ${_additionalPhotos.length} photo${_additionalPhotos.length == 1 ? '' : 's'}',
+                        icon: Icons.cloud_upload_outlined,
+                        onPressed: _actionBusy
+                            ? null
+                            : () => _uploadAdditionalPhotos(report),
+                      ),
+                    ],
+                    if (_actionBusy && _uploadPercent != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            LinearProgressIndicator(
+                              value: _uploadPercent! / 100,
+                              color: AppColors.brandAccent,
+                            ),
+                            const SizedBox(height: 6),
+                            Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                'Uploading photos: $_uploadPercent%',
+                                textAlign: TextAlign.center,
+                                style: AppTypography.caption(
+                                  size: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                   if (canVerifyRepair) ...[
                     AppButton(
                       label: 'Verify completion',
@@ -1001,6 +1219,86 @@ class _Summary extends StatelessWidget {
   }
 }
 
+class _SelectedRepairPhotos extends StatelessWidget {
+  const _SelectedRepairPhotos({required this.photos, required this.onRemove});
+
+  final List<XFile> photos;
+  final ValueChanged<XFile> onRemove;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 164,
+    child: ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: photos.length,
+      separatorBuilder: (_, _) => const SizedBox(width: 10),
+      itemBuilder: (context, index) {
+        final photo = photos[index];
+        return SizedBox(
+          width: 124,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(
+                        File(photo.path),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          color: AppColors.sheetBackground,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: Material(
+                        color: AppColors.darkBlue.withValues(alpha: 0.82),
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          tooltip: 'Remove ${photo.name}',
+                          onPressed: () => onRemove(photo),
+                          icon: const Icon(Icons.close_rounded),
+                          color: AppColors.onPrimary,
+                          iconSize: 18,
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(
+                            minWidth: 40,
+                            minHeight: 40,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                photo.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption(
+                  size: 10,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
 class _PhotosSection extends StatelessWidget {
   const _PhotosSection({required this.report});
 
@@ -1029,19 +1327,69 @@ class _PhotosSection extends StatelessWidget {
             ),
           ),
           SizedBox(
-            height: 116,
+            height: 160,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: photos.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, i) => PhotoThumbnail(
-                photo: photos[i],
-                width: 116,
-                height: 116,
-                radius: 16,
-                onTap: () =>
-                    PhotoGalleryScreen.open(context, photos, initialIndex: i),
-              ),
+              itemBuilder: (context, i) {
+                final photo = photos[i];
+                return SizedBox(
+                  width: 116,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PhotoThumbnail(
+                        photo: photo,
+                        width: 116,
+                        height: 104,
+                        radius: 12,
+                        onTap: () => PhotoGalleryScreen.open(
+                          context,
+                          photos,
+                          initialIndex: i,
+                        ),
+                      ),
+                      if (photo.caption != null ||
+                          photo.createdAt != null ||
+                          photo.uploadedByName != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          photo.caption ??
+                              'Uploaded ${formatDateTime(photo.createdAt)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption(
+                            size: 9,
+                            weight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        if (photo.uploadedByName != null)
+                          Text(
+                            photo.uploadedByName!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption(
+                              size: 9,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        if (photo.createdAt != null && photo.caption != null)
+                          Text(
+                            formatDateTime(photo.createdAt),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption(
+                              size: 9,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],

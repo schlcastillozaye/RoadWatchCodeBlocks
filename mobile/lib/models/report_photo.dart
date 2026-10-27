@@ -14,6 +14,8 @@ class ReportPhoto {
     this.isPublic = false,
     this.caption,
     this.createdAt,
+    this.uploadedByName,
+    this.uploadedByRole,
   });
 
   final String id;
@@ -30,6 +32,8 @@ class ReportPhoto {
   final bool isPublic;
   final String? caption;
   final DateTime? createdAt;
+  final String? uploadedByName;
+  final String? uploadedByRole;
 
   double get aspectRatio {
     if (width != null && height != null && height! > 0) return width! / height!;
@@ -37,28 +41,37 @@ class ReportPhoto {
   }
 
   factory ReportPhoto.fromJson(Map<String, dynamic> json) => ReportPhoto(
-        id: asString(json['id']),
-        kind: PhotoKind.fromApi(asStringOrNull(json['kind'])),
-        url: AppConfig.absoluteUrl(asString(json['url'])),
-        mimeType: asString(json['mimeType'], 'image/jpeg'),
-        sizeBytes: asInt(json['sizeBytes']),
-        width: asIntOrNull(json['width']),
-        height: asIntOrNull(json['height']),
-        isPublic: asBool(json['isPublic']),
-        caption: asStringOrNull(json['caption']),
-        createdAt: asDate(json['createdAt']),
-      );
+    id: asString(json['id']),
+    kind: PhotoKind.fromApi(asStringOrNull(json['kind'])),
+    url: AppConfig.absoluteUrl(asString(json['url'])),
+    mimeType: asString(json['mimeType'], 'image/jpeg'),
+    sizeBytes: asInt(json['sizeBytes']),
+    width: asIntOrNull(json['width']),
+    height: asIntOrNull(json['height']),
+    isPublic: asBool(json['isPublic']),
+    caption: asStringOrNull(json['caption']),
+    createdAt: asDate(json['createdAt']),
+    uploadedByName: json['uploadedBy'] is Map
+        ? asStringOrNull((json['uploadedBy'] as Map)['fullName'])
+        : null,
+    uploadedByRole: json['uploadedBy'] is Map
+        ? asStringOrNull((json['uploadedBy'] as Map)['role'])
+        : null,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'kind': kind.api,
-        'url': url,
-        'mimeType': mimeType,
-        'sizeBytes': sizeBytes,
-        'width': width,
-        'height': height,
-        'isPublic': isPublic,
-        'caption': caption,
-        'createdAt': createdAt?.toIso8601String(),
-      };
+    'id': id,
+    'kind': kind.api,
+    'url': url,
+    'mimeType': mimeType,
+    'sizeBytes': sizeBytes,
+    'width': width,
+    'height': height,
+    'isPublic': isPublic,
+    'caption': caption,
+    'createdAt': createdAt?.toIso8601String(),
+    'uploadedBy': uploadedByName == null
+        ? null
+        : {'fullName': uploadedByName, 'role': uploadedByRole},
+  };
 }

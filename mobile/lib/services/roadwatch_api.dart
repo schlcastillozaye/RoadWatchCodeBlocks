@@ -464,6 +464,7 @@ class RoadWatchApi {
     String id, {
     required PhotoKind kind,
     required List<UploadFile> photos,
+    ProgressCallback? onProgress,
   }) async {
     final json = await client.postMultipart(
       '/api/reports/$id/photos',
@@ -478,6 +479,8 @@ class RoadWatchApi {
             ),
           )
           .toList(),
+      onProgress: onProgress,
+      timeout: const Duration(minutes: 3),
     );
     return RoadReport.fromJson(asMap(asMap(json)['report']));
   }
@@ -500,6 +503,7 @@ class RoadWatchApi {
             ),
           )
           .toList(),
+      timeout: const Duration(minutes: 3),
     );
     return RoadReport.fromJson(asMap(asMap(json)['report']));
   }

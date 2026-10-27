@@ -664,6 +664,34 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .rw-staff-completion label span,
 .rw-report-decision label span { color: var(--ink-3); font-weight: 400; }
 .rw-staff-completion .btn { justify-self: start; max-width: 100%; white-space: normal; }
+.rw-additional-photos-form { gap: 0.6rem; }
+.rw-additional-photos-form .btn { justify-self: start; }
+.rw-additional-photo-preview { display: grid; gap: 0.5rem; min-width: 0; }
+.rw-additional-photo-item {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.45rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.rw-additional-photo-item > img { width: 3.5rem; height: 3.5rem; border-radius: 7px; object-fit: cover; background: var(--sheet); }
+.rw-additional-photo-name { min-width: 0; overflow-wrap: anywhere; color: var(--ink-2); font-size: 0.76rem; }
+.rw-additional-photo-name small { display: block; color: var(--ink-3); font-size: 0.68rem; }
+.rw-photo-upload-progress { width: 100%; height: 0.6rem; accent-color: var(--blue); }
+.rw-photo-meta {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.5rem 0.6rem;
+  color: var(--ink-3);
+  font-size: 0.68rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.rw-photo-meta strong { color: var(--ink-2); font-weight: 700; }
 .rw-report-decision { display: grid; gap: 0.8rem; }
 .rw-report-decision h2 { margin: 0; color: var(--navy); font-size: 1.3rem; font-weight: 700; line-height: 1.25; }
 .rw-report-decision > #rw-decision-description { color: var(--ink-2); font-size: 0.87rem; line-height: 1.5; }
@@ -1865,15 +1893,18 @@ body,
 .rw-photo-trigger {
   display: block;
   padding: 0;
-  border: 0;
+  border: 1px solid var(--line);
   background: none;
+  background-color: var(--surface);
   color: inherit;
   font: inherit;
-  line-height: 0;
+  line-height: 1.4;
   cursor: zoom-in;
   border-radius: 0.5rem;
 }
 .rw-photo-trigger img { display: block; }
+.rw-photo-trigger .rw-photo-kind { display: inline-flex; margin: 0.45rem 0.55rem; font-size: 0.72rem; line-height: 1.4; }
+.rw-photo-trigger .rw-photo-meta { text-align: left; }
 .rw-photo-trigger:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
 :root[data-theme='dark'] .rw-photo-trigger:focus-visible { outline-color: var(--sky); }
 .admin-report-thumb { width: 2.75rem; height: 2.75rem; border-radius: 0.5rem; object-fit: cover; }

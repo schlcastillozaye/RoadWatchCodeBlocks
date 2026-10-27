@@ -275,9 +275,15 @@ Auth required. **`multipart/form-data`**. Adds photos to an existing report.
 
 The reporting citizen may add `BEFORE` photos only to their own pending report.
 Only its currently assigned maintenance officer may add `PROGRESS` or `AFTER`
-photos to an approved, incomplete report; `AFTER` photos are accepted only
-while repair status is `IN_PROGRESS`. Administrators may review photos but
-cannot upload repair evidence.
+photos to an approved, incomplete report. `AFTER` photos are accepted while
+repair work is in progress, returned for work, or awaiting administrator
+verification. Every upload appends new rows to `ReportPhoto`; it never replaces
+earlier evidence or changes the repair status. A verified/completed report
+cannot receive additional evidence. Uploads accept up to 8 images per request,
+with the configured per-image size limit and server-side image type validation.
+Photo DTOs include the upload timestamp and, for authorized report viewers,
+the uploader's name and role when available. Administrators may review photos
+but cannot upload repair evidence.
 
 **201** `{ "report": { … } }`
 

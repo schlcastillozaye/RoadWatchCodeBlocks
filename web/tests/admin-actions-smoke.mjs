@@ -133,6 +133,14 @@ page.route('**/api/**', async (route) => {
           photos: [
             { url: 'https://assets.invalid/synthetic-photo.svg', isPublic: true, kind: 'BEFORE', caption: 'Before repair' },
             { url: 'https://assets.invalid/synthetic-photo.svg', isPublic: true, kind: 'AFTER', caption: 'After repair' },
+            {
+              url: 'https://assets.invalid/synthetic-photo.svg',
+              isPublic: true,
+              kind: 'AFTER',
+              caption: 'Additional repair evidence',
+              createdAt: '2026-10-27T04:10:00.000Z',
+              uploadedBy: { id: 'officer-ui-test', fullName: 'Synthetic Officer', role: 'MAINTENANCE_OFFICER' },
+            },
           ],
         },
       };
@@ -398,7 +406,7 @@ try {
           detailUsesContentWidth: desktop
             ? detailRect.width >= contentRect.width - 2
             : detailRect.width <= contentRect.width + 1,
-          photosFit: photoButtons.length === 2
+          photosFit: photoButtons.length === 3
             && imageRects.every((rect) => rect.width > 0 && rect.left >= photos.getBoundingClientRect().left - 1
               && rect.right <= photos.getBoundingClientRect().right + 1)
             && (!desktop || photoButtons.every((button) => button.querySelector('img').getBoundingClientRect().height >= 224)),
@@ -414,6 +422,12 @@ try {
 
   await page.setViewportSize({ width: 375, height: 667 });
   await page.evaluate(() => window.navigateTo('/report/verification'));
+  await page.locator('.rw-photo-meta').getByText('Additional repair evidence').waitFor();
+  const additionalEvidenceMetadata = await page.locator('.rw-photo-meta').filter({
+    hasText: 'Additional repair evidence',
+  }).innerText();
+  assert.match(additionalEvidenceMetadata, /Uploaded/);
+  assert.match(additionalEvidenceMetadata, /Synthetic Officer/);
   await page.locator('[data-repair-return]').click();
   const returnDialog = page.locator('dialog.rw-confirm-dialog');
   await returnDialog.waitFor({ state: 'visible', timeout: 5000 });

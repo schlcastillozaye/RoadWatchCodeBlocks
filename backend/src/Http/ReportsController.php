@@ -141,7 +141,11 @@ class ReportsController
     {
         $actor = Auth::authenticate();
         $kind = Validate::enum(Request::body('kind') ?? 'BEFORE', 'kind', Schema::PHOTO_KINDS, false) ?? 'BEFORE';
-        $report = ReportService::addPhotos($params['id'], $actor, self::filesForKind($kind), $kind);
+        $files = self::filesForKind($kind);
+        if (count($files) > Schema::MAX_PHOTOS_PER_REQUEST) {
+            Validate::fail('photos', 'A maximum of ' . Schema::MAX_PHOTOS_PER_REQUEST . ' photos can be uploaded at a time.');
+        }
+        $report = ReportService::addPhotos($params['id'], $actor, $files, $kind);
         Response::status(201);
         return ['report' => $report];
     }

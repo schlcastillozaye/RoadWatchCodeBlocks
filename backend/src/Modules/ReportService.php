@@ -433,32 +433,18 @@ class ReportService
 
     public static function addPhotos(string $reportId, array $actor, array $files, string $kind): array
     {
+        if ($kind !== 'BEFORE') {
+            return self::addRepairPhotos($reportId, $actor, $files, $kind);
+        }
+
         $report = self::getOrThrow($reportId);
 
         $isOwner = ($report['citizenId'] ?? null) === $actor['id'];
-        $isAssignedOfficer = ($actor['role'] ?? null) === 'MAINTENANCE_OFFICER'
-            && ($report['assignedOfficerId'] ?? null) === $actor['id'];
-
-        if ($kind === 'BEFORE') {
-            if (!$isOwner || ($actor['role'] ?? null) !== 'CITIZEN') {
-                throw AppError::forbidden('Only the reporting citizen can add initial report photos.');
-            }
-            if ($report['moderationStatus'] !== 'PENDING_REVIEW') {
-                throw AppError::conflict('Initial report photos can only be added while the report is pending review.');
-            }
-        } else {
-            if (!$isAssignedOfficer) {
-                throw AppError::forbidden('Only the assigned maintenance officer can add repair photos.');
-            }
-            if ($report['moderationStatus'] !== 'APPROVED') {
-                throw AppError::conflict('Repair photos can only be added to approved reports.');
-            }
-            if (in_array($report['repairStatus'], ['COMPLETED', 'VERIFIED_COMPLETED'], true)) {
-                throw AppError::conflict('Repair photos cannot be added after the report is completed.');
-            }
-            if ($kind === 'AFTER' && !in_array($report['repairStatus'], ['IN_PROGRESS', 'RETURNED_FOR_WORK'], true)) {
-                throw AppError::conflict('After-repair photos can only be added while repair work is active.');
-            }
+        if (!$isOwner || ($actor['role'] ?? null) !== 'CITIZEN') {
+            throw AppError::forbidden('Only the reporting citizen can add initial report photos.');
+        }
+        if ($report['moderationStatus'] !== 'PENDING_REVIEW') {
+            throw AppError::conflict('Initial report photos can only be added while the report is pending review.');
         }
 
         $photos = self::persistPhotos($reportId, $files, $kind, $actor['id']);
@@ -471,6 +457,101 @@ class ReportService
             'actorId' => $actor['id'],
             'actorRole' => $actor['role'],
         ]);
+
+        return Dto::report(self::getOrThrow($reportId));
+    }
+
+    /**
+     * Append staff repair photos without changing the repair state. Locking
+     * the report ensures an upload cannot race an administrator's verification.
+     */
+    private static function addRepairPhotos(string $reportId, array $actor, array $files, string $kind): array
+    {
+        if (empty($files)) {
+            throw AppError::unprocessable('Select at least one repair photo to upload.');
+        }
+        if (count($files) > Schema::MAX_PHOTOS_PER_REQUEST) {
+            throw AppError::unprocessable(
+                'A maximum of ' . Schema::MAX_PHOTOS_PER_REQUEST . ' photos can be uploaded at a time.'
+            );
+        }
+
+        $stored = [];
+        $createdAt = Dates::toDb(Dates::now());
+        try {
+            Db::transaction(function () use ($reportId, $actor, $files, $kind, $createdAt, &$stored): void {
+                $report = Db::one('SELECT * FROM `Report` WHERE `id` = ? FOR UPDATE', [$reportId]);
+                if ($report === null) {
+                    throw AppError::notFound('Report not found.');
+                }
+                if ($report['moderationStatus'] !== 'APPROVED') {
+                    throw AppError::conflict('Repair photos can only be added to approved reports.');
+                }
+                if (!self::actorMayMaintain($report, $actor)) {
+                    throw AppError::forbidden('This report is not assigned to you.');
+                }
+                if (in_array($report['repairStatus'], ['COMPLETED', 'VERIFIED_COMPLETED'], true)) {
+                    throw AppError::conflict('Repair photos cannot be added after the report is completed.');
+                }
+                if ($kind === 'AFTER'
+                    && !in_array($report['repairStatus'], ['IN_PROGRESS', 'RETURNED_FOR_WORK', 'AWAITING_VERIFICATION'], true)) {
+                    throw AppError::conflict(
+                        'After-repair photos can only be added during active work or while awaiting verification.'
+                    );
+                }
+                if ($kind === 'PROGRESS'
+                    && !in_array($report['repairStatus'], ['AWAITING_MAINTENANCE', 'IN_PROGRESS', 'RETURNED_FOR_WORK', 'AWAITING_VERIFICATION'], true)) {
+                    throw AppError::conflict('Progress photos cannot be added in the current repair state.');
+                }
+
+                $stored = self::storeBuffers($files, 'reports');
+                foreach ($stored as $photo) {
+                    Db::execute(
+                        'INSERT INTO `ReportPhoto` (`id`,`reportId`,`kind`,`storageKey`,`mimeType`,`sizeBytes`,`width`,`height`,`blurData`,`caption`,`uploadedById`,`createdAt`,`imageData`)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                        [
+                            Ids::cuid(),
+                            $reportId,
+                            $kind,
+                            $photo['stored']['key'],
+                            $photo['stored']['mimeType'],
+                            $photo['stored']['sizeBytes'],
+                            $photo['width'],
+                            $photo['height'],
+                            null,
+                            $kind === 'AFTER' ? 'Additional repair evidence' : 'Additional progress evidence',
+                            $actor['id'],
+                            $createdAt,
+                            $photo['stored']['data'] ?? null,
+                        ]
+                    );
+                }
+
+                Audit::history([
+                    'reportId' => $reportId,
+                    'type' => 'REPAIR',
+                    'fromValue' => $report['repairStatus'],
+                    'toValue' => $report['repairStatus'],
+                    'note' => 'Additional ' . strtolower($kind) . ' repair photo(s) uploaded (' . count($stored) . ').',
+                    'actorId' => $actor['id'],
+                    'actorRole' => $actor['role'],
+                ]);
+            });
+        } catch (\Throwable $error) {
+            foreach ($stored as $photo) {
+                Storage::remove($photo['stored']['key']);
+            }
+            throw $error;
+        }
+
+        Audit::record(array_merge([
+            'actorId' => $actor['id'],
+            'actorRole' => $actor['role'],
+            'action' => 'REPAIR_PHOTOS_ADDED',
+            'entityType' => 'Report',
+            'entityId' => $reportId,
+            'metadata' => ['kind' => $kind, 'count' => count($stored)],
+        ], Audit::actorContext()));
 
         return Dto::report(self::getOrThrow($reportId));
     }

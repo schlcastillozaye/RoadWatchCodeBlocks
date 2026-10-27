@@ -27,9 +27,9 @@ class UploadFile {
 /// decoding, structured errors and multipart uploads with progress.
 class ApiClient {
   ApiClient({TokenStore? tokenStore, http.Client? httpClient, String? baseUrl})
-      : tokens = tokenStore ?? TokenStore(),
-        _http = httpClient ?? http.Client(),
-        _baseUrl = baseUrl ?? AppConfig.apiBaseUrl;
+    : tokens = tokenStore ?? TokenStore(),
+      _http = httpClient ?? http.Client(),
+      _baseUrl = baseUrl ?? AppConfig.apiBaseUrl;
 
   final TokenStore tokens;
   final http.Client _http;
@@ -41,7 +41,9 @@ class ApiClient {
   static const Duration _timeout = Duration(seconds: 30);
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
-    final base = _baseUrl.endsWith('/') ? _baseUrl.substring(0, _baseUrl.length - 1) : _baseUrl;
+    final base = _baseUrl.endsWith('/')
+        ? _baseUrl.substring(0, _baseUrl.length - 1)
+        : _baseUrl;
     final p = path.startsWith('/') ? path : '/$path';
     final uri = Uri.parse('$base$p');
     if (query == null || query.isEmpty) return uri;
@@ -54,7 +56,10 @@ class ApiClient {
     return uri.replace(queryParameters: params);
   }
 
-  Future<Map<String, String>> _headers({required bool json, bool auth = true}) async {
+  Future<Map<String, String>> _headers({
+    required bool json,
+    bool auth = true,
+  }) async {
     final headers = <String, String>{'Accept': 'application/json'};
     if (json) headers['Content-Type'] = 'application/json';
     if (auth) {
@@ -94,10 +99,15 @@ class ApiClient {
     );
   }
 
-  Future<dynamic> _send(Future<http.Response> Function() run, {bool auth = true, bool retry = true}) async {
+  Future<dynamic> _send(
+    Future<http.Response> Function() run, {
+    bool auth = true,
+    bool retry = true,
+    Duration? timeout,
+  }) async {
     http.Response res;
     try {
-      res = await run().timeout(_timeout);
+      res = await run().timeout(timeout ?? _timeout);
     } on TimeoutException {
       throw ApiException.timeout();
     } on ApiException {
@@ -108,33 +118,58 @@ class ApiClient {
 
     if (res.statusCode == 401 && auth && retry && onUnauthorized != null) {
       final refreshed = await onUnauthorized!.call();
-      if (refreshed) return _send(run, auth: auth, retry: false);
+      if (refreshed) {
+        return _send(run, auth: auth, retry: false, timeout: timeout);
+      }
     }
 
     return _decode(res);
   }
 
-  Future<dynamic> getJson(String path, {Map<String, dynamic>? query, bool auth = true}) {
-    return _send(() async => _http.get(_uri(path, query), headers: await _headers(json: false, auth: auth)),
-        auth: auth);
+  Future<dynamic> getJson(
+    String path, {
+    Map<String, dynamic>? query,
+    bool auth = true,
+  }) {
+    return _send(
+      () async => _http.get(
+        _uri(path, query),
+        headers: await _headers(json: false, auth: auth),
+      ),
+      auth: auth,
+    );
   }
 
   Future<dynamic> postJson(String path, {Object? body, bool auth = true}) {
     return _send(
-      () async => _http.post(_uri(path), headers: await _headers(json: true, auth: auth), body: jsonEncode(body ?? {})),
+      () async => _http.post(
+        _uri(path),
+        headers: await _headers(json: true, auth: auth),
+        body: jsonEncode(body ?? {}),
+      ),
       auth: auth,
     );
   }
 
   Future<dynamic> patchJson(String path, {Object? body, bool auth = true}) {
     return _send(
-      () async => _http.patch(_uri(path), headers: await _headers(json: true, auth: auth), body: jsonEncode(body ?? {})),
+      () async => _http.patch(
+        _uri(path),
+        headers: await _headers(json: true, auth: auth),
+        body: jsonEncode(body ?? {}),
+      ),
       auth: auth,
     );
   }
 
   Future<dynamic> deleteJson(String path, {bool auth = true}) {
-    return _send(() async => _http.delete(_uri(path), headers: await _headers(json: false, auth: auth)), auth: auth);
+    return _send(
+      () async => _http.delete(
+        _uri(path),
+        headers: await _headers(json: false, auth: auth),
+      ),
+      auth: auth,
+    );
   }
 
   Future<dynamic> postMultipart(
@@ -142,9 +177,14 @@ class ApiClient {
     Map<String, String> fields = const {},
     List<UploadFile> files = const [],
     ProgressCallback? onProgress,
+    Duration timeout = const Duration(seconds: 30),
   }) {
     return _send(() async {
-      final request = _ProgressMultipartRequest('POST', _uri(path), onProgress: onProgress);
+      final request = _ProgressMultipartRequest(
+        'POST',
+        _uri(path),
+        onProgress: onProgress,
+      );
       request.headers.addAll(await _headers(json: false));
       fields.forEach((k, v) {
         if (v.isNotEmpty) request.fields[k] = v;
@@ -154,17 +194,27 @@ class ApiClient {
         final mediaType = _mediaTypeForPath(name);
         if (file.bytes != null) {
           request.files.add(
-            http.MultipartFile.fromBytes(file.field, file.bytes!, filename: name, contentType: mediaType),
+            http.MultipartFile.fromBytes(
+              file.field,
+              file.bytes!,
+              filename: name,
+              contentType: mediaType,
+            ),
           );
         } else if (file.path != null) {
           request.files.add(
-            await http.MultipartFile.fromPath(file.field, file.path!, filename: name, contentType: mediaType),
+            await http.MultipartFile.fromPath(
+              file.field,
+              file.path!,
+              filename: name,
+              contentType: mediaType,
+            ),
           );
         }
       }
       final streamed = await _http.send(request);
       return http.Response.fromStream(streamed);
-    });
+    }, timeout: timeout);
   }
 
   void close() => _http.close();
