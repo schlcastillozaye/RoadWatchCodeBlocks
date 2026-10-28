@@ -187,6 +187,15 @@ try {
   assert.equal(await page.locator('#login-form').count(), 1, 'Successful registration should navigate to login');
   assert.equal(await page.evaluate(() => localStorage.getItem('roadwatch_auth_token')), null,
     'Registration must not automatically sign the user in');
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 667 }]) {
+    await page.setViewportSize(viewport);
+    const loginHeading = await page.locator('h1:visible').allTextContents();
+    assert.deepEqual(
+      loginHeading.map((heading) => heading.trim()),
+      ['Welcome back'],
+      `Login at ${viewport.width}x${viewport.height} should expose exactly one visible h1`,
+    );
+  }
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.getByRole('status').filter({
