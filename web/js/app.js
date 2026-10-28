@@ -595,7 +595,7 @@
         <aside class="rw-auth-intro" aria-label="About RoadWatch">
           <div class="rw-auth-brand">${brandLogoHtml('dark')}</div>
           <p class="rw-auth-intro-eyebrow">ROAD ISSUE REPORTING &amp; MAINTENANCE</p>
-          <p class="rw-auth-intro-title">Better roads start with a clear report.</p>
+          <div class="rw-auth-intro-display">Better roads start with a clear report.</div>
           <p class="rw-auth-intro-copy">RoadWatch helps residents share road concerns with a location and photo, while giving maintenance teams a clear way to review and track the work.</p>
           <ol class="rw-auth-intro-steps">
             <li><span>01</span><strong>Describe the issue</strong></li>

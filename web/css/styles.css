@@ -1442,7 +1442,7 @@ input[type='file'].brand-input::file-selector-button {
     font-weight: 700;
     letter-spacing: 0.13em;
   }
-  .rw-auth-intro-title {
+  .rw-auth-intro-display {
     max-width: 12ch;
     color: var(--surface);
     font-family: var(--font-display);
@@ -1509,7 +1509,7 @@ input[type='file'].brand-input::file-selector-button {
   }
   :root[data-theme='dark'] .rw-auth-intro-eyebrow,
   :root[data-theme='dark'] .rw-auth-intro-steps li > span { color: var(--blue-ink); }
-  :root[data-theme='dark'] .rw-auth-intro-title,
+  :root[data-theme='dark'] .rw-auth-intro-display,
   :root[data-theme='dark'] .rw-auth-intro-steps li { color: var(--ink); }
   :root[data-theme='dark'] .rw-auth-intro-copy { color: var(--ink-2); }
   :root[data-theme='dark'] .rw-auth-intro-steps li { border-color: var(--line); }
